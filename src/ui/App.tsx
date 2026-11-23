@@ -51,12 +51,12 @@ export function App() {
         <AmbientBackdrop />
 
         <div className="frame">
-          <div className="viewport" aria-hidden={Boolean(ActiveGame)}>
+          <div className="viewport" hidden={Boolean(ActiveGame)} aria-hidden={Boolean(ActiveGame)}>
             {tab === 'play' && <HomeScreen />}
             {tab === 'sounds' && <SoundsScreen />}
           </div>
 
-          <TabIsland />
+          {!ActiveGame && <TabIsland />}
 
           <AnimatePresence>
             {ActiveGame && (

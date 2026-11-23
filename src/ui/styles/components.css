@@ -629,7 +629,7 @@
   flex-direction: column;
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
-  background: rgb(0 0 0 / 0.84);
+  background: transparent;
   user-select: none;
   -webkit-user-select: none;
 }
