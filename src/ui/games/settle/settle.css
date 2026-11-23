@@ -1,0 +1,412 @@
+/* ==========================================================================
+   Settle — Ember visual layer
+   Rules: design tokens only, transform/opacity (+ sparing filter), no
+   transition: all, no scale(0), fine-pointer hover gating, reduced motion.
+   ========================================================================== */
+
+.settle-arena {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* --- Board well ---------------------------------------------------------- */
+
+.settle-well {
+  --rail-w: clamp(72px, 21cqw, 90px);
+  --board-h: min(100cqh, 580px, calc((100cqw - var(--rail-w) - 16px) * 2));
+  position: relative;
+  height: var(--board-h);
+  width: calc(var(--board-h) / 2);
+  padding: 5px;
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(110% 60% at 50% 100%, rgb(255 122 51 / 0.055), transparent 72%),
+    var(--c-night-1);
+  box-shadow:
+    0 0 0 1px var(--c-line-soft) inset,
+    0 18px 40px -22px rgb(0 0 0 / 0.9);
+  touch-action: none;
+  overflow: hidden;
+  flex: none;
+}
+
+.settle-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(20, 1fr);
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+}
+
+/* --- Cells --------------------------------------------------------------- */
+
+.settle-cell {
+  position: relative;
+  border-radius: 3.5px;
+  background: rgb(27 17 12 / 0.44);
+}
+
+/* Token hue mapping (zero hardcoded colors) */
+.settle-cell[data-color='ember'],
+.settle-mini__cell[data-color='ember'] {
+  --cell-hue: var(--p-ember);
+}
+
+.settle-cell[data-color='saffron'],
+.settle-mini__cell[data-color='saffron'] {
+  --cell-hue: var(--p-saffron);
+}
+
+.settle-cell[data-color='honey'],
+.settle-mini__cell[data-color='honey'] {
+  --cell-hue: var(--p-honey);
+}
+
+.settle-cell[data-color='moss'],
+.settle-mini__cell[data-color='moss'] {
+  --cell-hue: var(--p-moss);
+}
+
+.settle-cell[data-color='clay'],
+.settle-mini__cell[data-color='clay'] {
+  --cell-hue: var(--p-clay);
+}
+
+.settle-cell[data-color='rose'],
+.settle-mini__cell[data-color='rose'] {
+  --cell-hue: var(--p-rose);
+}
+
+.settle-cell[data-color='sand'],
+.settle-mini__cell[data-color='sand'] {
+  --cell-hue: var(--p-sand);
+}
+
+/* Lit-from-within Ember block */
+.settle-cell--filled,
+.settle-mini__cell {
+  border-radius: 4.5px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cell-hue) 80%, var(--c-candle) 20%) 0%,
+    var(--cell-hue) 58%,
+    color-mix(in srgb, var(--cell-hue) 84%, var(--c-night-0) 16%) 100%
+  );
+  box-shadow:
+    0 1px 0 rgb(255 232 198 / 0.36) inset,
+    0 -1.5px 0 rgb(10 6 5 / 0.44) inset,
+    1px 0 0 rgb(255 232 198 / 0.08) inset;
+}
+
+.settle-cell--active {
+  filter: brightness(1.06);
+  box-shadow:
+    0 1px 0 rgb(255 238 212 / 0.48) inset,
+    0 -1.5px 0 rgb(10 6 5 / 0.4) inset,
+    1px 0 0 rgb(255 232 198 / 0.12) inset;
+}
+
+/* Ghost piece: delicate dashed warm outline */
+.settle-cell--ghost {
+  border-radius: 4.5px;
+  background: color-mix(in srgb, var(--cell-hue) 7%, transparent);
+  border: 1.5px dashed color-mix(in srgb, var(--cell-hue) 44%, transparent);
+}
+
+/* Candlelight bloom on clearing rows (260ms before collapse) */
+.settle-cell--clearing {
+  animation: settle-row-bloom 260ms var(--ease-out) forwards;
+}
+
+@keyframes settle-row-bloom {
+  0% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+  42% {
+    opacity: 1;
+    filter: brightness(1.55);
+  }
+  100% {
+    opacity: 0.12;
+    filter: brightness(1.3);
+  }
+}
+
+/* --- Serene top-out ember dissolve --------------------------------------- */
+
+.settle-dissolve-layer {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+  height: calc((100% - 10px) * 4 / 20);
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 2px;
+  pointer-events: none;
+  z-index: 4;
+  animation: settle-ember-dissolve 1100ms var(--ease-out) forwards;
+}
+
+.settle-dissolve-cell {
+  border-radius: 4px;
+  background: radial-gradient(
+    circle at 50% 40%,
+    var(--c-candle),
+    var(--c-ember) 65%,
+    transparent 100%
+  );
+  opacity: 0.75;
+}
+
+@keyframes settle-ember-dissolve {
+  0% {
+    opacity: 0.85;
+    transform: translateY(0);
+    filter: brightness(1.25);
+  }
+  45% {
+    opacity: 0.55;
+    transform: translateY(-4px);
+    filter: brightness(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+    filter: brightness(0.8);
+  }
+}
+
+.settle-notice {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  background: rgb(18 10 7 / 0.88);
+  box-shadow:
+    0 0 0 1px var(--c-line) inset,
+    0 8px 20px -10px rgb(0 0 0 / 0.85);
+  font-size: 12px;
+  font-weight: 520;
+  letter-spacing: 0.02em;
+  color: var(--c-glow);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* --- Side rail (Hold + Next 3) ------------------------------------------- */
+
+.settle-rail {
+  --rail-w: clamp(72px, 21cqw, 90px);
+  --board-h: min(100cqh, 580px, calc((100cqw - var(--rail-w) - 16px) * 2));
+  width: var(--rail-w);
+  height: var(--board-h);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+}
+
+.settle-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--c-night-1);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+}
+
+.settle-panel--hold {
+  width: 100%;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    opacity var(--d-fast) ease;
+}
+
+.settle-panel--hold:active:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--c-night-2);
+}
+
+.settle-panel--hold[data-locked='true'] {
+  opacity: 0.56;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settle-panel--hold:hover:not(:disabled) {
+    background: var(--c-night-2);
+  }
+}
+
+.settle-panel__label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-ink-3);
+}
+
+.settle-panel__slot {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 36px;
+}
+
+.settle-panel__empty {
+  width: 14px;
+  height: 2px;
+  border-radius: 99px;
+  background: var(--c-line);
+}
+
+.settle-next-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 2px 0;
+}
+
+.settle-next-item {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 30px;
+}
+
+.settle-next-item[data-rank='1'] {
+  opacity: 0.82;
+}
+
+.settle-next-item[data-rank='2'] {
+  opacity: 0.62;
+}
+
+/* Mini piece preview grid */
+.settle-mini {
+  --mini-cell: 12px;
+  display: grid;
+  gap: 1.5px;
+}
+
+.settle-mini__cell {
+  width: var(--mini-cell);
+  height: var(--mini-cell);
+  border-radius: 3px;
+}
+
+/* --- Bottom thumb controls ----------------------------------------------- */
+
+.settle-controls {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr) auto;
+  gap: 7px;
+  width: 100%;
+  align-items: center;
+}
+
+.settle-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 50px;
+  border-radius: var(--r-md);
+  color: var(--c-ink);
+  background: var(--c-night-2);
+  box-shadow:
+    0 0 0 1px var(--c-line-soft) inset,
+    0 1px 0 rgb(255 232 198 / 0.05) inset;
+  user-select: none;
+  touch-action: manipulation;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    color var(--d-fast) ease,
+    opacity var(--d-fast) ease;
+}
+
+.settle-btn:active:not(:disabled),
+.settle-btn[data-pressed='true']:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--c-night-3);
+}
+
+.settle-btn--accent {
+  color: var(--c-glow);
+  background:
+    radial-gradient(100% 120% at 50% 0%, rgb(255 122 51 / 0.12), transparent 70%),
+    var(--c-night-2);
+  box-shadow: 0 0 0 1px var(--c-line) inset;
+}
+
+.settle-btn--hold {
+  padding: 0 12px;
+  min-width: 54px;
+  border-radius: var(--r-pill);
+  background: var(--c-night-1);
+  color: var(--c-ink-2);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+}
+
+.settle-btn--hold:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.settle-btn__label {
+  font-size: 10px;
+  font-weight: 560;
+  letter-spacing: 0.03em;
+  color: var(--c-ink-3);
+  line-height: 1;
+}
+
+.settle-btn--accent .settle-btn__label {
+  color: var(--c-ink-2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .settle-btn:hover:not(:disabled) {
+    background: var(--c-night-3);
+  }
+  .settle-btn--hold:hover:not(:disabled) {
+    color: var(--c-ink);
+    background: var(--c-night-2);
+  }
+}
+
+/* --- Reduced motion ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .settle-dissolve-layer {
+    animation: settle-ember-dissolve-reduced 600ms ease-out forwards;
+  }
+
+  @keyframes settle-ember-dissolve-reduced {
+    0% {
+      opacity: 0.7;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+}

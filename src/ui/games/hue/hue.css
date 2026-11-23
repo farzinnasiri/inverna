@@ -1,0 +1,275 @@
+/* ==========================================================================
+   Hue — tactile colour-harmony mosaic
+   Ember motion rules: transform/opacity only, ease-out, no scale(0), no
+   transition: all, hover gated to fine pointers, reduced-motion aware.
+   ========================================================================== */
+
+.hue-stage {
+  container-type: size;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.hue-board {
+  --cols: 5;
+  --rows: 6;
+  width: min(100cqw, calc(100cqh * var(--cols) / var(--rows)), 388px);
+  aspect-ratio: var(--cols) / var(--rows);
+  padding: 4px;
+  border-radius: var(--r-lg);
+  background: var(--c-night-1);
+  box-shadow:
+    0 0 0 1px var(--c-line) inset,
+    0 22px 48px -20px rgb(0 0 0 / 0.85);
+}
+
+.hue-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  gap: 2px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* --- Individual tiles ---------------------------------------------------- */
+
+.hue-tile {
+  position: relative;
+  border-radius: 3px;
+  background-color: var(--tile-color);
+  cursor: pointer;
+  transform: translate3d(0, 0, 0) scale(1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 240 216 / 0.13),
+    inset 0 -1px 0 rgb(10 6 5 / 0.18);
+  transition:
+    transform 190ms var(--ease-out),
+    box-shadow 190ms var(--ease-out),
+    opacity 220ms var(--ease-out);
+  will-change: transform;
+}
+
+/* Outer frame corner rounding so the mosaic sits flush inside --r-lg. */
+.hue-tile[data-corner='tl'] {
+  border-top-left-radius: calc(var(--r-lg) - 4px);
+}
+.hue-tile[data-corner='tr'] {
+  border-top-right-radius: calc(var(--r-lg) - 4px);
+}
+.hue-tile[data-corner='bl'] {
+  border-bottom-left-radius: calc(var(--r-lg) - 4px);
+}
+.hue-tile[data-corner='br'] {
+  border-bottom-right-radius: calc(var(--r-lg) - 4px);
+}
+
+.hue-tile[data-pinned='true'] {
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hue-tile[data-pinned='false']:not([data-dragging='true']):not([data-selected='true']):hover {
+    transform: translate3d(0, 0, 0) scale(1.025);
+    z-index: 2;
+  }
+}
+
+/* Keyboard focus indicator (soft warm inner ring). */
+.hue-tile[data-focused='true'] {
+  z-index: 4;
+  box-shadow:
+    inset 0 0 0 2px var(--c-glow),
+    inset 0 0 0 3px rgb(18 10 7 / 0.55);
+}
+
+/* Selected (lifted for tap-to-swap). */
+.hue-tile[data-selected='true'] {
+  z-index: 6;
+  transform: translate3d(0, -1px, 0) scale(1.06);
+  box-shadow:
+    inset 0 0 0 2px var(--c-candle),
+    inset 0 1px 0 rgb(255 244 224 / 0.3),
+    0 12px 26px -6px rgb(0 0 0 / 0.72);
+}
+
+/* Drop target receptivity while dragging over a movable slot. */
+.hue-tile[data-drop-target='true'] {
+  z-index: 3;
+  transform: translate3d(0, 0, 0) scale(0.94);
+  box-shadow:
+    inset 0 0 0 2px rgb(255 217 160 / 0.7),
+    inset 0 0 0 3px rgb(18 10 7 / 0.45);
+}
+
+/* Active pointer drag follows the finger with zero transition lag. */
+.hue-tile[data-dragging='true'] {
+  z-index: 12;
+  cursor: grabbing;
+  transition: box-shadow 140ms var(--ease-out);
+  box-shadow:
+    inset 0 0 0 1.5px rgb(255 217 160 / 0.75),
+    0 18px 34px -8px rgb(0 0 0 / 0.78);
+}
+
+/* Instant FLIP start frame before transitioning back to (0, 0). */
+.hue-tile[data-flip-start='true'] {
+  transition: none;
+  z-index: 8;
+}
+
+.hue-tile[data-flip-active='true'] {
+  transition: transform 210ms var(--ease-out);
+  z-index: 8;
+}
+
+/* --- Pinned anchor dot --------------------------------------------------- */
+
+.hue-tile__anchor {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: rgb(18 10 7 / 0.56);
+  box-shadow: 0 0 0 1px rgb(255 225 190 / 0.22);
+}
+
+.hue-tile[data-dark='true'] .hue-tile__anchor {
+  background: rgb(241 220 196 / 0.52);
+  box-shadow: 0 0 0 1px rgb(10 6 5 / 0.35);
+}
+
+/* --- Gentle hint ring ---------------------------------------------------- */
+
+.hue-tile__hint {
+  position: absolute;
+  inset: 4px;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 2px solid var(--c-candle);
+  box-shadow: 0 0 0 1px rgb(18 10 7 / 0.45);
+  animation: hue-hint-pulse 1100ms var(--ease-out) 2 both;
+}
+
+@keyframes hue-hint-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  40% {
+    opacity: 0.92;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* --- Solved diagonal wave shimmer --------------------------------------- */
+
+.hue-tile__sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 35% 30%, rgb(255 236 204 / 0.5), transparent 72%);
+}
+
+.hue-grid[data-solved='true'] .hue-tile {
+  cursor: default;
+  animation: hue-wave-tile 620ms var(--ease-out) var(--wave-delay, 0ms) both;
+}
+
+.hue-grid[data-solved='true'] .hue-tile__sheen {
+  animation: hue-wave-sheen 680ms var(--ease-out) var(--wave-delay, 0ms) both;
+}
+
+@keyframes hue-wave-tile {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  38% {
+    transform: translate3d(0, 0, 0) scale(1.035);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes hue-wave-sheen {
+  0% {
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* --- Calm bottom bar ----------------------------------------------------- */
+
+.hue-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 388px;
+  margin: 0 auto;
+}
+
+.hue-bar__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.hue-bar__title {
+  font-size: 18px;
+  line-height: 1.15;
+  color: var(--c-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hue-bar__sub {
+  font-size: 12.5px;
+  color: var(--c-ink-3);
+}
+
+/* --- Reduced motion ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .hue-tile {
+    transition: opacity 160ms var(--ease-out);
+  }
+  .hue-tile[data-selected='true'] {
+    transform: none;
+  }
+  .hue-tile[data-drop-target='true'] {
+    transform: none;
+  }
+  .hue-grid[data-solved='true'] .hue-tile {
+    animation: none;
+  }
+  .hue-tile[data-flip-start='true'],
+  .hue-tile[data-flip-active='true'] {
+    transform: none !important;
+    transition: none !important;
+  }
+}

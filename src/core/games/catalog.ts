@@ -36,7 +36,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Falling blocks',
     line: 'Fit the pieces, clear the rows. The pace never climbs.',
     effect: 'Visuospatial focus',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'hue',
@@ -44,7 +44,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Colour gradient',
     line: 'Swap tiles until the colours flow again.',
     effect: 'Visual order',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'thread',
