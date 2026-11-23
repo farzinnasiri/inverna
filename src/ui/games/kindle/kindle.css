@@ -1,0 +1,481 @@
+/* ==========================================================================
+   Kindle — 2048 Ember Hearth
+   Motion rules: transform/opacity (+ sparing filter) only, ease-out,
+   never scale(0) (start >= 0.9 with opacity 0), no transition: all,
+   fine-pointer hover gating, prefers-reduced-motion aware.
+   ========================================================================== */
+
+.kindle-stage {
+  container-type: size;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* --- 4x4 Hearth well ----------------------------------------------------- */
+
+.kindle-board {
+  --board-size: min(100cqw, 100cqh, 392px);
+  --pad: 10px;
+  position: relative;
+  width: var(--board-size);
+  height: var(--board-size);
+  container-type: inline-size;
+  padding: var(--pad);
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(120% 70% at 50% 100%, rgb(255 122 51 / 0.055), transparent 72%),
+    var(--c-night-1);
+  box-shadow:
+    0 0 0 1px var(--c-line) inset,
+    0 22px 48px -22px rgb(0 0 0 / 0.9);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  overflow: hidden;
+}
+
+.kindle-board[data-stuck='true'] {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--c-ember) 34%, var(--c-line)) inset,
+    0 22px 48px -22px rgb(0 0 0 / 0.9);
+}
+
+.kindle-grid,
+.kindle-tiles {
+  --gap: clamp(7px, 2.5cqi, 10px);
+}
+
+.kindle-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: var(--gap);
+  width: 100%;
+  height: 100%;
+}
+
+.kindle-slot {
+  border-radius: var(--r-md);
+  background: var(--c-night-2);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.45) inset,
+    0 0 0 1px var(--c-line-soft) inset;
+}
+
+/* --- Positioned tile layer (GPU translate3d gliding) --------------------- */
+
+.kindle-tiles {
+  position: absolute;
+  inset: var(--pad);
+  pointer-events: none;
+}
+
+.kindle-tile {
+  --row: 0;
+  --col: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc((100% - 3 * var(--gap)) / 4);
+  height: calc((100% - 3 * var(--gap)) / 4);
+  transform: translate3d(
+    calc(var(--col) * (100% + var(--gap))),
+    calc(var(--row) * (100% + var(--gap))),
+    0
+  );
+  transition: transform 150ms var(--ease-out);
+  will-change: transform;
+  z-index: 2;
+}
+
+.kindle-tile--source {
+  z-index: 1;
+}
+
+.kindle-tile--merged {
+  z-index: 3;
+}
+
+.kindle-tile--extinguished {
+  z-index: 1;
+}
+
+/* --- Lit-from-within Ember tiles ----------------------------------------- */
+
+.kindle-tile__inner {
+  --tile-bg: var(--c-night-3);
+  --tile-fg: var(--c-ink);
+  --tile-hi: rgb(255 234 202 / 0.22);
+  --tile-lo: rgb(10 6 5 / 0.44);
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  color: var(--tile-fg);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--tile-bg) 84%, var(--c-candle) 16%) 0%,
+    var(--tile-bg) 56%,
+    color-mix(in srgb, var(--tile-bg) 86%, var(--c-night-0) 14%) 100%
+  );
+  box-shadow:
+    0 1px 0 var(--tile-hi) inset,
+    0 -1.5px 0 var(--tile-lo) inset,
+    0 4px 12px -6px rgb(0 0 0 / 0.65);
+  line-height: 1;
+  font-weight: 420;
+  letter-spacing: -0.02em;
+}
+
+/* Smooth Fraunces sizing across 1 to 5+ digits */
+.kindle-tile__inner[data-digits='1'] {
+  font-size: clamp(24px, 9.6cqi, 38px);
+}
+
+.kindle-tile__inner[data-digits='2'] {
+  font-size: clamp(22px, 8.6cqi, 34px);
+}
+
+.kindle-tile__inner[data-digits='3'] {
+  font-size: clamp(18px, 7.1cqi, 28px);
+  font-weight: 440;
+}
+
+.kindle-tile__inner[data-digits='4'] {
+  font-size: clamp(15px, 5.7cqi, 23px);
+  font-weight: 460;
+  letter-spacing: -0.025em;
+}
+
+.kindle-tile__inner[data-digits='5'] {
+  font-size: clamp(12px, 4.6cqi, 18px);
+  font-weight: 480;
+  letter-spacing: -0.03em;
+}
+
+/* --- Heat-stage Ember palette (2 -> 4096+, zero blue, verified contrast) -- */
+
+/* 2: Warm banked charcoal */
+.kindle-tile__inner[data-tier='2'] {
+  --tile-bg: color-mix(in srgb, var(--c-night-3) 82%, var(--c-coal) 18%);
+  --tile-fg: var(--c-ink);
+  --tile-hi: rgb(255 228 196 / 0.14);
+}
+
+/* 4: Smoked coal & clay */
+.kindle-tile__inner[data-tier='4'] {
+  --tile-bg: color-mix(in srgb, var(--c-coal) 74%, var(--c-night-3) 26%);
+  --tile-fg: var(--c-ink);
+  --tile-hi: rgb(255 228 196 / 0.18);
+}
+
+/* 8: Kiln clay */
+.kindle-tile__inner[data-tier='8'] {
+  --tile-bg: color-mix(in srgb, var(--p-clay) 58%, var(--c-coal) 42%);
+  --tile-fg: var(--c-ink);
+  --tile-hi: rgb(255 232 200 / 0.24);
+}
+
+/* 16: Burnt sienna */
+.kindle-tile__inner[data-tier='16'] {
+  --tile-bg: color-mix(in srgb, var(--p-ember) 60%, var(--c-coal) 40%);
+  --tile-fg: var(--c-ink);
+  --tile-hi: rgb(255 232 200 / 0.28);
+}
+
+/* 32: Glowing ember */
+.kindle-tile__inner[data-tier='32'] {
+  --tile-bg: color-mix(in srgb, var(--p-ember) 88%, var(--c-glow) 12%);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 236 206 / 0.36);
+}
+
+/* 64: Bright ember orange */
+.kindle-tile__inner[data-tier='64'] {
+  --tile-bg: color-mix(in srgb, var(--c-ember) 86%, var(--c-glow) 14%);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 238 210 / 0.44);
+}
+
+/* 128: Saffron flame */
+.kindle-tile__inner[data-tier='128'] {
+  --tile-bg: var(--p-saffron);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 242 216 / 0.48);
+}
+
+/* 256: Amber glow */
+.kindle-tile__inner[data-tier='256'] {
+  --tile-bg: var(--c-glow);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 246 224 / 0.54);
+}
+
+/* 512: Warm honey */
+.kindle-tile__inner[data-tier='512'] {
+  --tile-bg: var(--p-honey);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 248 228 / 0.58);
+}
+
+/* 1024: Sunlit sand & candle */
+.kindle-tile__inner[data-tier='1024'] {
+  --tile-bg: color-mix(in srgb, var(--p-sand) 65%, var(--c-candle) 35%);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 250 236 / 0.68);
+  background:
+    radial-gradient(120% 95% at 50% 0%, rgb(255 248 230 / 0.42), transparent 64%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tile-bg) 82%, var(--c-candle) 18%) 0%,
+      var(--tile-bg) 62%,
+      color-mix(in srgb, var(--tile-bg) 90%, var(--c-glow) 10%) 100%
+    );
+}
+
+/* 2048: Luminous candlelight */
+.kindle-tile__inner[data-tier='2048'] {
+  --tile-bg: var(--c-candle);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 252 242 / 0.8);
+  background:
+    radial-gradient(125% 100% at 50% 0%, rgb(255 250 236 / 0.65), transparent 62%),
+    linear-gradient(180deg, var(--c-candle) 0%, var(--c-glow) 100%);
+  box-shadow:
+    0 1px 0 var(--tile-hi) inset,
+    0 -1.5px 0 rgb(110 46 10 / 0.34) inset,
+    0 0 0 1px rgb(255 244 218 / 0.45) inset,
+    0 6px 18px -6px rgb(0 0 0 / 0.72);
+}
+
+/* 4096+: Hearth gold-light */
+.kindle-tile__inner[data-tier='4096'] {
+  --tile-bg: color-mix(in srgb, var(--c-candle) 74%, var(--c-ink) 26%);
+  --tile-fg: #2a0f04;
+  --tile-hi: rgb(255 252 244 / 0.86);
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgb(255 252 240 / 0.72), transparent 64%),
+    linear-gradient(180deg, var(--c-ink) 0%, var(--c-candle) 58%, var(--c-glow) 100%);
+  box-shadow:
+    0 1px 0 var(--tile-hi) inset,
+    0 -1.5px 0 rgb(110 46 10 / 0.34) inset,
+    0 0 0 1.5px rgb(255 246 226 / 0.62) inset,
+    0 6px 20px -6px rgb(0 0 0 / 0.75);
+}
+
+/* --- Tile animations (GPU only, never scale(0)) -------------------------- */
+
+/* Spawn: enter gently from scale(0.9) + opacity: 0 */
+.kindle-tile--new .kindle-tile__inner {
+  animation: kindle-spawn 190ms var(--ease-out) 70ms both;
+}
+
+@keyframes kindle-spawn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Merge result: warm brightness/scale bloom (1 -> 1.08 -> 1, 200ms ease-out) */
+.kindle-tile--merged .kindle-tile__inner {
+  animation: kindle-merge-bloom 200ms var(--ease-out) 85ms both;
+}
+
+@keyframes kindle-merge-bloom {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: brightness(1);
+  }
+  42% {
+    opacity: 1;
+    transform: scale(1.08);
+    filter: brightness(1.16);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+/* Merging sources glide into destination, then yield to the merged tile */
+.kindle-tile--source .kindle-tile__inner {
+  animation: kindle-source-yield 155ms var(--ease-out) forwards;
+}
+
+@keyframes kindle-source-yield {
+  0%,
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Make room: gentle ember cool-down (stays >= scale(0.91)) */
+.kindle-tile--extinguished .kindle-tile__inner {
+  animation: kindle-extinguish 420ms var(--ease-out) forwards;
+}
+
+@keyframes kindle-extinguish {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: brightness(1.15);
+  }
+  45% {
+    opacity: 0.55;
+    transform: scale(0.95);
+    filter: brightness(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.91);
+    filter: brightness(0.65);
+  }
+}
+
+/* --- Quiet 2048 milestone pill ------------------------------------------- */
+
+.kindle-notice {
+  position: absolute;
+  top: 12px;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin-inline: auto;
+  z-index: 8;
+  padding: 6px 14px;
+  border-radius: var(--r-pill);
+  background: rgb(18 10 7 / 0.9);
+  box-shadow:
+    0 0 0 1px var(--c-line) inset,
+    0 8px 20px -10px rgb(0 0 0 / 0.85);
+  font-size: 12.5px;
+  font-weight: 540;
+  letter-spacing: 0.015em;
+  color: var(--c-candle);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* --- Bottom controls bar ------------------------------------------------- */
+
+.kindle-controls {
+  max-width: 392px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.kindle-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.kindle-bar__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.kindle-bar__best {
+  font-size: 13px;
+  color: var(--c-ink-3);
+  white-space: nowrap;
+}
+
+.kindle-bar__tag {
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: var(--c-night-2);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--c-glow);
+  white-space: nowrap;
+}
+
+.kindle-undo-count {
+  font-size: 12px;
+  color: var(--c-ink-3);
+  padding-left: 2px;
+}
+
+/* Gentle unstick footer when board is full */
+.kindle-stuck-bar {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--c-night-1);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+}
+
+.kindle-stuck-bar__row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.kindle-stuck-bar__label {
+  font-size: 13px;
+  color: var(--c-ink-2);
+}
+
+.kindle-stuck-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* --- Reduced motion ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .kindle-tile {
+    transition: none;
+  }
+
+  .kindle-tile--new .kindle-tile__inner,
+  .kindle-tile--merged .kindle-tile__inner {
+    animation: kindle-fade-in-reduced 140ms ease-out both;
+  }
+
+  .kindle-tile--source .kindle-tile__inner,
+  .kindle-tile--extinguished .kindle-tile__inner {
+    animation: kindle-fade-out-reduced 140ms ease-out forwards;
+  }
+
+  @keyframes kindle-fade-in-reduced {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @keyframes kindle-fade-out-reduced {
+    0% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+}

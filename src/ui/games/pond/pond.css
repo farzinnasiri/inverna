@@ -1,0 +1,48 @@
+/* ==========================================================================
+   Pond — ambient koi pond
+   Ember palette only: warm near-black water, subtle inner vignette, zero blue.
+   ========================================================================== */
+
+.pond-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 260px;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: radial-gradient(75% 70% at 50% 45%, var(--c-night-1), var(--c-night-0));
+  box-shadow:
+    0 0 0 1px var(--c-line-soft),
+    0 16px 40px -18px rgb(0 0 0 / 0.85);
+}
+
+.pond-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.pond-vignette {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    90% 88% at 50% 50%,
+    rgb(10 6 5 / 0) 56%,
+    rgb(10 6 5 / 0.32) 86%,
+    rgb(10 6 5 / 0.62) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 217 160 / 0.05),
+    inset 0 0 28px rgb(10 6 5 / 0.68);
+}
+
+.pond-caption {
+  margin: 0;
+  text-align: center;
+  color: var(--c-ink-3);
+  letter-spacing: 0.01em;
+}

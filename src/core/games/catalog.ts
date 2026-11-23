@@ -52,7 +52,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Connect the dots',
     line: 'Join each pair of lights. Paths never cross.',
     effect: 'Bounded problem-solving',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'kindle',
@@ -60,7 +60,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: '2048',
     line: 'Slide embers together until they glow brighter.',
     effect: 'Gentle planning',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'pond',
@@ -68,7 +68,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Ambient koi',
     line: 'Guide a fish through dark water. Gather the light.',
     effect: 'Effortless attention',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'drift',
