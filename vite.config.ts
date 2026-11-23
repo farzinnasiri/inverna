@@ -17,8 +17,8 @@ export default defineConfig({
         name: 'Lull',
         short_name: 'Lull',
         description: 'Quiet games and sleep sounds for the last hour of the day.',
-        theme_color: '#0A0605',
-        background_color: '#0A0605',
+        theme_color: '#000000',
+        background_color: '#000000',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

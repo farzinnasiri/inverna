@@ -1,7 +1,7 @@
 /* ==========================================================================
-   Hue — tactile colour-harmony mosaic
-   Ember motion rules: transform/opacity only, ease-out, no scale(0), no
-   transition: all, hover gated to fine pointers, reduced-motion aware.
+   Hue — Low Light flat Dusk Stone gradient mosaic
+   Flat tiles separated by a 2px true-black gap. No bevels, no shadows,
+   no gradients on UI, transform/opacity motion only.
    ========================================================================== */
 
 .hue-stage {
@@ -17,12 +17,7 @@
   --rows: 6;
   width: min(100cqw, calc(100cqh * var(--cols) / var(--rows)), 388px);
   aspect-ratio: var(--cols) / var(--rows);
-  padding: 4px;
-  border-radius: var(--r-lg);
-  background: var(--c-night-1);
-  box-shadow:
-    0 0 0 1px var(--c-line) inset,
-    0 22px 48px -20px rgb(0 0 0 / 0.85);
+  background: var(--c-bg);
 }
 
 .hue-grid {
@@ -33,12 +28,13 @@
   grid-template-columns: repeat(var(--cols), 1fr);
   grid-template-rows: repeat(var(--rows), 1fr);
   gap: 2px;
+  background: var(--c-bg);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* --- Individual tiles ---------------------------------------------------- */
+/* --- Individual flat tiles ----------------------------------------------- */
 
 .hue-tile {
   position: relative;
@@ -46,28 +42,24 @@
   background-color: var(--tile-color);
   cursor: pointer;
   transform: translate3d(0, 0, 0) scale(1);
-  box-shadow:
-    inset 0 1px 0 rgb(255 240 216 / 0.13),
-    inset 0 -1px 0 rgb(10 6 5 / 0.18);
   transition:
     transform 190ms var(--ease-out),
-    box-shadow 190ms var(--ease-out),
     opacity 220ms var(--ease-out);
   will-change: transform;
 }
 
-/* Outer frame corner rounding so the mosaic sits flush inside --r-lg. */
+/* Outer corner rounding for a crisp silhouette on true black. */
 .hue-tile[data-corner='tl'] {
-  border-top-left-radius: calc(var(--r-lg) - 4px);
+  border-top-left-radius: var(--r-md);
 }
 .hue-tile[data-corner='tr'] {
-  border-top-right-radius: calc(var(--r-lg) - 4px);
+  border-top-right-radius: var(--r-md);
 }
 .hue-tile[data-corner='bl'] {
-  border-bottom-left-radius: calc(var(--r-lg) - 4px);
+  border-bottom-left-radius: var(--r-md);
 }
 .hue-tile[data-corner='br'] {
-  border-bottom-right-radius: calc(var(--r-lg) - 4px);
+  border-bottom-right-radius: var(--r-md);
 }
 
 .hue-tile[data-pinned='true'] {
@@ -76,46 +68,41 @@
 
 @media (hover: hover) and (pointer: fine) {
   .hue-tile[data-pinned='false']:not([data-dragging='true']):not([data-selected='true']):hover {
-    transform: translate3d(0, 0, 0) scale(1.025);
+    transform: translate3d(0, 0, 0) scale(1.02);
     z-index: 2;
   }
 }
 
-/* Keyboard focus indicator (soft warm inner ring). */
+/* Keyboard focus indicator (2px ink2 inner outline). */
 .hue-tile[data-focused='true'] {
   z-index: 4;
-  box-shadow:
-    inset 0 0 0 2px var(--c-glow),
-    inset 0 0 0 3px rgb(18 10 7 / 0.55);
+  outline: 2px solid var(--c-ink-2);
+  outline-offset: -2px;
 }
 
-/* Selected (lifted for tap-to-swap). */
+/* Selected (crisp 2px ink inner outline + subtle scale, no drop shadow). */
 .hue-tile[data-selected='true'] {
   z-index: 6;
-  transform: translate3d(0, -1px, 0) scale(1.06);
-  box-shadow:
-    inset 0 0 0 2px var(--c-candle),
-    inset 0 1px 0 rgb(255 244 224 / 0.3),
-    0 12px 26px -6px rgb(0 0 0 / 0.72);
+  transform: translate3d(0, 0, 0) scale(1.04);
+  outline: 2px solid var(--c-ink);
+  outline-offset: -2px;
 }
 
 /* Drop target receptivity while dragging over a movable slot. */
 .hue-tile[data-drop-target='true'] {
   z-index: 3;
   transform: translate3d(0, 0, 0) scale(0.94);
-  box-shadow:
-    inset 0 0 0 2px rgb(255 217 160 / 0.7),
-    inset 0 0 0 3px rgb(18 10 7 / 0.45);
+  outline: 2px solid var(--c-ink-2);
+  outline-offset: -2px;
 }
 
 /* Active pointer drag follows the finger with zero transition lag. */
 .hue-tile[data-dragging='true'] {
   z-index: 12;
   cursor: grabbing;
-  transition: box-shadow 140ms var(--ease-out);
-  box-shadow:
-    inset 0 0 0 1.5px rgb(255 217 160 / 0.75),
-    0 18px 34px -8px rgb(0 0 0 / 0.78);
+  transition: none;
+  outline: 2px solid var(--c-ink);
+  outline-offset: -2px;
 }
 
 /* Instant FLIP start frame before transitioning back to (0, 0). */
@@ -140,24 +127,21 @@
   border-radius: 50%;
   transform: translate(-50%, -50%);
   pointer-events: none;
-  background: rgb(18 10 7 / 0.56);
-  box-shadow: 0 0 0 1px rgb(255 225 190 / 0.22);
+  background: var(--c-accent-ink);
 }
 
 .hue-tile[data-dark='true'] .hue-tile__anchor {
-  background: rgb(241 220 196 / 0.52);
-  box-shadow: 0 0 0 1px rgb(10 6 5 / 0.35);
+  background: var(--c-ink);
 }
 
-/* --- Gentle hint ring ---------------------------------------------------- */
+/* --- Gentle hint outline ------------------------------------------------- */
 
 .hue-tile__hint {
   position: absolute;
   inset: 4px;
   border-radius: inherit;
   pointer-events: none;
-  border: 2px solid var(--c-candle);
-  box-shadow: 0 0 0 1px rgb(18 10 7 / 0.45);
+  border: 2px solid var(--c-ink);
   animation: hue-hint-pulse 1100ms var(--ease-out) 2 both;
 }
 
@@ -167,7 +151,7 @@
     transform: scale(0.92);
   }
   40% {
-    opacity: 0.92;
+    opacity: 0.9;
     transform: scale(1);
   }
   100% {
@@ -176,24 +160,11 @@
   }
 }
 
-/* --- Solved diagonal wave shimmer --------------------------------------- */
-
-.hue-tile__sheen {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  opacity: 0;
-  background: radial-gradient(circle at 35% 30%, rgb(255 236 204 / 0.5), transparent 72%);
-}
+/* --- Solved diagonal wave ------------------------------------------------ */
 
 .hue-grid[data-solved='true'] .hue-tile {
   cursor: default;
   animation: hue-wave-tile 620ms var(--ease-out) var(--wave-delay, 0ms) both;
-}
-
-.hue-grid[data-solved='true'] .hue-tile__sheen {
-  animation: hue-wave-sheen 680ms var(--ease-out) var(--wave-delay, 0ms) both;
 }
 
 @keyframes hue-wave-tile {
@@ -201,22 +172,10 @@
     transform: translate3d(0, 0, 0) scale(1);
   }
   38% {
-    transform: translate3d(0, 0, 0) scale(1.035);
+    transform: translate3d(0, 0, 0) scale(1.03);
   }
   100% {
     transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes hue-wave-sheen {
-  0% {
-    opacity: 0;
-  }
-  35% {
-    opacity: 0.55;
-  }
-  100% {
-    opacity: 0;
   }
 }
 
@@ -231,25 +190,11 @@
   margin: 0 auto;
 }
 
-.hue-bar__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .hue-bar__title {
-  font-size: 18px;
-  line-height: 1.15;
-  color: var(--c-ink);
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.hue-bar__sub {
-  font-size: 12.5px;
-  color: var(--c-ink-3);
 }
 
 /* --- Reduced motion ------------------------------------------------------ */

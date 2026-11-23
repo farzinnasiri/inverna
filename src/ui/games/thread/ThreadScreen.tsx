@@ -28,7 +28,7 @@ import {
   type ThreadState,
 } from '@/core/games/thread/engine'
 import { Completion, GameShell, type GameScreenProps } from '@/ui/components/GameShell'
-import { Button } from '@/ui/components/controls'
+import { IconButton } from '@/ui/components/controls'
 import { useCalm, useFeedback, useGameSave, useKeys } from '@/ui/hooks/game'
 import './thread.css'
 
@@ -39,6 +39,17 @@ interface ThreadSave {
 }
 
 const COMPLETION_DELAY_MS = 680
+
+/** Explicit mapping from engine PieceColor keys onto the 7 flat Dusk Stones. */
+const STONE_VAR: Record<PieceColor, string> = {
+  ember: 'var(--p-clay)',
+  saffron: 'var(--p-ochre)',
+  honey: 'var(--p-straw)',
+  moss: 'var(--p-sage)',
+  clay: 'var(--p-rosewood)',
+  rose: 'var(--p-stone)',
+  sand: 'var(--p-bone)',
+}
 
 function isValidSave(value: unknown): value is ThreadSave {
   if (!value || typeof value !== 'object') return false
@@ -70,6 +81,80 @@ function buildSvgPathD(path: readonly Cell[]): string {
     d += ` L ${path[i]!.col * 100 + 50} ${path[i]!.row * 100 + 50}`
   }
   return d
+}
+
+/**
+ * Distinct flat geometric endpoint shape (~60% of a 100×100 cell) for each
+ * of the 7 pairs so colour-blind players can solve every board effortlessly.
+ */
+function EndpointShape({ color, cx, cy }: { color: PieceColor; cx: number; cy: number }) {
+  const fill = STONE_VAR[color]
+
+  switch (color) {
+    // Pair 0 (ember / clay): filled disc
+    case 'ember':
+      return <circle cx={cx} cy={cy} r={29} fill={fill} />
+
+    // Pair 1 (saffron / ochre): thick ring (hollow circle)
+    case 'saffron':
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={24} fill="var(--c-surface-1)" />
+          <circle cx={cx} cy={cy} r={24} fill="none" stroke={fill} strokeWidth={10} />
+        </>
+      )
+
+    // Pair 2 (honey / straw): rounded square
+    case 'honey':
+      return <rect x={cx - 26} y={cy - 26} width={52} height={52} rx={9} fill={fill} />
+
+    // Pair 3 (moss / sage): diamond
+    case 'moss':
+      return (
+        <polygon
+          points={`${cx},${cy - 31} ${cx + 31},${cy} ${cx},${cy + 31} ${cx - 31},${cy}`}
+          fill={fill}
+          strokeLinejoin="round"
+        />
+      )
+
+    // Pair 4 (clay / rosewood): triangle
+    case 'clay':
+      return (
+        <polygon
+          points={`${cx},${cy - 29} ${cx + 29},${cy + 22} ${cx - 29},${cy + 22}`}
+          fill={fill}
+          strokeLinejoin="round"
+        />
+      )
+
+    // Pair 5 (rose / stone): hollow square
+    case 'rose':
+      return (
+        <>
+          <rect x={cx - 22} y={cy - 22} width={44} height={44} rx={5} fill="var(--c-surface-1)" />
+          <rect
+            x={cx - 22}
+            y={cy - 22}
+            width={44}
+            height={44}
+            rx={5}
+            fill="none"
+            stroke={fill}
+            strokeWidth={10}
+          />
+        </>
+      )
+
+    // Pair 6 (sand / bone): plus / cross
+    case 'sand':
+      return (
+        <>
+          <rect x={cx - 29} y={cy - 10} width={58} height={20} rx={5} fill={fill} />
+          <rect x={cx - 10} y={cy - 29} width={20} height={58} rx={5} fill={fill} />
+        </>
+      )
+  }
 }
 
 export default function ThreadScreen({ onExit }: GameScreenProps) {
@@ -302,20 +387,29 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
     return set
   }, [state.pairs, state.paths])
 
-  // Map each cell index -> occupying colour for soft ember cell tinting.
-  const cellTint = useMemo(() => {
-    const map = new Array<PieceColor | null>(totalCells).fill(null)
+  // Track cells occupied by paths or endpoints so empty grid dots hide cleanly underneath.
+  const cellOccupied = useMemo(() => {
+    const occupied = new Array<boolean>(totalCells).fill(false)
     for (const color of PIECE_COLORS) {
       const path = state.paths[color]
       if (!path) continue
       const isActive = state.activeColor === color
       if (path.length < 2 && !isActive) continue
       for (const cell of path) {
-        map[cell.row * state.size + cell.col] = color
+        occupied[cell.row * state.size + cell.col] = true
       }
     }
-    return map
+    return occupied
   }, [state.paths, state.activeColor, state.size, totalCells])
+
+  const endpointCells = useMemo(() => {
+    const set = new Set<number>()
+    for (const pair of state.pairs) {
+      set.add(pair.a.row * state.size + pair.a.col)
+      set.add(pair.b.row * state.size + pair.b.col)
+    }
+    return set
+  }, [state.pairs, state.size])
 
   const activeTip = useMemo(() => {
     if (!state.activeColor) return null
@@ -344,39 +438,28 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={
         <>
-          <p>Drag from any glowing dot to connect it to its matching colour.</p>
-          <p>Fill every cell on the board. Crossing another thread trims it cleanly so you can reroute anytime.</p>
+          <p>Drag from any shape to connect it to its matching pair.</p>
+          <p>Fill every cell on the board. Crossing another path trims it cleanly so you can reroute anytime.</p>
         </>
       }
       controls={
         <div className="thread-bar">
-          <div className="thread-bar__meta">
-            <span className="thread-bar__title t-serif">Puzzle {state.puzzleNumber}</span>
-            <span className="thread-bar__sub num">
-              {state.size} × {state.size}
-            </span>
-          </div>
+          <span className="thread-bar__title t-headline">Puzzle {state.puzzleNumber}</span>
           <div className="thread-bar__actions">
-            <Button
-              variant="quiet"
-              size="sm"
+            <IconButton
+              label="Undo"
               onClick={handleUndo}
               disabled={state.history.length === 0 || state.solved}
-              aria-label="Undo"
             >
-              <Undo2 size={15} strokeWidth={1.75} aria-hidden />
-              Undo
-            </Button>
-            <Button
-              variant="quiet"
-              size="sm"
+              <Undo2 size={20} strokeWidth={1.5} aria-hidden />
+            </IconButton>
+            <IconButton
+              label="Clear board"
               onClick={handleClear}
               disabled={!hasDrawnPaths || state.solved}
-              aria-label="Clear board"
             >
-              <RotateCcw size={15} strokeWidth={1.75} aria-hidden />
-              Clear
-            </Button>
+              <RotateCcw size={20} strokeWidth={1.5} aria-hidden />
+            </IconButton>
           </div>
         </div>
       }
@@ -398,41 +481,29 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
               onPointerUp={(e) => finishPointer(e, false)}
               onPointerCancel={(e) => finishPointer(e, true)}
             >
-              {/* Layer 1: Hairline cells with soft tinted ember fills */}
+              {/* Layer 1: Flat cells with subtle centred ink-4 grid dots */}
               <div className="thread-cells" aria-hidden="true">
-                {cellTint.map((color, idx) => {
-                  const row = Math.floor(idx / state.size)
-                  const col = idx % state.size
-                  const isMissed = allPairsConnected && !state.solved && color === null
+                {cellOccupied.map((occupied, idx) => {
+                  const hasDot = !occupied && !endpointCells.has(idx)
+                  const isMissed = allPairsConnected && !state.solved && !occupied
                   return (
                     <div
                       key={idx}
                       className="thread-cell"
-                      data-color={color ?? undefined}
-                      data-connected={color && connectedColors.has(color) ? 'true' : undefined}
-                      data-last-col={col === state.size - 1 ? 'true' : undefined}
-                      data-last-row={row === state.size - 1 ? 'true' : undefined}
+                      data-dot={hasDot ? 'true' : undefined}
                       data-missed={isMissed ? 'true' : undefined}
                     />
                   )
                 })}
               </div>
 
-              {/* Layer 2 & 3: Continuous silky rounded SVG threads + lit glass endpoint beads */}
+              {/* Layer 2 & 3: Flat Dusk Stone paths + geometric endpoint shapes */}
               <svg
                 className="thread-svg"
                 viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
                 aria-hidden="true"
               >
-                <defs>
-                  <radialGradient id="thread-bead-shade" cx="34%" cy="26%" r="74%">
-                    <stop offset="0%" stopColor="rgb(255 248 232 / 0.42)" />
-                    <stop offset="44%" stopColor="rgb(255 236 206 / 0.06)" />
-                    <stop offset="100%" stopColor="rgb(10 6 5 / 0.36)" />
-                  </radialGradient>
-                </defs>
-
-                {/* Silky continuous paths */}
+                {/* Continuous round-cap paths (40% cell width, 0.55 opacity) */}
                 <g className="thread-paths">
                   {state.pairs.map((pair) => {
                     const path = state.paths[pair.color]
@@ -441,44 +512,30 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
                     const connected = connectedColors.has(pair.color)
                     const active = state.activeColor === pair.color
                     return (
-                      <g
+                      <path
                         key={pair.color}
-                        className="thread-path"
+                        className="thread-path__stroke"
                         data-connected={connected || undefined}
                         data-active={active || undefined}
-                      >
-                        <path
-                          className="thread-path__shadow"
-                          d={d}
-                          transform="translate(0 3)"
-                        />
-                        <path
-                          className="thread-path__stroke"
-                          d={d}
-                          style={{ stroke: `var(--p-${pair.color})` }}
-                        />
-                        <path
-                          className="thread-path__sheen"
-                          d={d}
-                          transform="translate(0 -2)"
-                        />
-                      </g>
+                        d={d}
+                        style={{ stroke: STONE_VAR[pair.color] }}
+                      />
                     )
                   })}
                 </g>
 
-                {/* Active drag tip pulse */}
+                {/* Subtle active drag tip ring */}
                 {activeTip && state.activeColor && (
                   <circle
                     className="thread-tip"
                     cx={activeTip.col * 100 + 50}
                     cy={activeTip.row * 100 + 50}
-                    r={25}
-                    style={{ stroke: `var(--p-${state.activeColor})` }}
+                    r={24}
+                    style={{ stroke: STONE_VAR[state.activeColor] }}
                   />
                 )}
 
-                {/* Lit glass / ember endpoint beads */}
+                {/* Crisp flat geometric endpoint shapes */}
                 <g className="thread-beads">
                   {state.pairs.map((pair) => {
                     const connected = connectedColors.has(pair.color)
@@ -494,49 +551,7 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
                           data-active={active || undefined}
                           style={{ transformOrigin: `${cx}px ${cy}px` }}
                         >
-                          <circle
-                            className="thread-bead__halo"
-                            cx={cx}
-                            cy={cy}
-                            r={38}
-                            style={{
-                              stroke: `var(--p-${pair.color})`,
-                              transformOrigin: `${cx}px ${cy}px`,
-                            }}
-                          />
-                          <circle
-                            cx={cx}
-                            cy={cy + 3}
-                            r={29}
-                            fill="rgb(10 6 5 / 0.56)"
-                          />
-                          <circle
-                            cx={cx}
-                            cy={cy}
-                            r={28.5}
-                            fill={`var(--p-${pair.color})`}
-                          />
-                          <circle
-                            cx={cx}
-                            cy={cy}
-                            r={28.5}
-                            fill="url(#thread-bead-shade)"
-                          />
-                          <circle
-                            cx={cx}
-                            cy={cy}
-                            r={27.5}
-                            fill="none"
-                            stroke="rgb(255 244 224 / 0.24)"
-                            strokeWidth={1.6}
-                          />
-                          <circle
-                            className="thread-bead__spec"
-                            cx={cx - 8}
-                            cy={cy - 9}
-                            r={5.2}
-                            fill="rgb(255 248 232 / 0.52)"
-                          />
+                          <EndpointShape color={pair.color} cx={cx} cy={cy} />
                         </g>
                       )
                     })
@@ -548,7 +563,7 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
 
           {/* Quiet hint slot (fixed height so the board never shifts) */}
           <p
-            className="thread-note t-caption"
+            className="thread-note t-label"
             data-visible={allPairsConnected && !state.solved ? 'true' : undefined}
             aria-live="polite"
           >
@@ -562,7 +577,7 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
       <Completion
         open={showCompletion}
         title="Connected"
-        line={`Puzzle ${state.puzzleNumber} · ${state.size} × ${state.size}`}
+        line={`Puzzle ${state.puzzleNumber}`}
         actionLabel="Next puzzle"
         onAction={handleNextPuzzle}
       />

@@ -1,74 +1,63 @@
-# Design language — "Ember"
+# Design language — "Low Light"
 
-**The screen is a night-light, not a lamp.** Lull is used in a dark bedroom in
-the last hour before sleep. Everything is drawn from embers, candle-light, tea,
-clay and dusk. There is almost no blue anywhere, by rule.
+**A phone that is already half asleep.** True black ground, quiet warm greys,
+one muted sand accent used sparingly, flat matte surfaces, one typeface, and
+every primary screen fits in one viewport with zero scroll.
 
 ## Principles
 
-1. **Low light, low arousal.** Warm near-black grounds, parchment ink, light
-   that sits *inside* objects (lit embers) rather than glows around them.
-2. **Slow, not sluggish.** UI responds instantly (press feedback 140ms,
-   transitions ≤ 300ms). Only the *ambient* layer is slow: the horizon sun
-   breathes at six breaths a minute.
-3. **One metaphor: sunset.** A wind-down session is a sunset. The sun on Home
-   sinks below the horizon as the session runs; a tiny sun in every game's
-   title bar does the same. At the end: fade to black. No victory screen.
-4. **Nothing competes.** No streaks, badges, red dots, leaderboards or timers
-   counting down at you. Scores exist quietly, never celebrated loudly.
-5. **Classic games, played straight.** Each game is a faithful classic with
-   Lull's materials, not a reinvention.
+1. **Darkness is the material.** True `#000000` ground (OLED pixels off). Light
+   only where there is information, dimmer than you think.
+2. **One accent, rarely.** Muted sand (`#C4A57C`) marks at most one element per
+   screen at rest. Most screens use no accent at all.
+3. **Flat and precise.** Surfaces step by value (`bg → surface1 → surface2 →
+   surface3`), edges are 1px hairlines. Zero UI gradients, zero bevels, zero
+   Y-offset drop shadows, zero glows.
+4. **The object is the title.** No screen titles, subtitles, essays, or hints.
+   The bedtime clock, the sound orb, and the game tiles name themselves.
+5. **One viewport.** No primary screen scrolls at 390×844.
 
 ## Colour
 
-| Token | Hex | Use |
+| Token | Value | Use |
 |---|---|---|
-| `--c-night-0` | #0A0605 | App ground |
-| `--c-night-1` | #120A07 | Sheets, wells |
-| `--c-night-2` | #1B110C | Raised surfaces, empty cells |
-| `--c-night-3` | #261811 | Pressed/selected surfaces |
-| `--c-line` / `--c-line-soft` | #3A261C / #2A1B14 | Hairlines |
-| `--c-ink` | #F1DCC4 | Primary text |
-| `--c-ink-2` | #BC9B81 | Secondary text |
-| `--c-ink-3` | #8A6E5B | Captions, labels (large or short text only) |
-| `--c-ember` | #FF7A33 | The one accent: primary actions, focus |
-| `--c-glow` | #FFB45E | Highlights, active states |
-| `--c-candle` | #FFD9A0 | Hottest light (thumbs, sun core) |
-| `--c-coal` | #5C2A16 | Banked heat, deep fills |
+| `--c-bg` | `#000000` | App ground, game ground |
+| `--c-surface-1` | `#0E0D0C` | Sheets, sound orb ground, board wells |
+| `--c-surface-2` | `#171614` | Tiles, controls at rest |
+| `--c-surface-3` | `#22201D` | Selected/pressed states, fader tracks |
+| `--c-line` | `rgb(232 224 212 / 0.08)` | Hairlines, tile borders |
+| `--c-line-strong` | `rgb(232 224 212 / 0.14)` | Island edge, sheet top border |
+| `--c-ink` | `#DAD4CB` | Primary text (warm stone, not white) |
+| `--c-ink-2` | `#A8A198` | Secondary text, icons |
+| `--c-ink-3` | `#7A746D` | Labels (≥13px/500) |
+| `--c-ink-4` | `#4A4642` | Disabled, inactive strokes, grid dots |
+| `--c-accent` | `#C4A57C` | Muted sand (at most one per screen) |
+| `--c-accent-ink` | `#14110D` | Text on accent |
+| `--c-accent-dim` | `#7D6A51` | Horizon disc, session rim arc |
+| `--c-accent-wash` | `rgb(196 165 124 / 0.12)` | Hold-to-confirm fill |
 
-**Game hues** (`--p-*`): ember #E85A36 · saffron #F0973A · honey #E9C46A ·
-moss #A2A55A · clay #B5694A · rose #D97A6C · sand #E9D3AE. Pieces are lit from
-within: a top-light gradient (`linear-gradient(180deg, lighter, base)`), a 1px
-inner highlight at the top, a soft dark inner edge at the bottom. No outer
-neon glow.
+**Night light:** Warmth shifts ink, accent, and piece tokens in OKLab via
+`applyTokens({ warmth })` — never a colour overlay or `mix-blend-mode`. Dimming
+is a plain `#000000` layer (`opacity = dim * 0.7`), so black stays `#000000` at
+every light setting.
 
-## Type
+**Dusk stones (`--p-*`):** Matte, low-chroma (`<= 0.07` OKLCH), zero blue:
+`clay #A6705B · ochre #B48F5E · straw #CBBA8F · sage #8B9372 · rosewood #9E6866 · stone #8A817A · bone #DCD2C2`.
 
-- **Display:** Fraunces (variable, `SOFT` 100, light weights 330–420). Names,
-  headings, big numbers. Soft serif = bedtime book, not dashboard.
-- **UI:** Figtree (variable). Labels, body, buttons.
-- Numbers that change use `.num` (tabular figures).
-- Classes: `.t-display` 44 · `.t-title` 34 · `.t-heading` 22 · `.t-body` 16 ·
-  `.t-small` 14.5 · `.t-caption` 12.5.
+## Typography
 
-## Shape & depth
+One UI family: **SF Pro** on Apple devices, **Inter Variable** elsewhere. No
+serif. Five strict classes:
 
-Radii 6/10/14/22/30. Cards rarely; hairline-separated rows instead. Elevation
-is a soft, offset, dark shadow — never a coloured halo.
+- `.t-hero` — 64/1.0, weight 200, `-0.03em`, `tnum` (time only)
+- `.t-title` — 22/1.2, weight 600, `-0.015em` (sheet titles, onboarding questions)
+- `.t-headline` — 16/1.3, weight 500, `-0.005em` (names, row labels)
+- `.t-body` — 15/1.4, weight 400, `ink2` (at most one supporting line)
+- `.t-label` — 13/1.25, weight 500, `ink3`, sentence case (never uppercase)
 
-## Motion
+## Copy rules
 
-- Curves: `--ease-out` (0.23,1,0.32,1) for enter/exit · `--ease-in-out`
-  (0.77,0,0.175,1) for on-screen movement · `--ease-drawer` (0.32,0.72,0,1)
-  for sheets and indicators.
-- Press: `scale(0.97)` at 140ms. Sheets: 440ms drawer curve, flick to dismiss.
-- Game pieces moving on a grid: 120–180ms ease-out translate. Merges/clears:
-  a short brightness bloom (opacity/filter), never a bounce explosion.
-- Ambient: 10s breath cycle on the horizon glow; embers drift 14–22s.
-- Reduced motion: drop translation and scale, keep opacity.
-
-## Voice
-
-Short, plain, kind. "Wind down", "Start over", "Leave game". No exclamation
-marks. No guilt ("Still up?" is the limit). Honest about science: binaural
-beats are offered as soothing sound, not as medicine.
+1. One label per control — no hints under labels.
+2. Never echo a value already shown by a control.
+3. No counts, vanity badges, greetings, or periods on single-line UI text.
+4. No new UI text without removing some.

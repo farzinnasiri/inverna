@@ -1,7 +1,6 @@
 /* ==========================================================================
-   Settle — Ember visual layer
-   Rules: design tokens only, transform/opacity (+ sparing filter), no
-   transition: all, no scale(0), fine-pointer hover gating, reduced motion.
+   Settle — Lull v2 "Low Light" Dusk Stones & handheld thumb deck
+   Flat matte stones, true black gaps, zero gradients, zero shadows.
    ========================================================================== */
 
 .settle-arena {
@@ -18,19 +17,12 @@
 /* --- Board well ---------------------------------------------------------- */
 
 .settle-well {
-  --rail-w: clamp(72px, 21cqw, 90px);
+  --rail-w: clamp(70px, 21cqw, 88px);
   --board-h: min(100cqh, 580px, calc((100cqw - var(--rail-w) - 16px) * 2));
   position: relative;
   height: var(--board-h);
   width: calc(var(--board-h) / 2);
-  padding: 5px;
-  border-radius: var(--r-md);
-  background:
-    radial-gradient(110% 60% at 50% 100%, rgb(255 122 51 / 0.055), transparent 72%),
-    var(--c-night-1);
-  box-shadow:
-    0 0 0 1px var(--c-line-soft) inset,
-    0 18px 40px -22px rgb(0 0 0 / 0.9);
+  background: var(--c-bg);
   touch-action: none;
   overflow: hidden;
   flex: none;
@@ -43,165 +35,135 @@
   gap: 2px;
   width: 100%;
   height: 100%;
+  background: var(--c-bg);
 }
 
-/* --- Cells --------------------------------------------------------------- */
+/* --- Cells (flat matte Dusk Stones) -------------------------------------- */
 
 .settle-cell {
   position: relative;
-  border-radius: 3.5px;
-  background: rgb(27 17 12 / 0.44);
+  border-radius: 4px;
+  background: var(--c-surface-1);
 }
 
-/* Token hue mapping (zero hardcoded colors) */
+/* Direct mapping of engine data-color keys to v2 Dusk Stone tokens */
 .settle-cell[data-color='ember'],
-.settle-mini__cell[data-color='ember'] {
-  --cell-hue: var(--p-ember);
-}
-
-.settle-cell[data-color='saffron'],
-.settle-mini__cell[data-color='saffron'] {
-  --cell-hue: var(--p-saffron);
-}
-
-.settle-cell[data-color='honey'],
-.settle-mini__cell[data-color='honey'] {
-  --cell-hue: var(--p-honey);
-}
-
-.settle-cell[data-color='moss'],
-.settle-mini__cell[data-color='moss'] {
-  --cell-hue: var(--p-moss);
-}
-
-.settle-cell[data-color='clay'],
-.settle-mini__cell[data-color='clay'] {
+.settle-mini__cell[data-color='ember'],
+.settle-dissolve-cell[data-color='ember'] {
   --cell-hue: var(--p-clay);
 }
 
+.settle-cell[data-color='saffron'],
+.settle-mini__cell[data-color='saffron'],
+.settle-dissolve-cell[data-color='saffron'] {
+  --cell-hue: var(--p-ochre);
+}
+
+.settle-cell[data-color='honey'],
+.settle-mini__cell[data-color='honey'],
+.settle-dissolve-cell[data-color='honey'] {
+  --cell-hue: var(--p-straw);
+}
+
+.settle-cell[data-color='moss'],
+.settle-mini__cell[data-color='moss'],
+.settle-dissolve-cell[data-color='moss'] {
+  --cell-hue: var(--p-sage);
+}
+
+.settle-cell[data-color='clay'],
+.settle-mini__cell[data-color='clay'],
+.settle-dissolve-cell[data-color='clay'] {
+  --cell-hue: var(--p-rosewood);
+}
+
 .settle-cell[data-color='rose'],
-.settle-mini__cell[data-color='rose'] {
-  --cell-hue: var(--p-rose);
+.settle-mini__cell[data-color='rose'],
+.settle-dissolve-cell[data-color='rose'] {
+  --cell-hue: var(--p-stone);
 }
 
 .settle-cell[data-color='sand'],
-.settle-mini__cell[data-color='sand'] {
-  --cell-hue: var(--p-sand);
+.settle-mini__cell[data-color='sand'],
+.settle-dissolve-cell[data-color='sand'] {
+  --cell-hue: var(--p-bone);
 }
 
-/* Lit-from-within Ember block */
 .settle-cell--filled,
 .settle-mini__cell {
-  border-radius: 4.5px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--cell-hue) 80%, var(--c-candle) 20%) 0%,
-    var(--cell-hue) 58%,
-    color-mix(in srgb, var(--cell-hue) 84%, var(--c-night-0) 16%) 100%
-  );
-  box-shadow:
-    0 1px 0 rgb(255 232 198 / 0.36) inset,
-    0 -1.5px 0 rgb(10 6 5 / 0.44) inset,
-    1px 0 0 rgb(255 232 198 / 0.08) inset;
+  border-radius: 4px;
+  background: var(--cell-hue);
 }
 
-.settle-cell--active {
-  filter: brightness(1.06);
-  box-shadow:
-    0 1px 0 rgb(255 238 212 / 0.48) inset,
-    0 -1.5px 0 rgb(10 6 5 / 0.4) inset,
-    1px 0 0 rgb(255 232 198 / 0.12) inset;
-}
-
-/* Ghost piece: delicate dashed warm outline */
+/* Ghost piece: crisp 1px ink4 outline, transparent fill */
 .settle-cell--ghost {
-  border-radius: 4.5px;
-  background: color-mix(in srgb, var(--cell-hue) 7%, transparent);
-  border: 1.5px dashed color-mix(in srgb, var(--cell-hue) 44%, transparent);
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--c-ink-4);
 }
 
-/* Candlelight bloom on clearing rows (260ms before collapse) */
+/* Line clear: clean 220ms fade to bone then out */
 .settle-cell--clearing {
-  animation: settle-row-bloom 260ms var(--ease-out) forwards;
+  animation: settle-row-clear 220ms var(--ease-out) forwards;
 }
 
-@keyframes settle-row-bloom {
+@keyframes settle-row-clear {
   0% {
+    background-color: var(--cell-hue);
     opacity: 1;
-    filter: brightness(1);
   }
   42% {
+    background-color: var(--p-bone);
     opacity: 1;
-    filter: brightness(1.55);
   }
   100% {
-    opacity: 0.12;
-    filter: brightness(1.3);
+    background-color: var(--p-bone);
+    opacity: 0;
   }
 }
 
-/* --- Serene top-out ember dissolve --------------------------------------- */
+/* --- Top-out dissolve (plain gentle opacity fade) ------------------------ */
 
 .settle-dissolve-layer {
   position: absolute;
-  left: 5px;
-  right: 5px;
-  bottom: 5px;
-  height: calc((100% - 10px) * 4 / 20);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc((100% - 38px) * 0.2 + 6px);
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   grid-template-rows: repeat(4, 1fr);
   gap: 2px;
   pointer-events: none;
   z-index: 4;
-  animation: settle-ember-dissolve 1100ms var(--ease-out) forwards;
+  animation: settle-dissolve-fade 720ms var(--ease-out) forwards;
 }
 
 .settle-dissolve-cell {
   border-radius: 4px;
-  background: radial-gradient(
-    circle at 50% 40%,
-    var(--c-candle),
-    var(--c-ember) 65%,
-    transparent 100%
-  );
-  opacity: 0.75;
+  background: var(--cell-hue, var(--p-stone));
 }
 
-@keyframes settle-ember-dissolve {
+@keyframes settle-dissolve-fade {
   0% {
-    opacity: 0.85;
-    transform: translateY(0);
-    filter: brightness(1.25);
-  }
-  45% {
-    opacity: 0.55;
-    transform: translateY(-4px);
-    filter: brightness(1.05);
+    opacity: 0.9;
   }
   100% {
     opacity: 0;
-    transform: translateY(-10px);
-    filter: brightness(0.8);
   }
 }
 
 .settle-notice {
   position: absolute;
-  top: 12px;
+  top: 10px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
   padding: 5px 12px;
   border-radius: var(--r-pill);
-  background: rgb(18 10 7 / 0.88);
-  box-shadow:
-    0 0 0 1px var(--c-line) inset,
-    0 8px 20px -10px rgb(0 0 0 / 0.85);
-  font-size: 12px;
-  font-weight: 520;
-  letter-spacing: 0.02em;
-  color: var(--c-glow);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  color: var(--c-ink-2);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -209,13 +171,13 @@
 /* --- Side rail (Hold + Next 3) ------------------------------------------- */
 
 .settle-rail {
-  --rail-w: clamp(72px, 21cqw, 90px);
+  --rail-w: clamp(70px, 21cqw, 88px);
   --board-h: min(100cqh, 580px, calc((100cqw - var(--rail-w) - 16px) * 2));
   width: var(--rail-w);
   height: var(--board-h);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   flex: none;
 }
 
@@ -226,8 +188,8 @@
   gap: 8px;
   padding: 10px 8px 12px;
   border-radius: var(--r-md);
-  background: var(--c-night-1);
-  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
 }
 
 .settle-panel--hold {
@@ -240,46 +202,38 @@
 
 .settle-panel--hold:active:not(:disabled) {
   transform: scale(0.96);
-  background: var(--c-night-2);
+  background: var(--c-surface-2);
 }
 
 .settle-panel--hold[data-locked='true'] {
-  opacity: 0.56;
+  opacity: 0.45;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .settle-panel--hold:hover:not(:disabled) {
-    background: var(--c-night-2);
+    background: var(--c-surface-2);
   }
-}
-
-.settle-panel__label {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--c-ink-3);
 }
 
 .settle-panel__slot {
   display: grid;
   place-items: center;
   width: 100%;
-  min-height: 36px;
+  min-height: 32px;
 }
 
 .settle-panel__empty {
   width: 14px;
   height: 2px;
   border-radius: 99px;
-  background: var(--c-line);
+  background: var(--c-ink-4);
 }
 
 .settle-next-list {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
   padding: 2px 0;
 }
@@ -288,20 +242,20 @@
   display: grid;
   place-items: center;
   width: 100%;
-  min-height: 30px;
+  min-height: 28px;
 }
 
 .settle-next-item[data-rank='1'] {
-  opacity: 0.82;
+  opacity: 0.78;
 }
 
 .settle-next-item[data-rank='2'] {
-  opacity: 0.62;
+  opacity: 0.54;
 }
 
 /* Mini piece preview grid */
 .settle-mini {
-  --mini-cell: 12px;
+  --mini-cell: 11px;
   display: grid;
   gap: 1.5px;
 }
@@ -312,31 +266,122 @@
   border-radius: 3px;
 }
 
-/* --- Bottom thumb controls ----------------------------------------------- */
+/* --- Game Boy split thumb deck ------------------------------------------- */
 
-.settle-controls {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr) auto;
-  gap: 7px;
-  width: 100%;
+.settle-deck {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  max-width: 392px;
+  margin: 0 auto;
 }
 
-.settle-btn {
+/* Left: Tactile matte Cross D-Pad (~132px x 132px) */
+.settle-dpad {
+  --arm: 44px;
+  display: grid;
+  grid-template-columns: repeat(3, var(--arm));
+  grid-template-rows: repeat(3, var(--arm));
+  width: calc(var(--arm) * 3);
+  height: calc(var(--arm) * 3);
+  flex: none;
+}
+
+.settle-dpad__arm {
+  display: grid;
+  place-items: center;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  color: var(--c-ink-2);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    color var(--d-fast) ease;
+}
+
+.settle-dpad__arm--up {
+  grid-column: 2;
+  grid-row: 1;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  border-bottom: 0;
+  transform-origin: 50% 100%;
+}
+
+.settle-dpad__arm--left {
+  grid-column: 1;
+  grid-row: 2;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+  border-right: 0;
+  transform-origin: 100% 50%;
+}
+
+.settle-dpad__arm--right {
+  grid-column: 3;
+  grid-row: 2;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  border-left: 0;
+  transform-origin: 0% 50%;
+}
+
+.settle-dpad__arm--down {
+  grid-column: 2;
+  grid-row: 3;
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+  border-top: 0;
+  transform-origin: 50% 0%;
+}
+
+.settle-dpad__hub {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  place-items: center;
+  background: var(--c-surface-2);
+  pointer-events: none;
+}
+
+.settle-dpad__dimple {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+}
+
+.settle-dpad__arm:active:not(:disabled),
+.settle-dpad__arm[data-pressed='true']:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--c-surface-3);
+  color: var(--c-ink);
+}
+
+.settle-dpad__arm:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* Bottom-middle: Quiet Hold pill (Select/Start position) */
+.settle-hold-pill {
+  align-self: flex-end;
+  margin-bottom: 4px;
+  height: 30px;
+  padding: 0 13px;
+  border-radius: var(--r-pill);
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+  color: var(--c-ink-3);
   display: inline-flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  height: 50px;
-  border-radius: var(--r-md);
-  color: var(--c-ink);
-  background: var(--c-night-2);
-  box-shadow:
-    0 0 0 1px var(--c-line-soft) inset,
-    0 1px 0 rgb(255 232 198 / 0.05) inset;
+  white-space: nowrap;
   user-select: none;
-  touch-action: manipulation;
+  -webkit-user-select: none;
+  touch-action: none;
   transition:
     transform var(--d-press) var(--ease-out),
     background-color var(--d-fast) ease,
@@ -344,66 +389,111 @@
     opacity var(--d-fast) ease;
 }
 
-.settle-btn:active:not(:disabled),
-.settle-btn[data-pressed='true']:not(:disabled) {
+.settle-hold-pill:active:not(:disabled),
+.settle-hold-pill[data-pressed='true']:not(:disabled) {
   transform: scale(0.96);
-  background: var(--c-night-3);
-}
-
-.settle-btn--accent {
-  color: var(--c-glow);
-  background:
-    radial-gradient(100% 120% at 50% 0%, rgb(255 122 51 / 0.12), transparent 70%),
-    var(--c-night-2);
-  box-shadow: 0 0 0 1px var(--c-line) inset;
-}
-
-.settle-btn--hold {
-  padding: 0 12px;
-  min-width: 54px;
-  border-radius: var(--r-pill);
-  background: var(--c-night-1);
+  background: var(--c-surface-2);
   color: var(--c-ink-2);
-  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
 }
 
-.settle-btn--hold:disabled {
-  opacity: 0.4;
+.settle-hold-pill:disabled {
+  opacity: 0.35;
   cursor: default;
 }
 
-.settle-btn__label {
-  font-size: 10px;
-  font-weight: 560;
-  letter-spacing: 0.03em;
-  color: var(--c-ink-3);
-  line-height: 1;
+/* Right: Diagonally staggered Game Boy A / B round action buttons */
+.settle-ab {
+  position: relative;
+  width: 124px;
+  height: 112px;
+  flex: none;
 }
 
-.settle-btn--accent .settle-btn__label {
+.settle-ab__btn {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--c-surface-2);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    color var(--d-fast) ease,
+    opacity var(--d-fast) ease;
+}
+
+/* Big A button (58px, higher & right): Rotate */
+.settle-ab__btn--a {
+  top: 4px;
+  right: 0;
+  width: 58px;
+  height: 58px;
+  border: 1px solid var(--c-line-strong);
+  color: var(--c-ink);
+}
+
+/* Big B button (54px, lower & left): Drop */
+.settle-ab__btn--b {
+  bottom: 6px;
+  left: 0;
+  width: 54px;
+  height: 54px;
+  border: 1px solid var(--c-line);
   color: var(--c-ink-2);
 }
 
+.settle-ab__btn:active:not(:disabled),
+.settle-ab__btn[data-pressed='true']:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--c-surface-3);
+  color: var(--c-ink);
+}
+
+.settle-ab__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  .settle-btn:hover:not(:disabled) {
-    background: var(--c-night-3);
-  }
-  .settle-btn--hold:hover:not(:disabled) {
+  .settle-dpad__arm:hover:not(:disabled),
+  .settle-ab__btn:hover:not(:disabled) {
+    background: var(--c-surface-3);
     color: var(--c-ink);
-    background: var(--c-night-2);
+  }
+  .settle-hold-pill:hover:not(:disabled) {
+    background: var(--c-surface-2);
+    color: var(--c-ink-2);
+  }
+}
+
+/* Very short viewports: trim deck slightly so the board stays generous */
+@media (max-height: 640px) {
+  .settle-dpad {
+    --arm: 40px;
+  }
+  .settle-ab {
+    width: 118px;
+    height: 104px;
   }
 }
 
 /* --- Reduced motion ------------------------------------------------------ */
 
 @media (prefers-reduced-motion: reduce) {
-  .settle-dissolve-layer {
-    animation: settle-ember-dissolve-reduced 600ms ease-out forwards;
+  .settle-cell--clearing {
+    animation: settle-row-clear-reduced 140ms ease-out forwards;
   }
 
-  @keyframes settle-ember-dissolve-reduced {
+  .settle-dissolve-layer {
+    animation: settle-dissolve-fade 420ms ease-out forwards;
+  }
+
+  @keyframes settle-row-clear-reduced {
     0% {
-      opacity: 0.7;
+      opacity: 1;
     }
     100% {
       opacity: 0;

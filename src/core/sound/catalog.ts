@@ -5,39 +5,45 @@
 export type LayerId = 'rain' | 'waves' | 'fire' | 'wind' | 'brown' | 'pink' | 'white'
 
 export type BandId = 'delta' | 'theta' | 'alpha' | 'gamma'
+export type SleepBandId = 'delta' | 'theta' | 'alpha'
 
 export interface LayerMeta {
   id: LayerId
   name: string
+  short: string
   hint: string
 }
 
 export interface BandMeta {
-  id: BandId
+  id: SleepBandId
   name: string
   /** Beat frequency in Hz (difference between left and right ears). */
   hz: number
   hint: string
-  /** Whether this band is associated with rest. Gamma is not. */
   restful: boolean
 }
 
 export const LAYERS: readonly LayerMeta[] = [
-  { id: 'rain', name: 'Rain', hint: 'Steady rain on a roof' },
-  { id: 'waves', name: 'Waves', hint: 'Slow surf, long breaths' },
-  { id: 'fire', name: 'Hearth', hint: 'Low fire, the odd crackle' },
-  { id: 'wind', name: 'Wind', hint: 'Air moving through trees' },
-  { id: 'brown', name: 'Brown noise', hint: 'Deep, soft rumble' },
-  { id: 'pink', name: 'Pink noise', hint: 'Balanced, like distant water' },
-  { id: 'white', name: 'White noise', hint: 'Bright, masks everything' },
+  { id: 'rain', name: 'Rain', short: 'Rain', hint: 'Steady rain on a roof' },
+  { id: 'waves', name: 'Waves', short: 'Waves', hint: 'Slow surf, long breaths' },
+  { id: 'fire', name: 'Hearth', short: 'Fire', hint: 'Low fire, the odd crackle' },
+  { id: 'wind', name: 'Wind', short: 'Wind', hint: 'Air moving through trees' },
+  { id: 'brown', name: 'Brown noise', short: 'Brown', hint: 'Deep, soft rumble' },
+  { id: 'pink', name: 'Pink noise', short: 'Pink', hint: 'Balanced, like distant water' },
+  { id: 'white', name: 'White noise', short: 'White', hint: 'Bright, masks everything' },
 ]
 
+/** Sleep bands only (Gamma removed from v2 UI; saved mixes tolerated via normalizeBand). */
 export const BANDS: readonly BandMeta[] = [
   { id: 'delta', name: 'Delta', hz: 2, hint: 'Deep sleep rhythm', restful: true },
   { id: 'theta', name: 'Theta', hz: 5, hint: 'Drowsy, drifting', restful: true },
   { id: 'alpha', name: 'Alpha', hz: 10, hint: 'Relaxed, eyes closed', restful: true },
-  { id: 'gamma', name: 'Gamma', hz: 40, hint: 'Alert focus. Not for bedtime', restful: false },
 ]
+
+export function normalizeBand(band: BandId | null | undefined): SleepBandId | null {
+  if (band === 'delta' || band === 'theta' || band === 'alpha') return band
+  return null
+}
 
 export interface Mix {
   /** Gain per layer, 0..1. Missing = off. */
@@ -97,5 +103,5 @@ export function presetById(id: string | null | undefined): Preset | undefined {
 }
 
 export function isSilent(mix: Mix): boolean {
-  return !mix.band && Object.values(mix.layers).every((g) => !g)
+  return !normalizeBand(mix.band) && Object.values(mix.layers).every((g) => !g)
 }

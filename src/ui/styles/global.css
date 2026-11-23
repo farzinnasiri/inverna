@@ -1,18 +1,30 @@
 /* ==========================================================================
-   Lull — base layer
-   Tokens arrive as CSS variables from src/design/tokens.ts (applyTokens).
-   Fallbacks below keep first paint correct before JS runs.
+   Lull v2 — "Low Light" base layer
+   True black ground (#000000), flat matte warm greys, one typeface,
+   five strict typographic roles. Zero orange wash, zero shadows.
    ========================================================================== */
 
 :root {
-  --c-night-0: #0a0605;
-  --c-ink: #f1dcc4;
-  --font-ui: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Fraunces Variable', Georgia, serif;
+  --c-bg: #000000;
+  --c-surface-1: #0e0d0c;
+  --c-surface-2: #171614;
+  --c-surface-3: #22201d;
+  --c-line: rgb(232 224 212 / 0.08);
+  --c-line-strong: rgb(232 224 212 / 0.14);
+  --c-ink: #dad4cb;
+  --c-ink-2: #a8a198;
+  --c-ink-3: #7a746d;
+  --c-ink-4: #4a4642;
+  --c-accent: #c4a57c;
+  --c-accent-ink: #14110d;
+  --c-accent-dim: #7d6a51;
+  --c-accent-wash: rgb(196 165 124 / 0.12);
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Variable', system-ui, sans-serif;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --frame: 440px;
-  --tabbar-h: 68px;
+  --island-offset: calc(max(var(--safe-bottom), 12px) + 10px);
+  --island-space: calc(52px + max(var(--safe-bottom), 12px) + 26px);
   color-scheme: dark;
 }
 
@@ -26,11 +38,11 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--c-night-0);
+  background: var(--c-bg);
   color: var(--c-ink);
   font-family: var(--font-ui);
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -69,15 +81,15 @@ p {
   margin: 0;
 }
 
-/* --- Browser surfaces carry the design too ------------------------------ */
+/* --- Browser surfaces ---------------------------------------------------- */
 
 ::selection {
-  background: rgb(255 122 51 / 0.32);
-  color: var(--c-candle);
+  background: rgb(196 165 124 / 0.25);
+  color: var(--c-ink);
 }
 
 input {
-  caret-color: var(--c-ember);
+  caret-color: var(--c-ink-2);
 }
 
 :focus {
@@ -85,88 +97,75 @@ input {
 }
 
 :focus-visible {
-  outline: 2px solid var(--c-glow);
-  outline-offset: 3px;
+  outline: 2px solid var(--c-ink-2);
+  outline-offset: 2px;
   border-radius: var(--r-sm);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--c-line) transparent;
+  scrollbar-color: var(--c-surface-3) transparent;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--c-line);
+  background: var(--c-surface-3);
   border-radius: 99px;
 }
 
-/* --- Type ---------------------------------------------------------------- */
+/* --- Strict 5-role typographic scale ------------------------------------ */
 
-.t-display,
-.t-title,
-.t-heading,
-.t-serif {
-  font-family: var(--font-display);
-  font-optical-sizing: auto;
-  font-variation-settings: 'SOFT' 100, 'WONK' 0;
-  text-wrap: balance;
-}
-
-.t-display {
-  font-size: 44px;
-  line-height: 1.02;
-  font-weight: 330;
-  letter-spacing: -0.025em;
+.t-hero {
+  font-size: 64px;
+  line-height: 1;
+  font-weight: 200;
+  letter-spacing: -0.03em;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }
 
 .t-title {
-  font-size: 34px;
-  line-height: 1.06;
-  font-weight: 350;
-  letter-spacing: -0.02em;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--c-ink);
+  text-wrap: balance;
 }
 
-.t-heading {
-  font-size: 22px;
-  line-height: 1.15;
-  font-weight: 420;
-  letter-spacing: -0.012em;
+.t-headline {
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  color: var(--c-ink);
 }
 
 .t-body {
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 400;
+  letter-spacing: 0;
   color: var(--c-ink-2);
   text-wrap: pretty;
 }
 
-.t-small {
-  font-size: 14.5px;
-  line-height: 1.45;
-  color: var(--c-ink-2);
-  text-wrap: pretty;
-}
-
-.t-caption {
-  font-size: 12.5px;
-  line-height: 1.35;
-  letter-spacing: 0.01em;
+.t-label {
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: 0;
   color: var(--c-ink-3);
 }
 
 .num {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
-}
-
-em.t-accent {
-  font-style: italic;
-  color: var(--c-glow);
 }
 
 .visually-hidden {
@@ -183,7 +182,7 @@ em.t-accent {
 .app {
   position: relative;
   height: 100%;
-  isolation: isolate;
+  background: var(--c-bg);
 }
 
 .frame {
@@ -191,44 +190,26 @@ em.t-accent {
   max-width: var(--frame);
   height: 100%;
   margin: 0 auto;
+  background: var(--c-bg);
 }
 
-/* Desktop: the column sits in a quiet room, hairlines at its edges. */
 @media (min-width: 560px) {
   .frame {
-    border-inline: 1px solid var(--c-line-soft);
+    border-inline: 1px solid var(--c-line);
   }
 }
 
-.scroll {
+.viewport {
   position: absolute;
   inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   padding-top: var(--safe-top);
-  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 96px);
+  padding-bottom: var(--island-space);
 }
 
-.page {
-  padding: 20px 22px 0;
-}
-
-/* --- Ambient room light (behind everything) ----------------------------- */
-
-.room {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(70% 45% at 50% 108%, rgb(255 122 51 / 0.1), transparent 70%),
-    radial-gradient(60% 40% at 50% -10%, rgb(92 42 22 / 0.18), transparent 70%),
-    var(--c-night-0);
-}
-
-/* --- Night filter: the screen as a night-light -------------------------- */
-/* Multiply with deep orange strips blue (and some green); black dims.     */
+/* --- Plain black dim layer (black stays #000000, never tinted) ----------- */
 
 .night-filter {
   position: fixed;
@@ -237,24 +218,15 @@ em.t-accent {
   z-index: 1000;
 }
 
-.night-filter__warm {
-  position: absolute;
-  inset: 0;
-  background: #ff5a14;
-  mix-blend-mode: multiply;
-  opacity: 0;
-  transition: opacity 1.2s var(--ease-out);
-}
-
 .night-filter__dim {
   position: absolute;
   inset: 0;
-  background: #000;
+  background: #000000;
   opacity: 0;
-  transition: opacity 1.2s var(--ease-out);
+  transition: opacity 220ms linear;
 }
 
-/* --- Reduced motion: fewer and gentler, not zero ------------------------ */
+/* --- Reduced motion ------------------------------------------------------ */
 
 @media (prefers-reduced-motion: reduce) {
   *,

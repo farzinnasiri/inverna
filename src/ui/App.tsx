@@ -1,36 +1,34 @@
 import { Suspense, useEffect } from 'react'
 import { AnimatePresence, MotionConfig } from 'motion/react'
-import { Flame, Moon, Waves } from 'lucide-react'
 import { GAMES, type GameId } from '@/core/games/catalog'
 import { sound } from '@/platform'
 import { NightFilterOverlay } from './components/NightFilterOverlay'
-import { NowPlayingBar } from './components/NowPlayingBar'
+import { NightSheet } from './components/NightSheet'
 import { SessionCurtain } from './components/SessionCurtain'
+import { TabIsland } from './components/TabIsland'
 import { WindDownSheet } from './components/WindDownSheet'
 import { GAME_SCREENS } from './games/registry'
+import { Onboarding } from './onboarding/Onboarding'
 import { HomeScreen } from './screens/HomeScreen'
-import { NightScreen } from './screens/NightScreen'
 import { SoundsScreen } from './screens/SoundsScreen'
-import { useNav, type Tab } from './state/nav'
+import { useNav } from './state/nav'
 import { useSettings } from './state/settings'
-
-const TABS: readonly { id: Tab; label: string; Icon: typeof Flame }[] = [
-  { id: 'play', label: 'Play', Icon: Flame },
-  { id: 'sounds', label: 'Sounds', Icon: Waves },
-  { id: 'night', label: 'Night', Icon: Moon },
-]
 
 export function App() {
   const tab = useNav((s) => s.tab)
   const game = useNav((s) => s.game)
   const windDownOpen = useNav((s) => s.windDownOpen)
-  const setTab = useNav((s) => s.setTab)
+  const nightOpen = useNav((s) => s.nightOpen)
+  const onboardingReplay = useNav((s) => s.onboardingReplay)
   const openGame = useNav((s) => s.openGame)
   const closeGame = useNav((s) => s.closeGame)
   const setWindDownOpen = useNav((s) => s.setWindDownOpen)
-  const sfx = useSettings((s) => s.sfx)
+  const setNightOpen = useNav((s) => s.setNightOpen)
+  const setOnboardingReplay = useNav((s) => s.setOnboardingReplay)
 
-  // Sync SFX preference into the sound engine
+  const sfx = useSettings((s) => s.sfx)
+  const onboarded = useSettings((s) => s.onboarded)
+
   useEffect(() => {
     sound.setCuesEnabled(sfx)
   }, [sfx])
@@ -44,36 +42,18 @@ export function App() {
   }, [openGame])
 
   const ActiveGame = game ? GAME_SCREENS[game] : null
+  const showOnboarding = !onboarded || onboardingReplay
 
   return (
     <MotionConfig reducedMotion="user">
       <div className="app">
-        <div className="room" aria-hidden />
-
         <div className="frame">
-          <div className="scroll" aria-hidden={Boolean(ActiveGame)}>
+          <div className="viewport" aria-hidden={Boolean(ActiveGame)}>
             {tab === 'play' && <HomeScreen />}
             {tab === 'sounds' && <SoundsScreen />}
-            {tab === 'night' && <NightScreen />}
           </div>
 
-          <NowPlayingBar />
-
-          <nav className="tabbar" aria-label="Main navigation">
-            {TABS.map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                type="button"
-                className="tab"
-                aria-current={tab === id ? 'page' : undefined}
-                onClick={() => setTab(id)}
-              >
-                <Icon size={21} strokeWidth={1.7} />
-                <span>{label}</span>
-                <span className="tab__dot" aria-hidden />
-              </button>
-            ))}
-          </nav>
+          <TabIsland />
 
           <AnimatePresence>
             {ActiveGame && (
@@ -85,6 +65,8 @@ export function App() {
         </div>
 
         <WindDownSheet open={windDownOpen} onClose={() => setWindDownOpen(false)} />
+        <NightSheet open={nightOpen} onClose={() => setNightOpen(false)} />
+        {showOnboarding && <Onboarding onComplete={() => setOnboardingReplay(false)} />}
         <SessionCurtain />
         <NightFilterOverlay />
       </div>

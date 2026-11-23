@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Moon } from 'lucide-react'
-import { GAMES } from '@/core/games/catalog'
-import { minutesUntilBedtime, nightPhase } from '@/core/night'
+import { Moon } from 'lucide-react'
+import { GAMES, type GameId } from '@/core/games/catalog'
+import { formatBedtimeShort, minutesUntilBedtime, nightPhase } from '@/core/night'
 import { sessionElapsed, sessionProgress } from '@/core/session'
+import { ContinuePreview } from '../components/ContinuePreview'
 import { Button } from '../components/controls'
 import { GameGlyph } from '../components/GameGlyph'
 import { Horizon } from '../components/Horizon'
@@ -11,30 +12,16 @@ import { useSession } from '../state/session'
 import { useSettings } from '../state/settings'
 import { useSound } from '../state/sound'
 
-function greeting(now: Date): string {
-  const h = now.getHours()
-  if (h >= 22 || h < 4) return 'Quiet hours.'
-  if (h >= 18) return 'Good evening.'
-  if (h >= 12) return 'Take a breath.'
-  return 'Soft morning.'
-}
-
-function bedtimeLine(now: Date, schedule: ReturnType<typeof useSettings.getState>['schedule']): string {
-  const { phase } = nightPhase(schedule, now)
-  if (phase === 'bedtime') return 'Past bedtime. Keep the light low.'
-  if (phase === 'winding') {
-    const mins = minutesUntilBedtime(schedule, now)
-    return mins ? `${mins} min until bedtime.` : 'Bedtime is close.'
-  }
-  const mins = minutesUntilBedtime(schedule, now)
-  if (mins !== null && mins < 180) return `Bedtime in ${Math.round(mins / 5) * 5} min.`
-  return 'Pick something gentle instead of scrolling.'
+function formatNowShort(d: Date): string {
+  const h = d.getHours() % 12 || 12
+  return `${h}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 export function HomeScreen() {
   const openGame = useNav((s) => s.openGame)
   const setWindDownOpen = useNav((s) => s.setWindDownOpen)
   const schedule = useSettings((s) => s.schedule)
+  const lastGame = useSettings((s) => s.lastGame)
   const session = useSession((s) => s.session)
   const dismissSession = useSession((s) => s.dismiss)
   const stopSound = useSound((s) => s.stop)
@@ -45,110 +32,96 @@ export function HomeScreen() {
     return () => window.clearInterval(id)
   }, [session])
 
-  const progress = session ? sessionProgress(session, now) : 0
-  const remainingMin = session ? Math.max(1, Math.ceil((session.minutes * 60 - sessionElapsed(session, now)) / 60)) : 0
+  const dateNow = new Date(now)
+  const bedtimeText = formatBedtimeShort(schedule.bedtime)
+  const { phase, progress: eveningProgress } = nightPhase(schedule, dateNow)
+  const minsUntil = minutesUntilBedtime(schedule, dateNow)
+
+  let heroValue = bedtimeText
+  let heroLabel = 'Bedtime'
+  let horizonPos = 0.5
+  let horizonSet = 0
+
+  if (session) {
+    const rem = Math.max(1, Math.ceil((session.minutes * 60 - sessionElapsed(session, now)) / 60))
+    heroValue = `${rem} min`
+    heroLabel = 'Winding down'
+    horizonPos = 0.5
+    horizonSet = sessionProgress(session, now)
+  } else if (phase === 'bedtime') {
+    heroValue = formatNowShort(dateNow)
+    heroLabel = 'Past bedtime'
+    horizonPos = 0.5
+    horizonSet = 0.35
+  } else if (minsUntil !== null && minsUntil <= 180) {
+    heroValue = `${minsUntil} min`
+    heroLabel = `until ${bedtimeText}`
+    horizonPos = 0.16 + 0.34 * (phase === 'winding' ? eveningProgress : Math.max(0, 1 - minsUntil / 180))
+  }
 
   const ready = GAMES.filter((g) => g.status === 'ready')
-  const soon = GAMES.filter((g) => g.status === 'soon')
+  const featuredId: GameId =
+    lastGame && ready.some((g) => g.id === lastGame) ? lastGame : (ready[0]?.id ?? 'settle')
+  const ordered = [
+    ...ready.filter((g) => g.id === featuredId),
+    ...ready.filter((g) => g.id !== featuredId),
+  ]
 
   return (
-    <div className="page">
-      <Horizon set={session ? progress : 0} />
+    <div className="home">
+      <section className="home-hero" aria-label="Bedtime">
+        <div className="t-hero">{heroValue}</div>
+        <div className="t-label home-hero__label">{heroLabel}</div>
+        <Horizon set={horizonSet} position={horizonPos} />
+      </section>
 
-      <header className="home-head">
-        <div className="home-head__greeting">
-          <h1 className="t-display">{greeting(new Date(now))}</h1>
-          <p className="t-body">{bedtimeLine(new Date(now), schedule)}</p>
-        </div>
-      </header>
-
-      {session ? (
-        <section className="session-card" aria-label="Active wind-down session">
-          <div className="session-card__top">
-            <div className="session-card__meta">
-              <span className="row__label">Wind-down running</span>
-              <span className="row__hint num">About {remainingMin} min left · fades to black</span>
-            </div>
-            <Button
-              size="sm"
-              variant="quiet"
-              onClick={() => {
-                dismissSession()
-                stopSound(1.2)
-              }}
-            >
-              End
-            </Button>
-          </div>
-          <div className="session-card__bar" aria-hidden>
-            <div className="session-card__fill" style={{ transform: `scaleX(${Math.max(0.03, progress)})` }} />
-          </div>
-        </section>
-      ) : (
-        <div className="home-cta">
-          <Button variant="primary" block onClick={() => setWindDownOpen(true)}>
-            <Moon size={18} strokeWidth={1.9} />
-            Begin wind-down
+      <div className="home-action">
+        {session ? (
+          <Button
+            size="sm"
+            variant="quiet"
+            onClick={() => {
+              dismissSession()
+              stopSound(1.2)
+            }}
+          >
+            End
           </Button>
-        </div>
-      )}
-
-      <section className="shelf" aria-label="Playable games">
-        <div className="shelf__head">
-          <h2 className="t-heading">Games</h2>
-          <span className="t-caption num">{ready.length} ready</span>
-        </div>
-
-        <div className="shelf__list">
-          {ready.map((g) => (
-            <button key={g.id} type="button" className="game-row" onClick={() => openGame(g.id)}>
-              <span className="game-row__glyph">
-                <GameGlyph id={g.id} />
-              </span>
-              <span className="game-row__info">
-                <span className="game-row__top">
-                  <span className="game-row__name">{g.name}</span>
-                  <span className="game-row__classic">{g.classic}</span>
-                </span>
-                <span className="game-row__line">{g.line}</span>
-                <span className="game-row__effect">{g.effect}</span>
-              </span>
-              <span className="game-row__right">
-                <ChevronRight size={19} strokeWidth={1.6} className="game-row__chevron" />
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {soon.length > 0 && (
-          <>
-            <div className="shelf__divider">
-              <h2 className="t-heading" style={{ color: 'var(--c-ink-2)' }}>
-                Also in the collection
-              </h2>
-              <span className="t-caption num">{soon.length} planned</span>
-            </div>
-            <div className="shelf__list">
-              {soon.map((g) => (
-                <button key={g.id} type="button" className="game-row game-row--soon" disabled>
-                  <span className="game-row__glyph">
-                    <GameGlyph id={g.id} />
-                  </span>
-                  <span className="game-row__info">
-                    <span className="game-row__top">
-                      <span className="game-row__name">{g.name}</span>
-                      <span className="game-row__classic">{g.classic}</span>
-                    </span>
-                    <span className="game-row__line">{g.line}</span>
-                  </span>
-                  <span className="game-row__right">
-                    <span className="game-row__tag">Next</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
+        ) : (
+          <Button size="sm" variant="quiet" onClick={() => setWindDownOpen(true)}>
+            <Moon size={16} strokeWidth={1.5} aria-hidden />
+            Wind down
+          </Button>
         )}
+      </div>
+
+      <section className="game-grid" aria-label="Games">
+        {ordered.map((g, idx) => {
+          const isWide = idx === 0
+          const showMini = isWide && lastGame === g.id
+          return (
+            <button
+              key={g.id}
+              type="button"
+              className={`game-tile ${isWide ? 'game-tile--wide' : ''}`}
+              onClick={() => openGame(g.id)}
+            >
+              <span className="game-tile__visual">
+                {showMini ? (
+                  <ContinuePreview id={g.id} />
+                ) : (
+                  <GameGlyph id={g.id} />
+                )}
+              </span>
+              {showMini && (
+                <span className="game-tile__fallback">
+                  <GameGlyph id={g.id} />
+                </span>
+              )}
+              <span className="game-tile__name t-headline">{g.name}</span>
+            </button>
+          )
+        })}
       </section>
     </div>
   )

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { Flame, RotateCcw, Undo2 } from 'lucide-react'
+import { RotateCcw, Undo2 } from 'lucide-react'
 import {
   GRID_SIZE,
   createKindle,
@@ -13,7 +13,7 @@ import {
 } from '@/core/games/kindle/engine'
 import { easeArray } from '@/design/tokens'
 import { GameShell, type GameScreenProps } from '@/ui/components/GameShell'
-import { Button } from '@/ui/components/controls'
+import { Button, IconButton } from '@/ui/components/controls'
 import { useCalm, useFeedback, useGameSave, useGestures, useKeys } from '@/ui/hooks/game'
 import './kindle.css'
 
@@ -308,7 +308,7 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
       gameId="kindle"
       stats={[
         { label: 'Score', value: state.score.toLocaleString() },
-        { label: 'Highest', value: state.bestTile },
+        ...(bestScore > 0 ? [{ label: 'Best', value: bestScore.toLocaleString() }] : []),
       ]}
       paused={paused}
       onPauseChange={setPaused}
@@ -316,9 +316,9 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={
         <>
-          <p>Swipe in any direction — or use arrow keys or WASD — to slide every ember across the hearth.</p>
-          <p>Matching embers combine into a warmer, brighter tile. Reach 2048 and keep going as long as you like.</p>
-          <p>If the board fills up, you can undo a few steps or tap Make room to gently cool the two dimmest tiles.</p>
+          <p>Swipe in any direction — or use arrow keys or WASD — to slide every tile across the board.</p>
+          <p>Matching tiles combine into a brighter tile. Reach 2048 and keep going as long as you like.</p>
+          <p>If the board fills up, undo a few steps or tap Make room to clear the two lowest tiles.</p>
         </>
       }
       controls={
@@ -326,10 +326,9 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
           {state.stuck ? (
             <div className="kindle-stuck-bar" role="status" aria-live="polite">
               <div className="kindle-stuck-bar__row">
-                <span className="kindle-stuck-bar__label">No moves left</span>
+                <span className="t-label">No moves left</span>
                 <div className="kindle-stuck-bar__actions">
                   <Button variant="primary" size="sm" onClick={doMakeRoom}>
-                    <Flame size={15} strokeWidth={1.8} aria-hidden />
                     Make room
                   </Button>
                   <Button
@@ -339,11 +338,11 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
                     disabled={undoCount === 0}
                     aria-label={undoCount > 0 ? `Undo (${undoCount} available)` : 'Undo'}
                   >
-                    <Undo2 size={15} strokeWidth={1.8} aria-hidden />
+                    <Undo2 size={16} strokeWidth={1.5} aria-hidden />
                     Undo
                   </Button>
                   <Button variant="ghost" size="sm" onClick={doRestart}>
-                    <RotateCcw size={14} strokeWidth={1.8} aria-hidden />
+                    <RotateCcw size={15} strokeWidth={1.5} aria-hidden />
                     New board
                   </Button>
                 </div>
@@ -351,27 +350,16 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
             </div>
           ) : (
             <div className="kindle-bar">
-              <div className="kindle-bar__meta">
-                {bestScore > 0 ? (
-                  <span className="kindle-bar__best num">Best {bestScore.toLocaleString()}</span>
-                ) : (
-                  <span className="kindle-bar__best">Swipe to slide embers</span>
-                )}
-                {state.reached2048 && (
-                  <span className="kindle-bar__tag num">2048 kindled</span>
-                )}
+              <div className="kindle-undo">
+                <IconButton
+                  label={undoCount > 0 ? `Undo (${undoCount} available)` : 'Undo'}
+                  onClick={doUndo}
+                  disabled={undoCount === 0}
+                >
+                  <Undo2 size={20} strokeWidth={1.5} />
+                </IconButton>
+                {undoCount > 0 && <span className="t-label num kindle-undo__count">{undoCount}</span>}
               </div>
-              <Button
-                variant="quiet"
-                size="sm"
-                onClick={doUndo}
-                disabled={undoCount === 0}
-                aria-label={undoCount > 0 ? `Undo (${undoCount} available)` : 'Undo'}
-              >
-                <Undo2 size={15} strokeWidth={1.8} aria-hidden />
-                Undo
-                {undoCount > 0 && <span className="kindle-undo-count num">{undoCount}</span>}
-              </Button>
             </div>
           )}
         </div>
@@ -406,7 +394,7 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
                   aria-hidden={tile.kind === 'source' || tile.kind === 'extinguished' || undefined}
                 >
                   <div
-                    className="kindle-tile__inner t-serif num"
+                    className="kindle-tile__inner num"
                     data-tier={tileTier(tile.value)}
                     data-digits={digitCount(tile.value)}
                   >
@@ -421,15 +409,15 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
             {milestoneNotice && (
               <motion.div
                 key="milestone-2048"
-                className="kindle-notice"
+                className="kindle-notice t-label"
                 role="status"
                 aria-live="polite"
                 initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-                transition={{ duration: 0.3, ease: easeArray.out }}
+                transition={{ duration: 0.26, ease: easeArray.out }}
               >
-                2048 kindled · keep going
+                2048 · keep going
               </motion.div>
             )}
           </AnimatePresence>

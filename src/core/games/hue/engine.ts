@@ -79,84 +79,86 @@ export interface BoardLayout {
 }
 
 /**
- * Curated warm, low-blue palettes inspired by dusk, candle-light, clay,
- * terracotta, saffron, honey, dried moss, rosewood, tea, ochre, smoked plum,
- * and coal. Each palette separates its two axes across lightness and warm
- * red↔gold/moss chroma so every board remains distinguishable even under a
- * deep orange night filter.
+ * Curated quiet, matte Dusk Stone palettes (low chroma <= 0.07 OKLCH, zero
+ * blue/cyan/violet, lightness spanning roughly L* 22 → 82 across corners).
+ * Every palette satisfies a strict OKLab neighbor distance ΔE >= 0.04 on the
+ * largest 5×6 board so every tile remains calmly distinguishable in low light.
  */
 export const PALETTES: readonly HuePalette[] = [
   {
     id: 'late-sun',
     title: 'Late Sun',
-    corners: { tl: '#f6dea6', tr: '#e57435', bl: '#7a743b', br: '#3b1714' },
+    corners: { tl: '#d5c9b4', tr: '#b07f6c', bl: '#777b58', br: '#452f2a' },
   },
   {
     id: 'kiln',
     title: 'Kiln',
-    corners: { tl: '#f1e1c1', tr: '#d9693a', bl: '#8e6c3f', br: '#321411' },
+    corners: { tl: '#d6ccbe', tr: '#aa786b', bl: '#8f7a57', br: '#422d29' },
   },
   {
     id: 'amber-tea',
     title: 'Amber Tea',
-    corners: { tl: '#f4e39c', tr: '#d87b29', bl: '#6c7c40', br: '#361f14' },
+    corners: { tl: '#d4c6a4', tr: '#a97f61', bl: '#707958', br: '#423128' },
   },
   {
     id: 'dry-moss',
     title: 'Dry Moss',
-    corners: { tl: '#ece3b4', tr: '#c45c36', bl: '#768846', br: '#3a1b16' },
+    corners: { tl: '#d0cbb1', tr: '#a57667', bl: '#75805c', br: '#402e29' },
   },
   {
     id: 'hearth-ash',
     title: 'Hearth Ash',
-    corners: { tl: '#ebd8bc', tr: '#cf685c', bl: '#786649', br: '#241513' },
+    corners: { tl: '#d6ccc0', tr: '#a97874', bl: '#827569', br: '#3b2c2a' },
   },
   {
     id: 'cinnamon-dusk',
     title: 'Cinnamon Dusk',
-    corners: { tl: '#f5cc8c', tr: '#c85038', bl: '#8a6c3c', br: '#35151d' },
+    corners: { tl: '#d9c4a8', tr: '#a7756a', bl: '#817354', br: '#412929' },
   },
   {
     id: 'saffron-loom',
     title: 'Saffron Loom',
-    corners: { tl: '#f7e599', tr: '#dc5b2c', bl: '#988136', br: '#3f1814' },
+    corners: { tl: '#d8caa4', tr: '#a97a63', bl: '#817850', br: '#462f28' },
   },
   {
     id: 'rosewood',
     title: 'Rosewood',
-    corners: { tl: '#f0d2b6', tr: '#c4534e', bl: '#88723d', br: '#391819' },
+    corners: { tl: '#d7c7ba', tr: '#a4716e', bl: '#857a58', br: '#442b2b' },
   },
   {
     id: 'honeycomb',
     title: 'Honeycomb',
-    corners: { tl: '#f8e9b8', tr: '#de8331', bl: '#8f7d3a', br: '#421e14' },
+    corners: { tl: '#dbccac', tr: '#ad8763', bl: '#7d7d5d', br: '#483229' },
   },
   {
     id: 'terracotta',
     title: 'Terracotta',
-    corners: { tl: '#f0dfbe', tr: '#d45a3a', bl: '#7c8244', br: '#421c15' },
+    corners: { tl: '#d5c8b7', tr: '#a77564', bl: '#757b5d', br: '#452f2a' },
   },
   {
     id: 'smoked-plum',
     title: 'Smoked Plum',
-    corners: { tl: '#f1c79c', tr: '#b9444c', bl: '#846d42', br: '#29121a' },
+    corners: { tl: '#d5c4b3', tr: '#9f6e6f', bl: '#817357', br: '#3d2727' },
   },
   {
     id: 'ochre-field',
     title: 'Ochre Field',
-    corners: { tl: '#f3e39a', tr: '#cf742e', bl: '#6c8044', br: '#3b2115' },
+    corners: { tl: '#d5caa9', tr: '#a8855f', bl: '#6f7a57', br: '#423127' },
   },
   {
     id: 'candlewick',
     title: 'Candlewick',
-    corners: { tl: '#fce4ac', tr: '#e5612c', bl: '#8c6936', br: '#2c1211' },
+    corners: { tl: '#dccfb8', tr: '#af8068', bl: '#86755a', br: '#412d29' },
   },
   {
     id: 'cedar-clay',
     title: 'Cedar & Clay',
-    corners: { tl: '#f0dab2', tr: '#c95c3c', bl: '#7c7b40', br: '#351c14' },
+    corners: { tl: '#d5c9b5', tr: '#aa7969', bl: '#787658', br: '#422d28' },
   },
 ] as const
+
+/** Minimum perceptual OKLab ΔE between adjacent solved cells on any board. */
+export const MIN_NEIGHBOR_DELTA_E = 0.04
 
 /** Two tiles closer than this OKLab Euclidean distance are treated as matching. */
 export const SOLVED_COLOR_EPSILON = 0.0015
@@ -285,6 +287,25 @@ export function oklabDistance(c0: Oklab, c1: Oklab): number {
 export function hexDistance(hexA: string, hexB: string): number {
   if (hexA.toLowerCase() === hexB.toLowerCase()) return 0
   return oklabDistance(hexToOklab(hexA), hexToOklab(hexB))
+}
+
+/** Return the minimum OKLab Euclidean distance ΔE between all orthogonal neighbours on a grid. */
+export function minAdjacentDistance(colors: readonly string[], cols: number, rows: number): number {
+  let min = Number.POSITIVE_INFINITY
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const i = row * cols + col
+      if (col + 1 < cols) {
+        const d = hexDistance(colors[i]!, colors[i + 1]!)
+        if (d < min) min = d
+      }
+      if (row + 1 < rows) {
+        const d = hexDistance(colors[i]!, colors[i + cols]!)
+        if (d < min) min = d
+      }
+    }
+  }
+  return min
 }
 
 /* -------------------------------------------------------------------------- */

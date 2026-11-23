@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ArrowDownToLine, ChevronDown, ChevronLeft, ChevronRight, Repeat2, RotateCw } from 'lucide-react'
+import { ArrowDownToLine, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, RotateCw } from 'lucide-react'
 import {
   BOARD_COLS,
   BOARD_ROWS,
@@ -87,25 +87,21 @@ function MiniPiece({ type }: { type: TetrominoType }) {
   )
 }
 
-/** Tactile thumb button with optional DAS/ARR press-and-hold repeat. */
-function ControlButton({
+/** Tactile handheld button with optional DAS/ARR press-and-hold repeat. */
+function PadButton({
   label,
-  shortLabel,
-  icon,
+  className,
   repeat = false,
-  accent = false,
-  holdChip = false,
   disabled = false,
   onTrigger,
+  children,
 }: {
   label: string
-  shortLabel: string
-  icon: ReactNode
+  className: string
   repeat?: boolean
-  accent?: boolean
-  holdChip?: boolean
   disabled?: boolean
   onTrigger: () => void
+  children: ReactNode
 }) {
   const [pressed, setPressed] = useState(false)
   const triggerRef = useRef(onTrigger)
@@ -148,20 +144,21 @@ function ControlButton({
     <button
       type="button"
       aria-label={label}
+      title={label}
       disabled={disabled}
       data-pressed={pressed}
-      className={`settle-btn ${accent ? 'settle-btn--accent' : ''} ${holdChip ? 'settle-btn--hold' : ''}`}
+      className={className}
       onPointerDown={start}
       onPointerUp={stop}
       onPointerLeave={stop}
       onPointerCancel={stop}
+      onContextMenu={(e) => e.preventDefault()}
       onClick={(e) => {
         // Keyboard activation (Enter / Space) has detail === 0; pointer was handled onPointerDown.
         if (e.detail === 0 && !disabled) triggerRef.current()
       }}
     >
-      {icon}
-      <span className="settle-btn__label">{shortLabel}</span>
+      {children}
     </button>
   )
 }
@@ -476,60 +473,81 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
       onExit={handleExit}
       howTo={
         <>
-          <p>Fit the falling pieces to fill horizontal rows. The pace stays steady and slows gently during a wind-down.</p>
-          <p>Tap the board to turn a piece, drag left or right to slide, swipe down to drop, or swipe up to hold.</p>
-          <p>If the stack reaches the top, the bottom rows dissolve into embers to make room.</p>
+          <p>Fit falling stones into full rows. The pace stays steady and slows gently during a wind-down.</p>
+          <p>Use the D-pad and buttons, or tap the board to turn, drag to slide, swipe down to drop, and swipe up to hold.</p>
+          <p>If the stack reaches the top, the bottom rows fade away to make room.</p>
         </>
       }
       controls={
-        <div className="settle-controls" role="group" aria-label="Piece controls">
-          <ControlButton
-            label="Move left"
-            shortLabel="Left"
-            icon={<ChevronLeft size={20} strokeWidth={1.8} />}
-            repeat
-            disabled={paused}
-            onTrigger={doLeft}
-          />
-          <ControlButton
-            label="Rotate clockwise"
-            shortLabel="Turn"
-            icon={<RotateCw size={18} strokeWidth={1.8} />}
-            disabled={paused}
-            onTrigger={doRotateCW}
-          />
-          <ControlButton
-            label="Soft drop"
-            shortLabel="Down"
-            icon={<ChevronDown size={20} strokeWidth={1.8} />}
-            repeat
-            disabled={paused}
-            onTrigger={doSoftDrop}
-          />
-          <ControlButton
-            label="Hard drop"
-            shortLabel="Drop"
-            icon={<ArrowDownToLine size={18} strokeWidth={1.8} />}
-            accent
-            disabled={paused}
-            onTrigger={doHardDrop}
-          />
-          <ControlButton
-            label="Move right"
-            shortLabel="Right"
-            icon={<ChevronRight size={20} strokeWidth={1.8} />}
-            repeat
-            disabled={paused}
-            onTrigger={doRight}
-          />
-          <ControlButton
+        <div className="settle-deck" role="group" aria-label="Piece controls">
+          <div className="settle-dpad" role="group" aria-label="Directional pad">
+            <PadButton
+              className="settle-dpad__arm settle-dpad__arm--up"
+              label="Hard drop"
+              disabled={paused}
+              onTrigger={doHardDrop}
+            >
+              <ChevronUp size={20} strokeWidth={1.5} aria-hidden />
+            </PadButton>
+            <PadButton
+              className="settle-dpad__arm settle-dpad__arm--left"
+              label="Move left"
+              repeat
+              disabled={paused}
+              onTrigger={doLeft}
+            >
+              <ChevronLeft size={20} strokeWidth={1.5} aria-hidden />
+            </PadButton>
+            <div className="settle-dpad__hub" aria-hidden>
+              <span className="settle-dpad__dimple" />
+            </div>
+            <PadButton
+              className="settle-dpad__arm settle-dpad__arm--right"
+              label="Move right"
+              repeat
+              disabled={paused}
+              onTrigger={doRight}
+            >
+              <ChevronRight size={20} strokeWidth={1.5} aria-hidden />
+            </PadButton>
+            <PadButton
+              className="settle-dpad__arm settle-dpad__arm--down"
+              label="Soft drop"
+              repeat
+              disabled={paused}
+              onTrigger={doSoftDrop}
+            >
+              <ChevronDown size={20} strokeWidth={1.5} aria-hidden />
+            </PadButton>
+          </div>
+
+          <PadButton
+            className="settle-hold-pill t-label"
             label="Hold piece"
-            shortLabel="Hold"
-            icon={<Repeat2 size={16} strokeWidth={1.8} />}
-            holdChip
             disabled={paused || !state.canHold}
             onTrigger={doHold}
-          />
+          >
+            Hold
+          </PadButton>
+
+          <div className="settle-ab" role="group" aria-label="Action buttons">
+            <PadButton
+              className="settle-ab__btn settle-ab__btn--b"
+              label="Hard drop"
+              disabled={paused}
+              onTrigger={doHardDrop}
+            >
+              <ArrowDownToLine size={20} strokeWidth={1.5} aria-hidden />
+            </PadButton>
+            <PadButton
+              className="settle-ab__btn settle-ab__btn--a"
+              label="Rotate clockwise"
+              disabled={paused}
+              onTrigger={doRotateCW}
+            >
+              <RotateCw size={22} strokeWidth={1.5} aria-hidden />
+            </PadButton>
+          </div>
         </div>
       }
     >
@@ -562,6 +580,7 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
                   <div
                     key={`${rIdx}-${cIdx}`}
                     className={cell ? 'settle-dissolve-cell' : undefined}
+                    data-color={cell ?? undefined}
                   />
                 )),
               )}
@@ -572,15 +591,15 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
             {state.dissolving && (
               <motion.div
                 key={`notice-${state.dissolving.id}`}
-                className="settle-notice"
+                className="settle-notice t-label"
                 role="status"
                 aria-live="polite"
                 initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-                transition={{ duration: 0.28, ease: easeArray.out }}
+                transition={{ duration: 0.24, ease: easeArray.out }}
               >
-                Making room…
+                Making room
               </motion.div>
             )}
           </AnimatePresence>
@@ -595,14 +614,14 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
             onClick={doHold}
             aria-label={state.hold ? `Hold piece (${state.hold})` : 'Hold piece'}
           >
-            <span className="settle-panel__label">Hold</span>
+            <span className="t-label">Hold</span>
             <div className="settle-panel__slot">
               {state.hold ? <MiniPiece type={state.hold} /> : <span className="settle-panel__empty" aria-hidden />}
             </div>
           </button>
 
           <div className="settle-panel">
-            <span className="settle-panel__label">Next</span>
+            <span className="t-label">Next</span>
             <div className="settle-next-list">
               {nextThree.map((type, idx) => (
                 <div key={`${idx}-${type}`} className="settle-next-item" data-rank={idx}>

@@ -99,11 +99,11 @@ export default function HueScreen({ onExit }: GameScreenProps) {
     }
   }, [])
 
-  // Precompute whether each tile is dark so anchor dots always contrast gently.
+  // Precompute whether each tile is dark so anchor dots always contrast crisply.
   const darkTileIds = useMemo(() => {
     const dark = new Set<number>()
     for (const tile of state.tiles) {
-      if (tile.pinned && hexToOklab(tile.color).L < 0.46) {
+      if (tile.pinned && hexToOklab(tile.color).L < 0.54) {
         dark.add(tile.id)
       }
     }
@@ -417,12 +417,7 @@ export default function HueScreen({ onExit }: GameScreenProps) {
       }
       controls={
         <div className="hue-bar">
-          <div className="hue-bar__meta">
-            <span className="hue-bar__title t-serif">{state.paletteTitle}</span>
-            <span className="hue-bar__sub num">
-              {state.cols} × {state.rows}
-            </span>
-          </div>
+          <span className="hue-bar__title t-headline">{state.paletteTitle}</span>
           <Button
             variant="quiet"
             size="sm"
@@ -430,7 +425,7 @@ export default function HueScreen({ onExit }: GameScreenProps) {
             disabled={state.solved}
             aria-label="Hint"
           >
-            <Sparkles size={15} strokeWidth={1.75} aria-hidden />
+            <Sparkles size={16} strokeWidth={1.5} aria-hidden />
             Hint
           </Button>
         </div>
@@ -476,7 +471,7 @@ export default function HueScreen({ onExit }: GameScreenProps) {
               }
 
               if (isDragging && dragRender) {
-                tileStyle.transform = `translate3d(${dragRender.dx}px, ${dragRender.dy}px, 0) scale(1.07)`
+                tileStyle.transform = `translate3d(${dragRender.dx}px, ${dragRender.dy}px, 0) scale(1.05)`
               } else if (flip) {
                 tileStyle.transform = `translate3d(${flip.dx}px, ${flip.dy}px, 0)`
               }
@@ -505,7 +500,6 @@ export default function HueScreen({ onExit }: GameScreenProps) {
                 >
                   {tile.pinned && <span className="hue-tile__anchor" aria-hidden />}
                   {isHinted && <span key={hintTick} className="hue-tile__hint" aria-hidden />}
-                  {state.solved && <span className="hue-tile__sheen" aria-hidden />}
                 </div>
               )
             })}

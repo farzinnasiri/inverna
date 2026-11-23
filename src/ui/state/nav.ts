@@ -1,28 +1,40 @@
 import { create } from 'zustand'
 import type { GameId } from '@/core/games/catalog'
+import { useSettings } from './settings'
 
-export type Tab = 'play' | 'sounds' | 'night'
+export type Tab = 'play' | 'sounds'
 
-/**
- * Tiny navigator. Deliberately not a URL router: the app is a single
- * full-screen surface, and this maps directly onto an Expo stack + tabs later.
- */
 interface NavState {
   tab: Tab
   game: GameId | null
   windDownOpen: boolean
+  nightOpen: boolean
+  mixOpen: boolean
+  onboardingReplay: boolean
   setTab: (tab: Tab) => void
   openGame: (id: GameId) => void
   closeGame: () => void
   setWindDownOpen: (open: boolean) => void
+  setNightOpen: (open: boolean) => void
+  setMixOpen: (open: boolean) => void
+  setOnboardingReplay: (open: boolean) => void
 }
 
 export const useNav = create<NavState>()((set) => ({
   tab: 'play',
   game: null,
   windDownOpen: false,
+  nightOpen: false,
+  mixOpen: false,
+  onboardingReplay: false,
   setTab: (tab) => set({ tab }),
-  openGame: (game) => set({ game }),
+  openGame: (game) => {
+    useSettings.getState().set({ lastGame: game })
+    set({ game })
+  },
   closeGame: () => set({ game: null }),
   setWindDownOpen: (windDownOpen) => set({ windDownOpen }),
+  setNightOpen: (nightOpen) => set({ nightOpen }),
+  setMixOpen: (mixOpen) => set({ mixOpen }),
+  setOnboardingReplay: (onboardingReplay) => set({ onboardingReplay }),
 }))

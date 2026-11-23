@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import type { GameId } from '@/core/games/catalog'
 import { kv, NAMESPACE } from '@/core/storage'
 import { DEFAULT_SCHEDULE, type Schedule } from '@/core/night'
-import { SILENT_MIX, type Mix } from '@/core/sound/catalog'
+import { normalizeBand, SILENT_MIX, type Mix } from '@/core/sound/catalog'
 
 /** zustand persistence routed through the platform key-value store. */
 export const kvStorage = createJSONStorage(() => ({
@@ -12,10 +13,9 @@ export const kvStorage = createJSONStorage(() => ({
 }))
 
 export interface SettingsState {
-  /** Manual night filter, 0..1 each. */
-  warmth: number
-  dim: number
-  /** Let the bedtime schedule warm/dim the screen automatically. */
+  /** Single unified night light level, 0 = normal, 1 = lowest. */
+  light: number
+  /** Let the bedtime schedule deepen light before bedtime. */
   followBedtime: boolean
   schedule: Schedule
   sessionMinutes: number
@@ -24,8 +24,14 @@ export interface SettingsState {
   haptics: boolean
   /** Last custom mix from the Sounds screen. */
   mix: Mix
+  /** True once user has edited a custom mix (adds "Custom" to Sounds mode strip). */
+  hasCustomMix: boolean
   /** Sleep timer for ambient sound, minutes (0 = until stopped). */
   sleepTimer: number
+  /** Whether the 3-step initial tuning has been completed/skipped. */
+  onboarded: boolean
+  /** Most recently opened game (gets the 2-wide Continue tile on Home). */
+  lastGame: GameId | null
   set: (patch: Partial<Omit<SettingsState, 'set' | 'setSchedule'>>) => void
   setSchedule: (patch: Partial<Schedule>) => void
 }
@@ -33,8 +39,7 @@ export interface SettingsState {
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
-      warmth: 0.2,
-      dim: 0,
+      light: 0.3,
       followBedtime: true,
       schedule: DEFAULT_SCHEDULE,
       sessionMinutes: 15,
@@ -42,10 +47,38 @@ export const useSettings = create<SettingsState>()(
       sfx: true,
       haptics: true,
       mix: SILENT_MIX,
+      hasCustomMix: false,
       sleepTimer: 30,
+      onboarded: false,
+      lastGame: null,
       set: (patch) => set(patch),
       setSchedule: (patch) => set((s) => ({ schedule: { ...s.schedule, ...patch } })),
     }),
-    { name: 'settings', storage: kvStorage, version: 1 },
+    {
+      name: 'settings',
+      storage: kvStorage,
+      version: 2,
+      migrate: (persisted, version) => {
+        if (!persisted || typeof persisted !== 'object') return persisted
+        const p = persisted as Record<string, unknown>
+        if (version < 2) {
+          const warmth = typeof p.warmth === 'number' ? p.warmth : 0.3
+          const dim = typeof p.dim === 'number' ? p.dim : 0
+          const light = Math.min(1, Math.max(0, Math.max(warmth, dim / 0.6)))
+          const rawMix = p.mix as Mix | undefined
+          const mix = rawMix ? { ...rawMix, band: normalizeBand(rawMix.band) } : SILENT_MIX
+          const { warmth: _w, dim: _d, ...rest } = p
+          return {
+            ...rest,
+            light,
+            mix,
+            hasCustomMix: false,
+            onboarded: false,
+            lastGame: null,
+          }
+        }
+        return persisted
+      },
+    },
   ),
 )

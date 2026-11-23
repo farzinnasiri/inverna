@@ -1,7 +1,8 @@
 /* ==========================================================================
-   Thread — classic Connect the Dots / Flow Free in Lull's Ember language
-   Ember motion rules: transform/opacity only, ease-out, no scale(0), no
-   transition: all, hover gated to fine pointers, reduced-motion aware.
+   Thread — Low Light flat Dusk Stone path puzzle
+   Flat surface-1 board with centred ink-4 grid dots, 40% round-cap paths at
+   0.55 opacity, and distinct geometric endpoint shapes. Zero gradients,
+   zero shadows.
    ========================================================================== */
 
 .thread-stage {
@@ -23,29 +24,17 @@
   --size: 6;
   width: min(100cqw, calc(100cqh - 32px), 396px);
   aspect-ratio: 1;
-  padding: 6px;
   border-radius: var(--r-lg);
-  background: var(--c-night-1);
-  box-shadow:
-    0 0 0 1px var(--c-line) inset,
-    0 22px 48px -20px rgb(0 0 0 / 0.85);
-  transition:
-    filter 540ms var(--ease-out),
-    transform 480ms var(--ease-out);
-}
-
-.thread-board[data-solved='true'] {
-  filter: brightness(1.1);
+  background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
+  overflow: hidden;
+  transition: opacity 260ms var(--ease-out);
 }
 
 .thread-grid {
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: calc(var(--r-lg) - 6px);
-  overflow: hidden;
-  background: var(--c-night-2);
-  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -56,7 +45,7 @@
   cursor: default;
 }
 
-/* --- Layer 1: Hairline cells & soft ember fills -------------------------- */
+/* --- Layer 1: Flat cells with subtle centred ink-4 grid dots ------------- */
 
 .thread-cells {
   position: absolute;
@@ -68,57 +57,27 @@
 
 .thread-cell {
   position: relative;
-  box-sizing: border-box;
-  border-right: 1px solid var(--c-line-soft);
-  border-bottom: 1px solid var(--c-line-soft);
-  background-color: var(--c-night-2);
-  transition: background-color 180ms var(--ease-out);
 }
 
-.thread-cell[data-last-col='true'] {
-  border-right: 0;
-}
-
-.thread-cell[data-last-row='true'] {
-  border-bottom: 0;
-}
-
-.thread-cell[data-color='ember'] {
-  --cell-hue: var(--p-ember);
-}
-.thread-cell[data-color='saffron'] {
-  --cell-hue: var(--p-saffron);
-}
-.thread-cell[data-color='honey'] {
-  --cell-hue: var(--p-honey);
-}
-.thread-cell[data-color='moss'] {
-  --cell-hue: var(--p-moss);
-}
-.thread-cell[data-color='clay'] {
-  --cell-hue: var(--p-clay);
-}
-.thread-cell[data-color='rose'] {
-  --cell-hue: var(--p-rose);
-}
-.thread-cell[data-color='sand'] {
-  --cell-hue: var(--p-sand);
-}
-
-.thread-cell[data-color] {
-  background-color: color-mix(in srgb, var(--cell-hue) 13%, var(--c-night-2));
-}
-
-.thread-cell[data-color][data-connected='true'] {
-  background-color: color-mix(in srgb, var(--cell-hue) 20%, var(--c-night-2));
+.thread-cell[data-dot='true']::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--c-ink-4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .thread-cell[data-missed='true']::after {
   content: '';
   position: absolute;
-  inset: 4px;
-  border-radius: 5px;
-  border: 1.5px solid rgb(255 180 94 / 0.42);
+  inset: 6px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--c-ink-3);
   pointer-events: none;
   animation: thread-missed-pulse 2.2s ease-in-out infinite;
 }
@@ -126,20 +85,14 @@
 @keyframes thread-missed-pulse {
   0%,
   100% {
-    opacity: 0.32;
+    opacity: 0.35;
   }
   50% {
     opacity: 0.85;
   }
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .thread-grid:not(:active) .thread-cell:not([data-color]):hover {
-    background-color: var(--c-night-3);
-  }
-}
-
-/* --- Layer 2 & 3: SVG threads & lit glass beads -------------------------- */
+/* --- Layer 2 & 3: Flat SVG paths & geometric endpoints ------------------- */
 
 .thread-svg {
   position: absolute;
@@ -150,49 +103,27 @@
   pointer-events: none;
 }
 
-.thread-path__shadow {
-  fill: none;
-  stroke: rgb(10 6 5 / 0.5);
-  stroke-width: 38;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .thread-path__stroke {
   fill: none;
-  stroke-width: 30;
+  stroke-width: 40;
   stroke-linecap: round;
   stroke-linejoin: round;
-  opacity: 0.88;
-  transition: opacity 200ms var(--ease-out);
+  opacity: 0.55;
+  transition: opacity 180ms var(--ease-out);
 }
 
-.thread-path[data-connected='true'] .thread-path__stroke,
-.thread-path[data-active='true'] .thread-path__stroke {
-  opacity: 0.97;
-}
-
-.thread-path__sheen {
-  fill: none;
-  stroke: rgb(255 244 224 / 0.18);
-  stroke-width: 7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transition: opacity 200ms var(--ease-out);
-}
-
-.thread-path[data-connected='true'] .thread-path__sheen {
-  stroke: rgb(255 244 224 / 0.27);
+.thread-path__stroke[data-active='true'] {
+  opacity: 0.65;
 }
 
 /* Active drag tip ring */
 .thread-tip {
   fill: none;
-  stroke-width: 3.5;
-  opacity: 0.65;
+  stroke-width: 3;
+  opacity: 0.55;
 }
 
-/* Endpoint beads */
+/* Endpoint geometric shapes */
 .thread-bead {
   transform: scale(1);
   transition: transform 180ms var(--ease-out);
@@ -202,43 +133,19 @@
   transform: scale(1.06);
 }
 
-.thread-bead__halo {
-  fill: none;
-  stroke-width: 3.5;
-  opacity: 0;
-  transform: scale(0.92);
-  transition:
-    opacity 240ms var(--ease-out),
-    transform 260ms var(--ease-out);
-}
-
-.thread-bead[data-connected='true'] .thread-bead__halo {
-  opacity: 0.64;
-  transform: scale(1);
-}
-
-.thread-bead__spec {
-  opacity: 0.78;
-  transition: opacity 220ms var(--ease-out);
-}
-
-.thread-bead[data-connected='true'] .thread-bead__spec {
-  opacity: 1;
-}
-
 /* --- Quiet guidance caption ---------------------------------------------- */
 
 .thread-note {
   height: 18px;
   line-height: 18px;
   text-align: center;
-  color: var(--c-glow);
+  color: var(--c-ink-2);
   opacity: 0;
-  transition: opacity 260ms var(--ease-out);
+  transition: opacity 240ms var(--ease-out);
 }
 
 .thread-note[data-visible='true'] {
-  opacity: 0.88;
+  opacity: 1;
 }
 
 /* --- Calm bottom bar ----------------------------------------------------- */
@@ -252,45 +159,24 @@
   margin: 0 auto;
 }
 
-.thread-bar__meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .thread-bar__title {
-  font-size: 18px;
-  line-height: 1.15;
-  color: var(--c-ink);
-}
-
-.thread-bar__sub {
-  font-size: 12.5px;
-  color: var(--c-ink-3);
+  min-width: 0;
 }
 
 .thread-bar__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 /* --- Reduced motion ------------------------------------------------------ */
 
 @media (prefers-reduced-motion: reduce) {
-  .thread-board {
-    transition: opacity 220ms var(--ease-out);
-  }
   .thread-bead {
     transition: none;
   }
   .thread-bead[data-active='true'] {
     transform: none;
-  }
-  .thread-bead__halo {
-    transform: none;
-    transition: opacity 200ms var(--ease-out);
   }
   .thread-cell[data-missed='true']::after {
     animation: none;

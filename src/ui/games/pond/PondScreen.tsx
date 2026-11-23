@@ -7,13 +7,13 @@ import {
   SPINE_SPACING,
   tapPond,
   tickPond,
-  type MoteColor,
   type PondState,
   type Vec2,
 } from '@/core/games/pond/engine'
-import { color } from '@/design/tokens'
+import { hexToRgb, type ResolvedTokens } from '@/design/tokens'
 import { GameShell, type GameScreenProps } from '@/ui/components/GameShell'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys } from '@/ui/hooks/game'
+import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import './pond.css'
 
 interface PondSave {
@@ -28,19 +28,12 @@ const DEFAULT_SAVE: PondSave = {
   plays: 1,
 }
 
-const MOTE_RGB: Record<MoteColor, [number, number, number]> = {
-  candle: [255, 217, 160], // color.candle #FFD9A0
-  glow: [255, 180, 94], // color.glow #FFB45E
-  ember: [232, 90, 54], // pieces.ember #E85A36
-  honey: [233, 196, 106], // pieces.honey #E9C46A
-  rose: [217, 122, 108], // pieces.rose #D97A6C
-}
-
 /** Organic half-width profile along the 10-segment koi spine (normalised to pond min-dim). */
 const BODY_WIDTHS = [0.0155, 0.0235, 0.0245, 0.022, 0.018, 0.0138, 0.01, 0.0068, 0.0046, 0.003] as const
 
-function rgba(rgb: readonly [number, number, number], a: number): string {
-  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${a.toFixed(3)})`
+function hexAlpha(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${alpha.toFixed(3)})`
 }
 
 function isValidPondState(v: unknown): v is PondState {
@@ -163,7 +156,7 @@ function drawPectoralFin(
   side: 1 | -1,
   scale: number,
   flutter: number,
-  shadowOnly: boolean,
+  boneHex: string,
 ): void {
   ctx.save()
   ctx.translate(anchor.x, anchor.y)
@@ -182,23 +175,12 @@ function drawPectoralFin(
   ctx.quadraticCurveTo(-scale * 0.58, side * scale * 0.14, -scale * 0.22, 0)
   ctx.closePath()
 
-  if (shadowOnly) {
-    ctx.fillStyle = 'rgba(4, 2, 1, 0.38)'
-    ctx.fill()
-    ctx.restore()
-    return
-  }
-
-  const grad = ctx.createLinearGradient(0, 0, -scale * 0.75, side * scale * 0.85)
-  grad.addColorStop(0, 'rgba(255, 217, 160, 0.44)')
-  grad.addColorStop(0.55, 'rgba(255, 180, 94, 0.2)')
-  grad.addColorStop(1, 'rgba(232, 90, 54, 0.03)')
-  ctx.fillStyle = grad
+  ctx.fillStyle = hexAlpha(boneHex, 0.24)
   ctx.fill()
 
   // Delicate fin rays
-  ctx.strokeStyle = 'rgba(255, 217, 160, 0.16)'
-  ctx.lineWidth = Math.max(0.6, scale * 0.025)
+  ctx.strokeStyle = hexAlpha(boneHex, 0.14)
+  ctx.lineWidth = Math.max(0.6, scale * 0.024)
   for (let r = 0; r < 3; r++) {
     const t = 0.25 + r * 0.26
     ctx.beginPath()
@@ -221,7 +203,7 @@ function drawForkedTail(
   tailAngle: number,
   unit: number,
   sway: number,
-  shadowOnly: boolean,
+  boneHex: string,
 ): void {
   const len = unit * 0.072
   const spread = unit * 0.036
@@ -257,21 +239,10 @@ function drawForkedTail(
   )
   ctx.closePath()
 
-  if (shadowOnly) {
-    ctx.fillStyle = 'rgba(4, 2, 1, 0.35)'
-    ctx.fill()
-    ctx.restore()
-    return
-  }
-
-  const grad = ctx.createLinearGradient(0, 0, len, swayOffset)
-  grad.addColorStop(0, 'rgba(255, 217, 160, 0.56)')
-  grad.addColorStop(0.5, 'rgba(255, 180, 94, 0.28)')
-  grad.addColorStop(1, 'rgba(232, 90, 54, 0.05)')
-  ctx.fillStyle = grad
+  ctx.fillStyle = hexAlpha(boneHex, 0.32)
   ctx.fill()
 
-  ctx.strokeStyle = 'rgba(255, 217, 160, 0.16)'
+  ctx.strokeStyle = hexAlpha(boneHex, 0.15)
   ctx.lineWidth = Math.max(0.6, unit * 0.0016)
   ctx.beginPath()
   ctx.moveTo(0, 0)
@@ -290,29 +261,14 @@ function drawPond(
   h: number,
   pointerPos: Vec2 | null,
   reducedMotion: boolean,
+  tokens: ResolvedTokens,
 ): void {
   const unit = Math.min(w, h)
   const motionAmp = reducedMotion ? 0.45 : 1
 
-  // 1. Deep warm ink-black water ground (strictly Ember palette, zero blue)
-  const bg = ctx.createRadialGradient(w * 0.5, h * 0.46, unit * 0.06, w * 0.5, h * 0.5, Math.max(w, h) * 0.78)
-  bg.addColorStop(0, '#160D09')
-  bg.addColorStop(0.58, color.night1)
-  bg.addColorStop(1, color.night0)
-  ctx.fillStyle = bg
+  // 1. Pure flat true-black water ground (#000000)
+  ctx.fillStyle = tokens.color.bg
   ctx.fillRect(0, 0, w, h)
-
-  // Very subtle drifting warm under-depth glow pools
-  const driftT = state.timeMs * 0.00018 * motionAmp
-  for (let i = 0; i < 2; i++) {
-    const cx = w * (0.32 + i * 0.38 + Math.cos(driftT + i * 2.1) * 0.06)
-    const cy = h * (0.36 + i * 0.28 + Math.sin(driftT * 0.8 + i * 1.5) * 0.06)
-    const pool = ctx.createRadialGradient(cx, cy, 0, cx, cy, unit * 0.46)
-    pool.addColorStop(0, 'rgba(92, 42, 22, 0.075)')
-    pool.addColorStop(1, 'rgba(92, 42, 22, 0)')
-    ctx.fillStyle = pool
-    ctx.fillRect(0, 0, w, h)
-  }
 
   // 2. Project koi spine and normals
   const pts = projectSpineToPixels(state.koi.spine, w, h, unit)
@@ -333,9 +289,9 @@ function drawPond(
   const finFlutter = Math.sin(state.koi.tailPhase * 0.55) * motionAmp
   const turnBank = Math.max(-0.45, Math.min(0.45, state.koi.turnRate * 0.22))
 
-  // 3. Subtle wake shimmer behind the koi
-  const wakeAlpha = Math.min(0.08, state.koi.speed * 0.34)
-  if (wakeAlpha > 0.01) {
+  // 3. Quiet wake lines behind the koi
+  const wakeAlpha = Math.min(0.14, state.koi.speed * 0.5)
+  if (wakeAlpha > 0.015) {
     ctx.save()
     ctx.lineCap = 'round'
     for (const side of [-1, 1] as const) {
@@ -349,42 +305,14 @@ function drawPond(
         if (i === 2) ctx.moveTo(wx, wy)
         else ctx.lineTo(wx, wy)
       }
-      ctx.strokeStyle = `rgba(255, 217, 160, ${wakeAlpha.toFixed(3)})`
-      ctx.lineWidth = Math.max(0.8, unit * 0.0022)
+      ctx.strokeStyle = hexAlpha(tokens.color.ink3, wakeAlpha)
+      ctx.lineWidth = Math.max(0.8, unit * 0.002)
       ctx.stroke()
     }
     ctx.restore()
   }
 
-  // 4. Soft dark offset shadow underneath the koi (water depth)
-  const shadowOffX = unit * 0.014
-  const shadowOffY = unit * 0.022
-  ctx.save()
-  ctx.filter = 'blur(5px)'
-  const pecLShadow = {
-    x: pts[2]!.x + normals[2]!.x * BODY_WIDTHS[2]! * unit * 0.62 + shadowOffX,
-    y: pts[2]!.y + normals[2]!.y * BODY_WIDTHS[2]! * unit * 0.62 + shadowOffY,
-  }
-  const pecRShadow = {
-    x: pts[2]!.x - normals[2]!.x * BODY_WIDTHS[2]! * unit * 0.62 + shadowOffX,
-    y: pts[2]!.y - normals[2]!.y * BODY_WIDTHS[2]! * unit * 0.62 + shadowOffY,
-  }
-  drawPectoralFin(ctx, pecLShadow, shoulderAngle, 1, unit * 0.044, finFlutter - turnBank, true)
-  drawPectoralFin(ctx, pecRShadow, shoulderAngle, -1, unit * 0.044, -finFlutter + turnBank, true)
-  drawForkedTail(
-    ctx,
-    { x: pts[n - 1]!.x + shadowOffX, y: pts[n - 1]!.y + shadowOffY },
-    tailAngle,
-    unit,
-    tailSway,
-    true,
-  )
-  buildBodyPath(ctx, pts, normals, unit, shadowOffX, shadowOffY)
-  ctx.fillStyle = 'rgba(4, 2, 1, 0.56)'
-  ctx.fill()
-  ctx.restore()
-
-  // 5. Koi fins (under the body edge)
+  // 4. Translucent flat bone fins (under the body edge)
   const pecL = {
     x: pts[2]!.x + normals[2]!.x * BODY_WIDTHS[2]! * unit * 0.58,
     y: pts[2]!.y + normals[2]!.y * BODY_WIDTHS[2]! * unit * 0.58,
@@ -393,8 +321,8 @@ function drawPond(
     x: pts[2]!.x - normals[2]!.x * BODY_WIDTHS[2]! * unit * 0.58,
     y: pts[2]!.y - normals[2]!.y * BODY_WIDTHS[2]! * unit * 0.58,
   }
-  drawPectoralFin(ctx, pecL, shoulderAngle, 1, unit * 0.045, finFlutter - turnBank, false)
-  drawPectoralFin(ctx, pecR, shoulderAngle, -1, unit * 0.045, -finFlutter + turnBank, false)
+  drawPectoralFin(ctx, pecL, shoulderAngle, 1, unit * 0.045, finFlutter - turnBank, tokens.pieces.bone)
+  drawPectoralFin(ctx, pecR, shoulderAngle, -1, unit * 0.045, -finFlutter + turnBank, tokens.pieces.bone)
 
   // Smaller pelvic fins
   const pelvAngle = Math.atan2(pts[4]!.y - pts[6]!.y, pts[4]!.x - pts[6]!.x)
@@ -406,49 +334,26 @@ function drawPond(
     x: pts[5]!.x - normals[5]!.x * BODY_WIDTHS[5]! * unit * 0.6,
     y: pts[5]!.y - normals[5]!.y * BODY_WIDTHS[5]! * unit * 0.6,
   }
-  drawPectoralFin(ctx, pelvL, pelvAngle, 1, unit * 0.024, finFlutter * 0.6, false)
-  drawPectoralFin(ctx, pelvR, pelvAngle, -1, unit * 0.024, -finFlutter * 0.6, false)
+  drawPectoralFin(ctx, pelvL, pelvAngle, 1, unit * 0.024, finFlutter * 0.6, tokens.pieces.bone)
+  drawPectoralFin(ctx, pelvR, pelvAngle, -1, unit * 0.024, -finFlutter * 0.6, tokens.pieces.bone)
 
   // Forked flowing tail fin
-  drawForkedTail(ctx, pts[n - 1]!, tailAngle, unit, tailSway, false)
+  drawForkedTail(ctx, pts[n - 1]!, tailAngle, unit, tailSway, tokens.pieces.bone)
 
-  // 6. Koi organic tapered body with cream-candlelight & ember-saffron markings
+  // 5. Flat pale bone/straw koi body with flat ochre Kohaku markings
   ctx.save()
   buildBodyPath(ctx, pts, normals, unit)
-  const bodyGrad = ctx.createLinearGradient(pts[0]!.x, pts[0]!.y, pts[n - 1]!.x, pts[n - 1]!.y)
-  bodyGrad.addColorStop(0, color.candle)
-  bodyGrad.addColorStop(0.35, color.ink)
-  bodyGrad.addColorStop(0.75, '#E4BA8C')
-  bodyGrad.addColorStop(1, '#C98A5C')
-  ctx.fillStyle = bodyGrad
+  ctx.fillStyle = tokens.pieces.bone
   ctx.fill()
 
   // Clip markings cleanly to the koi silhouette
   ctx.clip()
 
-  // Warm saffron-gold crown & shoulder glow
-  const crown = ctx.createRadialGradient(
-    pts[1]!.x,
-    pts[1]!.y,
-    unit * 0.002,
-    pts[1]!.x,
-    pts[1]!.y,
-    unit * 0.036,
-  )
-  crown.addColorStop(0, 'rgba(255, 180, 94, 0.85)')
-  crown.addColorStop(0.6, 'rgba(240, 151, 58, 0.45)')
-  crown.addColorStop(1, 'rgba(240, 151, 58, 0)')
-  ctx.fillStyle = crown
-  ctx.beginPath()
-  ctx.arc(pts[1]!.x, pts[1]!.y, unit * 0.036, 0, Math.PI * 2)
-  ctx.fill()
-
-  // Classic Kohaku ember-vermilion markings along spine
   const patches: readonly { idx: number; offsetN: number; rx: number; ry: number; fill: string }[] = [
-    { idx: 1, offsetN: -0.25, rx: 0.022, ry: 0.015, fill: 'rgba(232, 90, 54, 0.82)' },
-    { idx: 3, offsetN: 0.28, rx: 0.028, ry: 0.017, fill: 'rgba(232, 90, 54, 0.86)' },
-    { idx: 5, offsetN: -0.18, rx: 0.02, ry: 0.012, fill: 'rgba(255, 180, 94, 0.72)' },
-    { idx: 6, offsetN: 0.15, rx: 0.018, ry: 0.01, fill: 'rgba(232, 90, 54, 0.78)' },
+    { idx: 1, offsetN: -0.22, rx: 0.022, ry: 0.015, fill: tokens.pieces.ochre },
+    { idx: 3, offsetN: 0.26, rx: 0.028, ry: 0.017, fill: tokens.pieces.ochre },
+    { idx: 5, offsetN: -0.18, rx: 0.02, ry: 0.012, fill: tokens.pieces.straw },
+    { idx: 6, offsetN: 0.14, rx: 0.018, ry: 0.01, fill: tokens.pieces.ochre },
   ]
   for (const patch of patches) {
     const p = pts[patch.idx]!
@@ -467,25 +372,14 @@ function drawPond(
     ctx.restore()
   }
 
-  // Subtle internal top-light sheen along the dorsal center
-  ctx.beginPath()
-  ctx.moveTo(pts[0]!.x, pts[0]!.y)
-  for (let i = 1; i < n - 2; i++) {
-    ctx.lineTo(pts[i]!.x, pts[i]!.y)
-  }
-  ctx.strokeStyle = 'rgba(255, 236, 204, 0.34)'
-  ctx.lineWidth = unit * 0.0085
-  ctx.lineCap = 'round'
-  ctx.stroke()
-
-  // Soft dark inner shadow at body edges for rounded 3D form
+  // Quiet depth contour along the body silhouette
   buildBodyPath(ctx, pts, normals, unit)
-  ctx.strokeStyle = 'rgba(42, 18, 8, 0.38)'
-  ctx.lineWidth = Math.max(1.2, unit * 0.004)
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)'
+  ctx.lineWidth = Math.max(1, unit * 0.003)
   ctx.stroke()
   ctx.restore()
 
-  // Translucent dorsal ridge fin flowing along joints 2..6
+  // Subtle flat dorsal ridge along joints 2..6
   ctx.save()
   ctx.beginPath()
   const dorsalWave = Math.sin(state.koi.tailPhase - 1.4) * unit * 0.0045 * motionAmp
@@ -496,8 +390,8 @@ function drawPond(
     const off = (dorsalWave + turnBank * unit * 0.007) * ((i - 2) / 4)
     ctx.lineTo(p.x + nm.x * off, p.y + nm.y * off)
   }
-  ctx.strokeStyle = 'rgba(255, 217, 160, 0.36)'
-  ctx.lineWidth = Math.max(1.2, unit * 0.0038)
+  ctx.strokeStyle = hexAlpha(tokens.pieces.straw, 0.42)
+  ctx.lineWidth = Math.max(1.2, unit * 0.0034)
   ctx.lineCap = 'round'
   ctx.stroke()
 
@@ -509,102 +403,68 @@ function drawPond(
   const hl = Math.hypot(hx, hy) || 1
   const hdx = hx / hl
   const hdy = hy / hl
-  const eyeR = Math.max(1.2, unit * 0.0029)
+  const eyeR = Math.max(1.2, unit * 0.0028)
   for (const side of [-1, 1] as const) {
     const ex = head.x + hdx * unit * 0.003 + normals[0]!.x * BODY_WIDTHS[0]! * unit * 0.72 * side
     const ey = head.y + hdy * unit * 0.003 + normals[0]!.y * BODY_WIDTHS[0]! * unit * 0.72 * side
-    ctx.fillStyle = color.night2
+    ctx.fillStyle = tokens.color.surface2
     ctx.beginPath()
     ctx.arc(ex, ey, eyeR, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.fillStyle = 'rgba(255, 217, 160, 0.55)'
-    ctx.beginPath()
-    ctx.arc(ex + hdx * eyeR * 0.25, ey + hdy * eyeR * 0.25, eyeR * 0.36, 0, Math.PI * 2)
     ctx.fill()
   }
   ctx.restore()
 
-  // 7. Concentric water ripples on the surface
+  // 6. Crisp delicate concentric water ripples in ink3 / accentDim
   for (const r of state.ripples) {
     const t = Math.max(0, Math.min(1, r.ageMs / r.durationMs))
     const ease = 1 - Math.pow(1 - t, 2.2)
     const fadeIn = Math.min(1, t / 0.09)
     const fadeOut = Math.pow(1 - t, 1.7)
-    const baseAlpha = fadeIn * fadeOut * (r.kind === 'gather' ? 0.52 : r.kind === 'tap' ? 0.4 : 0.16)
+    const baseAlpha = fadeIn * fadeOut * (r.kind === 'gather' ? 0.5 : r.kind === 'tap' ? 0.38 : 0.18)
     if (baseAlpha <= 0.005) continue
 
     const rx = r.x * w
     const ry = r.y * h
     const outerRadius = (r.startRadius + (r.maxRadius - r.startRadius) * ease) * unit
-    const rgb = MOTE_RGB[r.color]
+    const ringHex = r.kind === 'gather' ? tokens.color.accentDim : tokens.color.ink3
 
-    // Soft warm bloom on gather ripples
-    if (r.kind === 'gather' && t < 0.65) {
-      const bloomAlpha = (1 - t / 0.65) * 0.2
-      const bloom = ctx.createRadialGradient(rx, ry, 0, rx, ry, outerRadius * 0.75)
-      bloom.addColorStop(0, rgba(rgb, bloomAlpha))
-      bloom.addColorStop(1, rgba(rgb, 0))
-      ctx.fillStyle = bloom
-      ctx.beginPath()
-      ctx.arc(rx, ry, outerRadius * 0.75, 0, Math.PI * 2)
-      ctx.fill()
-    }
-
-    // Layered concentric hairline rings
     const rings = r.kind === 'tail' ? 1 : r.kind === 'gather' ? 3 : 2
     for (let ring = 0; ring < rings; ring++) {
       const ringRadius = outerRadius * (1 - ring * 0.26)
       if (ringRadius <= 1) continue
-      const ringAlpha = baseAlpha * (1 - ring * 0.3)
+      const ringAlpha = baseAlpha * (1 - ring * 0.28)
       ctx.beginPath()
       ctx.arc(rx, ry, ringRadius, 0, Math.PI * 2)
-      ctx.strokeStyle = rgba(rgb, ringAlpha)
-      ctx.lineWidth = Math.max(0.75, (r.kind === 'gather' ? 1.45 : 1.05) - ring * 0.25)
+      ctx.strokeStyle = hexAlpha(ringHex, ringAlpha)
+      ctx.lineWidth = Math.max(0.75, (r.kind === 'gather' ? 1.2 : 0.95) - ring * 0.2)
       ctx.stroke()
     }
   }
 
-  // 8. Glowing lantern-motes drifting on the water
+  // 7. Soft flat light motes in tokens.color.accent (0.35–0.55 alpha)
   for (const m of state.motes) {
     if (m.fadeIn <= 0.01) continue
     const mx = m.x * w
     const my = m.y * h
-    const pulse = 0.88 + 0.12 * Math.sin(m.phase * 1.55) * motionAmp
-    const alpha = m.fadeIn * pulse
-    const coreR = m.radius * unit * (0.9 + 0.1 * pulse)
-    const glowR = coreR * 4.8
-    const rgb = MOTE_RGB[m.color]
+    const pulse = 0.5 + 0.5 * Math.sin(m.phase * 1.55) * motionAmp
+    const coreAlpha = m.fadeIn * (0.35 + 0.2 * pulse)
+    const coreR = m.radius * unit * (0.92 + 0.08 * pulse)
 
-    // Soft radial candlelight glow
-    const halo = ctx.createRadialGradient(mx, my, coreR * 0.2, mx, my, glowR)
-    halo.addColorStop(0, rgba(MOTE_RGB.candle, 0.36 * alpha))
-    halo.addColorStop(0.32, rgba(rgb, 0.22 * alpha))
-    halo.addColorStop(0.7, rgba(rgb, 0.06 * alpha))
-    halo.addColorStop(1, rgba(rgb, 0))
-    ctx.fillStyle = halo
+    // Delicate concentric surface ring
     ctx.beginPath()
-    ctx.arc(mx, my, glowR, 0, Math.PI * 2)
-    ctx.fill()
-
-    // Subtle surface meniscus ring
-    ctx.beginPath()
-    ctx.arc(mx, my, coreR * 1.65, 0, Math.PI * 2)
-    ctx.strokeStyle = rgba(rgb, 0.18 * alpha)
-    ctx.lineWidth = 0.8
+    ctx.arc(mx, my, coreR * 1.85, 0, Math.PI * 2)
+    ctx.strokeStyle = hexAlpha(tokens.color.accentDim, 0.26 * m.fadeIn)
+    ctx.lineWidth = 0.85
     ctx.stroke()
 
-    // Lit ember core
-    const coreGrad = ctx.createRadialGradient(mx - coreR * 0.2, my - coreR * 0.25, 0, mx, my, coreR)
-    coreGrad.addColorStop(0, rgba(MOTE_RGB.candle, 0.96 * alpha))
-    coreGrad.addColorStop(0.55, rgba(rgb, 0.92 * alpha))
-    coreGrad.addColorStop(1, rgba(rgb, 0.35 * alpha))
-    ctx.fillStyle = coreGrad
+    // Flat matte accent core
+    ctx.fillStyle = hexAlpha(tokens.color.accent, coreAlpha)
     ctx.beginPath()
     ctx.arc(mx, my, coreR, 0, Math.PI * 2)
     ctx.fill()
   }
 
-  // 9. Quiet dark-umber floating lily / ember leaves at the pond margins
+  // 8. Flat matte floating leaves in surface3 (#22201D) with faint line veins
   for (const leaf of state.leaves) {
     const lx = leaf.x * w
     const ly = leaf.y * h
@@ -614,35 +474,18 @@ function drawPond(
     ctx.translate(lx, ly)
     ctx.rotate(leaf.angle)
 
-    // Soft water depth shadow beneath leaf
-    ctx.save()
-    ctx.translate(unit * 0.008, unit * 0.012)
     ctx.beginPath()
     ctx.moveTo(0, 0)
     ctx.arc(0, 0, lr, leaf.notch, Math.PI * 2 - leaf.notch)
     ctx.closePath()
-    ctx.fillStyle = 'rgba(4, 2, 1, 0.5)'
-    ctx.fill()
-    ctx.restore()
-
-    // Dark-umber / warm-peat leaf body
-    ctx.beginPath()
-    ctx.moveTo(0, 0)
-    ctx.arc(0, 0, lr, leaf.notch, Math.PI * 2 - leaf.notch)
-    ctx.closePath()
-    const leafGrad = ctx.createRadialGradient(-lr * 0.18, -lr * 0.2, lr * 0.08, 0, 0, lr)
-    leafGrad.addColorStop(0, '#2A1B13')
-    leafGrad.addColorStop(0.65, '#1D120C')
-    leafGrad.addColorStop(1, '#140B07')
-    ctx.fillStyle = leafGrad
+    ctx.fillStyle = tokens.color.surface3
     ctx.fill()
 
-    // Whisper-soft top rim & radial veins
-    ctx.strokeStyle = 'rgba(138, 110, 91, 0.18)'
+    // Faint rim & radial veins
+    ctx.strokeStyle = tokens.color.line
     ctx.lineWidth = 0.9
     ctx.stroke()
 
-    ctx.strokeStyle = 'rgba(188, 155, 129, 0.075)'
     ctx.lineWidth = 0.7
     for (let v = 0; v < 5; v++) {
       const va = leaf.notch + 0.55 + (v / 4) * (Math.PI * 2 - leaf.notch * 2 - 1.1)
@@ -654,24 +497,21 @@ function drawPond(
     ctx.restore()
   }
 
-  // 10. Whisper-quiet touch beacon while pointer is held on the water
+  // 9. Quiet touch beacon while pointer is held on the water
   if (pointerPos) {
     const px = pointerPos.x * w
     const py = pointerPos.y * h
-    const beaconR = unit * 0.022
+    const beaconR = unit * 0.02
     ctx.save()
     ctx.beginPath()
     ctx.arc(px, py, beaconR, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(255, 217, 160, 0.24)'
+    ctx.strokeStyle = hexAlpha(tokens.color.ink3, 0.36)
     ctx.lineWidth = 1
     ctx.stroke()
 
-    const dot = ctx.createRadialGradient(px, py, 0, px, py, beaconR * 0.65)
-    dot.addColorStop(0, 'rgba(255, 217, 160, 0.3)')
-    dot.addColorStop(1, 'rgba(255, 180, 94, 0)')
-    ctx.fillStyle = dot
     ctx.beginPath()
-    ctx.arc(px, py, beaconR * 0.65, 0, Math.PI * 2)
+    ctx.arc(px, py, beaconR * 0.28, 0, Math.PI * 2)
+    ctx.fillStyle = hexAlpha(tokens.color.accent, 0.4)
     ctx.fill()
     ctx.restore()
   }
@@ -681,6 +521,7 @@ export default function PondScreen({ onExit }: GameScreenProps) {
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
   const reduceMotion = useReducedMotion() ?? false
+  const tokens = useTokenColors()
   const [saved, setSaved] = useGameSave<PondSave>('pond', DEFAULT_SAVE)
 
   const initialStateRef = useRef<PondState | null>(null)
@@ -705,6 +546,8 @@ export default function PondScreen({ onExit }: GameScreenProps) {
   pausedRef.current = paused
   const reducedMotionRef = useRef(reduceMotion)
   reducedMotionRef.current = reduceMotion
+  const tokensRef = useRef<ResolvedTokens>(tokens)
+  tokensRef.current = tokens
 
   const persist = useCallback(
     (nextState: PondState, incrementPlays = false) => {
@@ -726,9 +569,14 @@ export default function PondScreen({ onExit }: GameScreenProps) {
     if (w <= 0 || h <= 0) return
     ctx.save()
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    drawPond(ctx, stateRef.current, w, h, pointerPosRef.current, reducedMotionRef.current)
+    drawPond(ctx, stateRef.current, w, h, pointerPosRef.current, reducedMotionRef.current, tokensRef.current)
     ctx.restore()
   }, [])
+
+  // Redraw immediately when live token warmth changes (even while paused)
+  useEffect(() => {
+    renderCanvas()
+  }, [tokens, renderCanvas])
 
   // Keep canvas crisp at native DPR whenever the stage resizes
   useEffect(() => {
@@ -933,12 +781,12 @@ export default function PondScreen({ onExit }: GameScreenProps) {
       onExit={handleExit}
       howTo={
         <>
-          <p>Touch or drag across the dark water to guide the koi toward the warm lantern-motes.</p>
+          <p>Touch or drag across the dark water to guide the koi toward the light motes.</p>
           <p>Lift your finger and watch it glide on its own. There is no timer and no rush.</p>
-          <p>During a wind-down session, the pond slows gradually with the sunset.</p>
+          <p>During a wind-down session, the pond slows gradually as bedtime approaches.</p>
         </>
       }
-      controls={<p className="pond-caption t-caption">Touch the water to guide the koi</p>}
+      controls={<p className="pond-caption t-label">Touch to guide</p>}
     >
       <div ref={frameRef} className="pond-frame">
         <canvas
@@ -951,7 +799,6 @@ export default function PondScreen({ onExit }: GameScreenProps) {
           onPointerUp={endPointer}
           onPointerCancel={endPointer}
         />
-        <div className="pond-vignette" aria-hidden />
       </div>
     </GameShell>
   )

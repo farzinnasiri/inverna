@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MIN_NEIGHBOR_DELTA_E,
   PALETTES,
   createHue,
   findHintPair,
@@ -9,6 +10,7 @@ import {
   hexToRgb,
   hueReducer,
   isSolved,
+  minAdjacentDistance,
   nextPuzzle,
   oklabToHex,
   restartPuzzle,
@@ -40,7 +42,7 @@ describe('Hue OKLab colour math & palettes', () => {
     }
   })
 
-  it('curates at least 12 distinct, warm low-blue palettes with clear tile separation', () => {
+  it('curates at least 12 distinct, matte Dusk Stone palettes with ΔE >= 0.04 between adjacent cells', () => {
     expect(PALETTES.length).toBeGreaterThanOrEqual(12)
 
     const ids = new Set(PALETTES.map((p) => p.id))
@@ -48,38 +50,33 @@ describe('Hue OKLab colour math & palettes', () => {
     expect(ids.size).toBe(PALETTES.length)
     expect(titles.size).toBe(PALETTES.length)
 
+    // Largest grid produced by layoutForPuzzle is 5×6.
+    const cols = 5
+    const rows = 6
+
     for (const p of PALETTES) {
-      // Every corner must be warm / low-blue (blue never dominates red).
-      for (const hex of [p.corners.tl, p.corners.tr, p.corners.bl, p.corners.br]) {
+      const grid = generateGradientGrid(p.corners, cols, rows)
+
+      // Every cell must be warm / zero blue dominance and low-chroma matte (OKLCH C <= 0.07).
+      for (const hex of grid) {
         const [r, , b] = hexToRgb(hex)
         expect(r).toBeGreaterThan(b)
+        const lab = hexToOklab(hex)
+        const chroma = Math.hypot(lab.a, lab.b)
+        expect(chroma).toBeLessThanOrEqual(0.07)
       }
 
-      // Adjacent tiles on a 5×6 grid should be perceptually distinct,
-      // both normally and under a warm orange night filter (#ff5a14 multiply).
-      const cols = 5
-      const rows = 6
-      const grid = generateGradientGrid(p.corners, cols, rows)
-      const applyWarmFilter = (hex: string) => {
-        const [r, g, b] = hexToRgb(hex)
-        // Blend 85% multiply with #ff5a14 (1.0, 0.353, 0.078)
-        const fr = r * (0.15 + 0.85 * 1.0)
-        const fg = g * (0.15 + 0.85 * (0x5a / 255))
-        const fb = b * (0.15 + 0.85 * (0x14 / 255))
-        const toHex = (c: number) => Math.round(c * 255).toString(16).padStart(2, '0')
-        return `#${toHex(fr)}${toHex(fg)}${toHex(fb)}`
-      }
-      const filteredGrid = grid.map(applyWarmFilter)
+      // Strict neighbor distinguishability constraint: ΔE(OKLab) >= 0.04 on the largest grid.
+      expect(minAdjacentDistance(grid, cols, rows)).toBeGreaterThanOrEqual(MIN_NEIGHBOR_DELTA_E)
+
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
           const i = row * cols + col
           if (col + 1 < cols) {
-            expect(hexDistance(grid[i]!, grid[i + 1]!)).toBeGreaterThan(0.02)
-            expect(hexDistance(filteredGrid[i]!, filteredGrid[i + 1]!)).toBeGreaterThan(0.01)
+            expect(hexDistance(grid[i]!, grid[i + 1]!)).toBeGreaterThanOrEqual(MIN_NEIGHBOR_DELTA_E)
           }
           if (row + 1 < rows) {
-            expect(hexDistance(grid[i]!, grid[i + cols]!)).toBeGreaterThan(0.02)
-            expect(hexDistance(filteredGrid[i]!, filteredGrid[i + cols]!)).toBeGreaterThan(0.01)
+            expect(hexDistance(grid[i]!, grid[i + cols]!)).toBeGreaterThanOrEqual(MIN_NEIGHBOR_DELTA_E)
           }
         }
       }

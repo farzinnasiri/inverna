@@ -41,7 +41,6 @@ export function SessionCurtain() {
     return () => window.clearInterval(id)
   }, [session, ended, finish, stopSound, closeGame])
 
-  // Also honour standalone sleep timer on Sounds screen
   const stopAt = useSound((s) => s.stopAt)
   useEffect(() => {
     if (!stopAt) return
@@ -70,15 +69,12 @@ export function SessionCurtain() {
           className="curtain__inner"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 1.4, delay: 0.4, ease: easeArray.out }}
+          transition={{ duration: 1.2, delay: 0.3, ease: easeArray.out }}
         >
           <p className="t-title" style={{ color: 'var(--c-ink-2)' }}>
-            Goodnight.
+            Goodnight
           </p>
-          <p className="t-small" style={{ color: 'var(--c-ink-3)' }}>
-            Put the phone down whenever you are ready.
-          </p>
-          <button type="button" className="curtain__wake" onClick={dismiss}>
+          <button type="button" className="curtain__wake t-label" onClick={dismiss}>
             Still awake
           </button>
         </motion.div>

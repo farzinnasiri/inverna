@@ -1,13 +1,10 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronLeft, Pause } from 'lucide-react'
 import { gameMeta, type GameId } from '@/core/games/catalog'
-import { sessionProgress } from '@/core/session'
 import { easeArray } from '@/design/tokens'
-import { useSession } from '../state/session'
 import { Button, IconButton, Sheet } from './controls'
 
-/** Props every game screen receives from the app. */
 export interface GameScreenProps {
   onExit: () => void
 }
@@ -18,16 +15,9 @@ export interface Stat {
 }
 
 /**
- * The frame every game sits in. Games own their board and controls;
- * the shell owns the top bar, stats, pause sheet and how-to text, so all
- * ten games feel like one place.
- *
- *   <GameShell gameId="settle" stats={[…]} paused={p} onPauseChange={setP}
- *              onRestart={restart} howTo={<p>…</p>} controls={<…/>}>
- *     <Board/>
- *   </GameShell>
- *
- * The shell pauses automatically when the tab is hidden.
+ * Quiet frame for every game.
+ * Top bar: back · 17/600 game name · pause.
+ * Stats: one centred t-label line (e.g. "8 · best 120").
  */
 export function GameShell({
   gameId,
@@ -69,28 +59,27 @@ export function GameShell({
       initial={{ opacity: 0, scale: 0.985 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.985 }}
-      transition={{ duration: 0.32, ease: easeArray.out }}
+      transition={{ duration: 0.28, ease: easeArray.out }}
     >
       <header className="game__top">
         <IconButton label="Back" onClick={onExit}>
-          <ChevronLeft size={24} strokeWidth={1.75} />
+          <ChevronLeft size={22} strokeWidth={1.5} />
         </IconButton>
-        <h1 className="game__title t-serif">
-          {meta.name}
-          <MiniSun />
-        </h1>
+        <h1 className="game__title">{meta.name}</h1>
         <IconButton label="Pause" onClick={() => onPauseChange(true)}>
-          <Pause size={20} strokeWidth={1.75} />
+          <Pause size={20} strokeWidth={1.5} />
         </IconButton>
       </header>
 
       {stats && stats.length > 0 && (
-        <div className="game__stats">
-          {stats.map((s) => (
-            <div className="stat" key={s.label}>
-              <span className="stat__value num">{s.value}</span>
-              <span className="stat__label">{s.label}</span>
-            </div>
+        <div className="game__stats num">
+          {stats.map((s, i) => (
+            <Fragment key={s.label}>
+              {i > 0 && <span className="game__stat-sep" aria-hidden>·</span>}
+              <span>
+                {s.label.toLowerCase()} {s.value}
+              </span>
+            </Fragment>
           ))}
         </div>
       )}
@@ -100,18 +89,18 @@ export function GameShell({
       {controls && <footer className="game__controls">{controls}</footer>}
 
       <Sheet open={paused} onClose={() => onPauseChange(false)} label="Paused">
-        <h2 className="t-title sheet__title">Paused</h2>
-        <p className="t-small">
-          {meta.name} · {meta.classic}
+        <h2 className="t-title">{meta.name}</h2>
+        <p className="t-label" style={{ marginTop: 4 }}>
+          {meta.classic}
         </p>
         <AnimatePresence initial={false}>
           {showHow && (
             <motion.div
               className="howto"
-              initial={{ opacity: 0, y: -6 }}
+              initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: easeArray.out }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.2, ease: easeArray.out }}
             >
               {howTo}
             </motion.div>
@@ -138,7 +127,7 @@ export function GameShell({
             </Button>
           )}
           <Button variant="ghost" block onClick={onExit}>
-            Leave game
+            Leave
           </Button>
         </div>
       </Sheet>
@@ -146,10 +135,6 @@ export function GameShell({
   )
 }
 
-/**
- * A quiet completion moment ("Solved"). Not a victory screen: no score
- * fanfare, one line and one way forward.
- */
 export function Completion({
   open,
   title = 'Solved',
@@ -171,15 +156,15 @@ export function Completion({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.6, ease: easeArray.out }}
+          transition={{ duration: 0.5, ease: easeArray.out }}
         >
           <motion.div
             className="completion__inner"
-            initial={{ opacity: 0, y: 10, filter: 'blur(6px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            transition={{ duration: 0.8, delay: 0.25, ease: easeArray.out }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.18, ease: easeArray.out }}
           >
-            <h2 className="t-display">{title}</h2>
+            <h2 className="t-title">{title}</h2>
             {line && <p className="t-body">{line}</p>}
             <Button variant="primary" onClick={onAction}>
               {actionLabel}
@@ -189,19 +174,4 @@ export function Completion({
       )}
     </AnimatePresence>
   )
-}
-
-/** A tiny sun on the horizon that sets as the wind-down session runs. */
-export function MiniSun() {
-  const session = useSession((s) => s.session)
-  const [p, setP] = useState(0)
-  useEffect(() => {
-    if (!session) return
-    const tick = () => setP(sessionProgress(session, Date.now()))
-    tick()
-    const id = window.setInterval(tick, 4000)
-    return () => window.clearInterval(id)
-  }, [session])
-  if (!session) return null
-  return <span className="mini-sun" style={{ ['--set' as string]: p }} aria-label="Wind-down in progress" role="img" />
 }

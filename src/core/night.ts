@@ -1,8 +1,11 @@
 /**
- * Night filter maths. Pure functions; the UI only paints the result.
+ * Night light & bedtime schedule maths. Pure functions; the UI only paints.
  *
- * warmth 0..1 — how much blue light is removed (1 = deep ember monochrome)
- * dim    0..1 — how much the screen is darkened on top of that
+ * v2 semantics:
+ * - One user control `light` (0 = normal, 1 = lowest).
+ * - warmth = light, dim = 0.6 * light.
+ * - The bedtime schedule deepens *from* the user's light level rather than
+ *   replacing it, so manual adjustments are always immediately visible.
  */
 export interface NightFilter {
   warmth: number
@@ -13,9 +16,9 @@ export interface Schedule {
   enabled: boolean
   /** "HH:MM", 24h. */
   bedtime: string
-  /** Minutes before bedtime when wind-down begins. */
+  /** Minutes before bedtime when dimming begins. Fixed at 45 in v2 UI. */
   leadMinutes: number
-  /** 0 = Sunday … 6 = Saturday. Days whose *evening* has a bedtime. */
+  /** 0 = Sunday … 6 = Saturday. */
   days: number[]
 }
 
@@ -38,10 +41,16 @@ export function formatHHMM(h: number, m: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
+/** Human-friendly 12h or 24h clock without leading zero clutter ("11:00"). */
+export function formatBedtimeShort(value: string): string {
+  const { h, m } = parseHHMM(value)
+  const h12 = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')}`
+}
+
 /**
  * Bedtime instants closest to `now` (the most recent one and the next one),
- * honouring the selected days. Morning cut-off is 06:00: until then, last
- * night's bedtime still counts as "tonight".
+ * honouring the selected days. Morning cut-off is 06:00.
  */
 export function bedtimeAround(schedule: Schedule, now: Date): { previous: Date | null; next: Date | null } {
   const { h, m } = parseHHMM(schedule.bedtime)
@@ -51,7 +60,6 @@ export function bedtimeAround(schedule: Schedule, now: Date): { previous: Date |
     const d = new Date(now)
     d.setDate(d.getDate() + offset)
     d.setHours(h, m, 0, 0)
-    // A bedtime after midnight (e.g. 00:30) belongs to the previous evening.
     const eveningDay = h < 12 ? (d.getDay() + 6) % 7 : d.getDay()
     if (!schedule.days.includes(eveningDay)) continue
     if (d.getTime() <= now.getTime()) previous = d
@@ -89,12 +97,28 @@ export function nightPhase(schedule: Schedule, now: Date): { phase: NightPhase; 
   return { phase: 'day', progress: 0 }
 }
 
-/** The filter the schedule asks for right now. */
-export function scheduleFilter(schedule: Schedule, now: Date): NightFilter {
+/** Convert single user `light` level (0..1) into warmth + dim filter channels. */
+export function lightToFilter(light: number): NightFilter {
+  const l = clamp01(light)
+  return { warmth: l, dim: 0.6 * l }
+}
+
+/**
+ * Effective light level combining the user's manual `light` with the bedtime
+ * schedule. The schedule deepens *from* the user's chosen level, so dragging
+ * the slider always has an immediate visible effect even inside the lead window.
+ */
+export function scheduledLight(userLight: number, followBedtime: boolean, schedule: Schedule, now: Date): number {
+  const base = clamp01(userLight)
+  if (!followBedtime || !schedule.enabled) return base
   const { phase, progress } = nightPhase(schedule, now)
-  if (phase === 'day') return { warmth: 0, dim: 0 }
-  const t = smooth(progress)
-  return { warmth: 0.35 + 0.55 * t, dim: 0.3 * t }
+  if (phase === 'day') return base
+  return clamp01(base + (1 - base) * 0.5 * smooth(progress))
+}
+
+/** Legacy helper kept for compatibility: schedule filter from userLight = 0. */
+export function scheduleFilter(schedule: Schedule, now: Date, userLight = 0): NightFilter {
+  return lightToFilter(scheduledLight(userLight, schedule.enabled, schedule, now))
 }
 
 /** Strongest of several filter requests wins, per channel. */
