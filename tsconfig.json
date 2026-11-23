@@ -1,19 +1,28 @@
 {
+  "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
     "strict": true,
+    "noEmit": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
-    "isolatedModules": true,
-    "noEmit": true,
-    "types": ["vite/client", "vite-plugin-pwa/client"],
-    "paths": { "@/*": ["./src/*"] }
+    "moduleSuffixes": [".native", ""],
+    "types": ["react", "node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "src/core/**/*.ts",
+    "src/design/**/*.ts",
+    "src/platform/**/*.ts",
+    "src/ui/rn/**/*.ts",
+    "src/ui/rn/**/*.tsx",
+    "src/ui/hooks/useTokenColors.ts",
+    "src/ui/state/**/*.ts",
+    "app.config.ts"
+  ]
 }

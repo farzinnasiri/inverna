@@ -1,20 +1,25 @@
 /**
- * Platform seam. The UI talks to `platform`, never to browser APIs directly
- * for storage, sound or haptics. A React Native build swaps this one file.
+ * Universal Expo platform seam (iOS, Android, Web).
+ * Storage, sound, haptics, and notifications all resolve cleanly per platform.
  */
 import { installKeyValueStore } from '@/core/storage'
 import type { SoundEngine } from '@/core/sound/engine'
-import { webStorage } from './web/storage'
-import { webHaptics, type Haptics } from './web/haptics'
-import { createWebSoundEngine } from './web/sound'
+import { deviceStorage } from './storage'
+import { deviceHaptics, type HapticsAdapter } from './haptics'
+import { createPlatformSoundEngine } from './sound'
+import { scheduleBedtimeReminder, cancelBedtimeReminder } from './notifications'
 
 let booted = false
 
 export function bootPlatform(): void {
   if (booted) return
   booted = true
-  installKeyValueStore(webStorage())
+  installKeyValueStore(deviceStorage())
 }
 
-export const sound: SoundEngine = createWebSoundEngine()
-export const haptics: Haptics = webHaptics
+export const sound: SoundEngine = createPlatformSoundEngine()
+export const haptics: HapticsAdapter = deviceHaptics
+export const notifications = {
+  scheduleBedtimeReminder,
+  cancelBedtimeReminder,
+}
