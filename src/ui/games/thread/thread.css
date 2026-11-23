@@ -1,7 +1,7 @@
 /* ==========================================================================
-   Thread — Low Light flat Dusk Stone path puzzle
-   Flat surface-1 board with centred ink-4 grid dots, 40% round-cap paths at
-   0.55 opacity, and distinct geometric endpoint shapes. Zero gradients,
+   Thread — Watchmaker Ink & Brass precision conduit puzzle
+   Outer hairline bezel, surface-1 well with crisp 3px ink-4 cell dots,
+   round-cap conduits, and locked-in circuit-pin endpoints. Zero gradients,
    zero shadows.
    ========================================================================== */
 
@@ -24,10 +24,10 @@
   --size: 6;
   width: min(100cqw, calc(100cqh - 32px), 396px);
   aspect-ratio: 1;
+  padding: 4px;
   border-radius: var(--r-lg);
-  background: var(--c-surface-1);
+  background: var(--c-bg);
   border: 1px solid var(--c-line);
-  overflow: hidden;
   transition: opacity 260ms var(--ease-out);
 }
 
@@ -35,6 +35,9 @@
   position: relative;
   width: 100%;
   height: 100%;
+  border-radius: calc(var(--r-lg) - 5px);
+  background: var(--c-surface-1);
+  overflow: hidden;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -112,8 +115,12 @@
   transition: opacity 180ms var(--ease-out);
 }
 
+.thread-path__stroke[data-connected='true'] {
+  opacity: 0.72;
+}
+
 .thread-path__stroke[data-active='true'] {
-  opacity: 0.65;
+  opacity: 0.68;
 }
 
 /* Active drag tip ring */
@@ -131,6 +138,24 @@
 
 .thread-bead[data-active='true'] {
   transform: scale(1.06);
+}
+
+/* Locked-in inner pinpoint highlight dot on connected pairs */
+.thread-bead__pin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: thread-pin-lock 200ms var(--ease-out) both;
+}
+
+@keyframes thread-pin-lock {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* --- Quiet guidance caption ---------------------------------------------- */
@@ -177,6 +202,9 @@
   }
   .thread-bead[data-active='true'] {
     transform: none;
+  }
+  .thread-bead__pin {
+    animation: none;
   }
   .thread-cell[data-missed='true']::after {
     animation: none;

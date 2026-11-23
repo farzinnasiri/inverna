@@ -2,17 +2,17 @@ import { readJSON } from '@/core/storage'
 import type { GameId } from '@/core/games/catalog'
 
 const KINDLE_RAMP: Record<number, string> = {
-  2: '#1E1C1A',
-  4: '#2A2723',
-  8: '#3A352F',
-  16: '#504840',
-  32: '#6B5F51',
-  64: '#857561',
-  128: '#A08B70',
-  256: '#B9A282',
-  512: '#CDB998',
-  1024: '#DDCDB2',
-  2048: '#EAE0CC',
+  2: '#171A20',
+  4: '#20252E',
+  8: '#2A3442',
+  16: '#364B5E',
+  32: '#3E6157',
+  64: '#585275',
+  128: '#87434B',
+  256: '#9E7F43',
+  512: '#B89450',
+  1024: '#C9B07C',
+  2048: '#DCE0E6',
 }
 
 const STONE_VAR: Record<string, string> = {

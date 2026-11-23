@@ -289,8 +289,8 @@ function drawPond(
   const finFlutter = Math.sin(state.koi.tailPhase * 0.55) * motionAmp
   const turnBank = Math.max(-0.45, Math.min(0.45, state.koi.turnRate * 0.22))
 
-  // 3. Quiet wake lines behind the koi
-  const wakeAlpha = Math.min(0.14, state.koi.speed * 0.5)
+  // 3. Quiet nocturnal wake lines behind the koi in Deep Navy Slate
+  const wakeAlpha = Math.min(0.22, state.koi.speed * 0.72)
   if (wakeAlpha > 0.015) {
     ctx.save()
     ctx.lineCap = 'round'
@@ -305,14 +305,14 @@ function drawPond(
         if (i === 2) ctx.moveTo(wx, wy)
         else ctx.lineTo(wx, wy)
       }
-      ctx.strokeStyle = hexAlpha(tokens.color.ink3, wakeAlpha)
+      ctx.strokeStyle = hexAlpha(tokens.pieces.clay, wakeAlpha)
       ctx.lineWidth = Math.max(0.8, unit * 0.002)
       ctx.stroke()
     }
     ctx.restore()
   }
 
-  // 4. Translucent flat bone fins (under the body edge)
+  // 4. Translucent Moon Ivory fins (under the body edge)
   const pecL = {
     x: pts[2]!.x + normals[2]!.x * BODY_WIDTHS[2]! * unit * 0.58,
     y: pts[2]!.y + normals[2]!.y * BODY_WIDTHS[2]! * unit * 0.58,
@@ -340,7 +340,7 @@ function drawPond(
   // Forked flowing tail fin
   drawForkedTail(ctx, pts[n - 1]!, tailAngle, unit, tailSway, tokens.pieces.bone)
 
-  // 5. Flat pale bone/straw koi body with flat ochre Kohaku markings
+  // 5. Moon Ivory koi body with Showa/Kohaku Antique Brass & Deep Navy Slate markings
   ctx.save()
   buildBodyPath(ctx, pts, normals, unit)
   ctx.fillStyle = tokens.pieces.bone
@@ -350,10 +350,11 @@ function drawPond(
   ctx.clip()
 
   const patches: readonly { idx: number; offsetN: number; rx: number; ry: number; fill: string }[] = [
-    { idx: 1, offsetN: -0.22, rx: 0.022, ry: 0.015, fill: tokens.pieces.ochre },
-    { idx: 3, offsetN: 0.26, rx: 0.028, ry: 0.017, fill: tokens.pieces.ochre },
-    { idx: 5, offsetN: -0.18, rx: 0.02, ry: 0.012, fill: tokens.pieces.straw },
-    { idx: 6, offsetN: 0.14, rx: 0.018, ry: 0.01, fill: tokens.pieces.ochre },
+    { idx: 1, offsetN: -0.2, rx: 0.022, ry: 0.015, fill: tokens.pieces.ochre },
+    { idx: 2, offsetN: 0.34, rx: 0.019, ry: 0.013, fill: tokens.pieces.clay },
+    { idx: 3, offsetN: -0.14, rx: 0.027, ry: 0.016, fill: tokens.pieces.ochre },
+    { idx: 5, offsetN: 0.24, rx: 0.018, ry: 0.011, fill: tokens.pieces.clay },
+    { idx: 6, offsetN: -0.12, rx: 0.016, ry: 0.0095, fill: tokens.pieces.ochre },
   ]
   for (const patch of patches) {
     const p = pts[patch.idx]!
@@ -372,14 +373,14 @@ function drawPond(
     ctx.restore()
   }
 
-  // Quiet depth contour along the body silhouette
+  // Quiet hairline contour along the body silhouette
   buildBodyPath(ctx, pts, normals, unit)
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)'
-  ctx.lineWidth = Math.max(1, unit * 0.003)
+  ctx.strokeStyle = 'rgba(220, 226, 235, 0.08)'
+  ctx.lineWidth = Math.max(1, unit * 0.0028)
   ctx.stroke()
   ctx.restore()
 
-  // Subtle flat dorsal ridge along joints 2..6
+  // Subtle flat dorsal ridge along joints 2..6 in muted pewter-ivory
   ctx.save()
   ctx.beginPath()
   const dorsalWave = Math.sin(state.koi.tailPhase - 1.4) * unit * 0.0045 * motionAmp
@@ -390,12 +391,12 @@ function drawPond(
     const off = (dorsalWave + turnBank * unit * 0.007) * ((i - 2) / 4)
     ctx.lineTo(p.x + nm.x * off, p.y + nm.y * off)
   }
-  ctx.strokeStyle = hexAlpha(tokens.pieces.straw, 0.42)
-  ctx.lineWidth = Math.max(1.2, unit * 0.0034)
+  ctx.strokeStyle = hexAlpha(tokens.pieces.stone, 0.36)
+  ctx.lineWidth = Math.max(1.1, unit * 0.003)
   ctx.lineCap = 'round'
   ctx.stroke()
 
-  // Subtle eyes near snout sides
+  // Crisp obsidian eyes near snout sides
   const head = pts[0]!
   const neck = pts[1]!
   const hx = head.x - neck.x
@@ -407,64 +408,78 @@ function drawPond(
   for (const side of [-1, 1] as const) {
     const ex = head.x + hdx * unit * 0.003 + normals[0]!.x * BODY_WIDTHS[0]! * unit * 0.72 * side
     const ey = head.y + hdy * unit * 0.003 + normals[0]!.y * BODY_WIDTHS[0]! * unit * 0.72 * side
-    ctx.fillStyle = tokens.color.surface2
+    ctx.fillStyle = tokens.color.surface1
     ctx.beginPath()
     ctx.arc(ex, ey, eyeR, 0, Math.PI * 2)
     ctx.fill()
   }
   ctx.restore()
 
-  // 6. Crisp delicate concentric water ripples in ink3 / accentDim
+  // 6. Crisp concentric hairline ripples in Deep Navy Slate (clay) & ink3
   for (const r of state.ripples) {
     const t = Math.max(0, Math.min(1, r.ageMs / r.durationMs))
     const ease = 1 - Math.pow(1 - t, 2.2)
     const fadeIn = Math.min(1, t / 0.09)
     const fadeOut = Math.pow(1 - t, 1.7)
-    const baseAlpha = fadeIn * fadeOut * (r.kind === 'gather' ? 0.5 : r.kind === 'tap' ? 0.38 : 0.18)
+    const baseAlpha = fadeIn * fadeOut * (r.kind === 'gather' ? 0.56 : r.kind === 'tap' ? 0.44 : 0.2)
     if (baseAlpha <= 0.005) continue
 
     const rx = r.x * w
     const ry = r.y * h
     const outerRadius = (r.startRadius + (r.maxRadius - r.startRadius) * ease) * unit
-    const ringHex = r.kind === 'gather' ? tokens.color.accentDim : tokens.color.ink3
 
     const rings = r.kind === 'tail' ? 1 : r.kind === 'gather' ? 3 : 2
     for (let ring = 0; ring < rings; ring++) {
       const ringRadius = outerRadius * (1 - ring * 0.26)
       if (ringRadius <= 1) continue
       const ringAlpha = baseAlpha * (1 - ring * 0.28)
+      const ringHex =
+        r.kind === 'gather'
+          ? ring === 0
+            ? tokens.pieces.clay
+            : tokens.color.accentDim
+          : r.kind === 'tap'
+            ? tokens.pieces.clay
+            : tokens.color.ink3
       ctx.beginPath()
       ctx.arc(rx, ry, ringRadius, 0, Math.PI * 2)
       ctx.strokeStyle = hexAlpha(ringHex, ringAlpha)
-      ctx.lineWidth = Math.max(0.75, (r.kind === 'gather' ? 1.2 : 0.95) - ring * 0.2)
+      ctx.lineWidth = Math.max(0.75, (r.kind === 'gather' ? 1.15 : 0.9) - ring * 0.18)
       ctx.stroke()
     }
   }
 
-  // 7. Soft flat light motes in tokens.color.accent (0.35–0.55 alpha)
+  // 7. Floating lantern-motes in Antique Brass (accent) & Moon Ivory (bone)
   for (const m of state.motes) {
     if (m.fadeIn <= 0.01) continue
     const mx = m.x * w
     const my = m.y * h
     const pulse = 0.5 + 0.5 * Math.sin(m.phase * 1.55) * motionAmp
-    const coreAlpha = m.fadeIn * (0.35 + 0.2 * pulse)
+    const coreAlpha = m.fadeIn * (0.42 + 0.22 * pulse)
     const coreR = m.radius * unit * (0.92 + 0.08 * pulse)
+    const isIvoryLantern = m.id % 3 === 0
 
-    // Delicate concentric surface ring
+    // Crisp concentric water ring around lantern-mote
     ctx.beginPath()
-    ctx.arc(mx, my, coreR * 1.85, 0, Math.PI * 2)
-    ctx.strokeStyle = hexAlpha(tokens.color.accentDim, 0.26 * m.fadeIn)
+    ctx.arc(mx, my, coreR * 1.95, 0, Math.PI * 2)
+    ctx.strokeStyle = hexAlpha(isIvoryLantern ? tokens.pieces.clay : tokens.color.accentDim, 0.34 * m.fadeIn)
     ctx.lineWidth = 0.85
     ctx.stroke()
 
-    // Flat matte accent core
-    ctx.fillStyle = hexAlpha(tokens.color.accent, coreAlpha)
+    // Lantern-mote body (Antique Brass or Moon Ivory)
+    ctx.fillStyle = hexAlpha(isIvoryLantern ? tokens.pieces.bone : tokens.color.accent, coreAlpha)
     ctx.beginPath()
     ctx.arc(mx, my, coreR, 0, Math.PI * 2)
     ctx.fill()
+
+    // Pinpoint inner wick gleam
+    ctx.fillStyle = hexAlpha(isIvoryLantern ? tokens.color.accent : tokens.pieces.bone, m.fadeIn * 0.62)
+    ctx.beginPath()
+    ctx.arc(mx, my, coreR * 0.38, 0, Math.PI * 2)
+    ctx.fill()
   }
 
-  // 8. Flat matte floating leaves in surface3 (#22201D) with faint line veins
+  // 8. Dark slate floating stepping leaves/stones at the margins (surface3)
   for (const leaf of state.leaves) {
     const lx = leaf.x * w
     const ly = leaf.y * h
@@ -481,7 +496,7 @@ function drawPond(
     ctx.fillStyle = tokens.color.surface3
     ctx.fill()
 
-    // Faint rim & radial veins
+    // Whisper-subtle hairline rim & radial veins
     ctx.strokeStyle = tokens.color.line
     ctx.lineWidth = 0.9
     ctx.stroke()
@@ -497,7 +512,7 @@ function drawPond(
     ctx.restore()
   }
 
-  // 9. Quiet touch beacon while pointer is held on the water
+  // 9. Quiet touch beacon while pointer is held on the obsidian water
   if (pointerPos) {
     const px = pointerPos.x * w
     const py = pointerPos.y * h
@@ -505,13 +520,13 @@ function drawPond(
     ctx.save()
     ctx.beginPath()
     ctx.arc(px, py, beaconR, 0, Math.PI * 2)
-    ctx.strokeStyle = hexAlpha(tokens.color.ink3, 0.36)
+    ctx.strokeStyle = hexAlpha(tokens.pieces.clay, 0.45)
     ctx.lineWidth = 1
     ctx.stroke()
 
     ctx.beginPath()
     ctx.arc(px, py, beaconR * 0.28, 0, Math.PI * 2)
-    ctx.fillStyle = hexAlpha(tokens.color.accent, 0.4)
+    ctx.fillStyle = hexAlpha(tokens.color.accent, 0.5)
     ctx.fill()
     ctx.restore()
   }

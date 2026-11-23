@@ -487,7 +487,7 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
               disabled={paused}
               onTrigger={doHardDrop}
             >
-              <ChevronUp size={20} strokeWidth={1.5} aria-hidden />
+              <ChevronUp size={18} strokeWidth={1.75} aria-hidden />
             </PadButton>
             <PadButton
               className="settle-dpad__arm settle-dpad__arm--left"
@@ -496,7 +496,7 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
               disabled={paused}
               onTrigger={doLeft}
             >
-              <ChevronLeft size={20} strokeWidth={1.5} aria-hidden />
+              <ChevronLeft size={18} strokeWidth={1.75} aria-hidden />
             </PadButton>
             <div className="settle-dpad__hub" aria-hidden>
               <span className="settle-dpad__dimple" />
@@ -508,7 +508,7 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
               disabled={paused}
               onTrigger={doRight}
             >
-              <ChevronRight size={20} strokeWidth={1.5} aria-hidden />
+              <ChevronRight size={18} strokeWidth={1.75} aria-hidden />
             </PadButton>
             <PadButton
               className="settle-dpad__arm settle-dpad__arm--down"
@@ -517,7 +517,7 @@ export default function SettleScreen({ onExit }: GameScreenProps) {
               disabled={paused}
               onTrigger={doSoftDrop}
             >
-              <ChevronDown size={20} strokeWidth={1.5} aria-hidden />
+              <ChevronDown size={18} strokeWidth={1.75} aria-hidden />
             </PadButton>
           </div>
 

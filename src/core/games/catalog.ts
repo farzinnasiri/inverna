@@ -76,7 +76,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Sliding tiles',
     line: 'Slide the tiles home, one quiet move at a time.',
     effect: 'Sequential thinking',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'nine',
@@ -84,7 +84,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Sudoku',
     line: 'Every row, column and box holds one to nine.',
     effect: 'Logical calm',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'weave',
@@ -92,7 +92,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Nonogram',
     line: 'Read the numbers, fill the cells, reveal the picture.',
     effect: 'Patient deduction',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'patience',
@@ -100,7 +100,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Klondike solitaire',
     line: 'The old card game. Build the four suits home.',
     effect: 'Familiar rhythm',
-    status: 'soon',
+    status: 'ready',
   },
   {
     id: 'lanterns',
@@ -108,7 +108,7 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Memory pairs',
     line: 'Turn two lanterns. Remember where the light was.',
     effect: 'Soft recall',
-    status: 'soon',
+    status: 'ready',
   },
 ]
 

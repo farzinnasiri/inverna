@@ -397,6 +397,7 @@ export default function KindleScreen({ onExit }: GameScreenProps) {
                     className="kindle-tile__inner num"
                     data-tier={tileTier(tile.value)}
                     data-digits={digitCount(tile.value)}
+                    data-milestone={tile.value >= 128 ? 'true' : undefined}
                   >
                     {tile.value}
                   </div>

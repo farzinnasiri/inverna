@@ -79,81 +79,82 @@ export interface BoardLayout {
 }
 
 /**
- * Curated quiet, matte Dusk Stone palettes (low chroma <= 0.07 OKLCH, zero
- * blue/cyan/violet, lightness spanning roughly L* 22 → 82 across corners).
+ * Curated nocturnal Watchmaker & Architectural palettes (low-glare chroma
+ * C <= 0.11 OKLCH across cool midnight slates, pine verdigris, smoked indigo,
+ * antique brass, oxblood, iron-graphite, and moonlit ivory).
  * Every palette satisfies a strict OKLab neighbor distance ΔE >= 0.04 on the
  * largest 5×6 board so every tile remains calmly distinguishable in low light.
  */
 export const PALETTES: readonly HuePalette[] = [
   {
-    id: 'late-sun',
-    title: 'Late Sun',
-    corners: { tl: '#d5c9b4', tr: '#b07f6c', bl: '#777b58', br: '#452f2a' },
+    id: 'midnight-brass',
+    title: 'Midnight Brass',
+    corners: { tl: '#cbd0d8', tr: '#b89450', bl: '#3d5a73', br: '#3c1d24' },
   },
   {
-    id: 'kiln',
-    title: 'Kiln',
-    corners: { tl: '#d6ccbe', tr: '#aa786b', bl: '#8f7a57', br: '#422d29' },
+    id: 'pine-silver',
+    title: 'Pine & Silver',
+    corners: { tl: '#d3d9d6', tr: '#497362', bl: '#555078', br: '#192530' },
   },
   {
-    id: 'amber-tea',
-    title: 'Amber Tea',
-    corners: { tl: '#d4c6a4', tr: '#a97f61', bl: '#707958', br: '#423128' },
+    id: 'observatory',
+    title: 'Observatory',
+    corners: { tl: '#d6d3c9', tr: '#5b567d', bl: '#466e64', br: '#2f2119' },
   },
   {
-    id: 'dry-moss',
-    title: 'Dry Moss',
-    corners: { tl: '#d0cbb1', tr: '#a57667', bl: '#75805c', br: '#402e29' },
+    id: 'clockwork',
+    title: 'Clockwork',
+    corners: { tl: '#cfd5dc', tr: '#456682', bl: '#8a434b', br: '#1b1e26' },
   },
   {
-    id: 'hearth-ash',
-    title: 'Hearth Ash',
-    corners: { tl: '#d6ccc0', tr: '#a97874', bl: '#827569', br: '#3b2c2a' },
+    id: 'verdigris-vault',
+    title: 'Verdigris Vault',
+    corners: { tl: '#cfd8d4', tr: '#3f6e67', bl: '#7c5e3a', br: '#1f2833' },
   },
   {
-    id: 'cinnamon-dusk',
-    title: 'Cinnamon Dusk',
-    corners: { tl: '#d9c4a8', tr: '#a7756a', bl: '#817354', br: '#412929' },
+    id: 'oxblood-brass',
+    title: 'Oxblood & Brass',
+    corners: { tl: '#d5cfd2', tr: '#9c7e47', bl: '#7d3a43', br: '#1e212a' },
   },
   {
-    id: 'saffron-loom',
-    title: 'Saffron Loom',
-    corners: { tl: '#d8caa4', tr: '#a97a63', bl: '#817850', br: '#462f28' },
+    id: 'astrolabe',
+    title: 'Astrolabe',
+    corners: { tl: '#d8d1c1', tr: '#a68549', bl: '#465c70', br: '#2b2436' },
   },
   {
-    id: 'rosewood',
-    title: 'Rosewood',
-    corners: { tl: '#d7c7ba', tr: '#a4716e', bl: '#857a58', br: '#442b2b' },
+    id: 'fjord-iron',
+    title: 'Fjord & Iron',
+    corners: { tl: '#cdd5dc', tr: '#4e6d82', bl: '#3b594d', br: '#20232b' },
   },
   {
-    id: 'honeycomb',
-    title: 'Honeycomb',
-    corners: { tl: '#dbccac', tr: '#ad8763', bl: '#7d7d5d', br: '#483229' },
+    id: 'smoked-indigo',
+    title: 'Smoked Indigo',
+    corners: { tl: '#d1d0da', tr: '#5c547d', bl: '#7f5b3c', br: '#1c2630' },
   },
   {
-    id: 'terracotta',
-    title: 'Terracotta',
-    corners: { tl: '#d5c8b7', tr: '#a77564', bl: '#757b5d', br: '#452f2a' },
+    id: 'antiquary',
+    title: 'Antiquary',
+    corners: { tl: '#d4cec4', tr: '#9b7e48', bl: '#3e6156', br: '#3d2229' },
   },
   {
-    id: 'smoked-plum',
-    title: 'Smoked Plum',
-    corners: { tl: '#d5c4b3', tr: '#9f6e6f', bl: '#817357', br: '#3d2727' },
+    id: 'harbor-bell',
+    title: 'Harbor Bell',
+    corners: { tl: '#ccd4d8', tr: '#3c5f78', bl: '#88454c', br: '#182826' },
   },
   {
-    id: 'ochre-field',
-    title: 'Ochre Field',
-    corners: { tl: '#d5caa9', tr: '#a8855f', bl: '#6f7a57', br: '#423127' },
+    id: 'graphite-gold',
+    title: 'Graphite & Gold',
+    corners: { tl: '#d3d6dc', tr: '#b39051', bl: '#4c5460', br: '#1d222b' },
   },
   {
-    id: 'candlewick',
-    title: 'Candlewick',
-    corners: { tl: '#dccfb8', tr: '#af8068', bl: '#86755a', br: '#412d29' },
+    id: 'spruce-garnet',
+    title: 'Spruce & Garnet',
+    corners: { tl: '#cfd6d1', tr: '#476e5c', bl: '#7e3d45', br: '#212633' },
   },
   {
-    id: 'cedar-clay',
-    title: 'Cedar & Clay',
-    corners: { tl: '#d5c9b5', tr: '#aa7969', bl: '#787658', br: '#422d28' },
+    id: 'moonlit-foundry',
+    title: 'Moonlit Foundry',
+    corners: { tl: '#d5d8de', tr: '#676f7d', bl: '#8e6d3f', br: '#212838' },
   },
 ] as const
 

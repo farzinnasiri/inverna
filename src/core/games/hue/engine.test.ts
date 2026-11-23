@@ -7,7 +7,6 @@ import {
   generateGradientGrid,
   hexDistance,
   hexToOklab,
-  hexToRgb,
   hueReducer,
   isSolved,
   minAdjacentDistance,
@@ -42,8 +41,8 @@ describe('Hue OKLab colour math & palettes', () => {
     }
   })
 
-  it('curates at least 12 distinct, matte Dusk Stone palettes with ΔE >= 0.04 between adjacent cells', () => {
-    expect(PALETTES.length).toBeGreaterThanOrEqual(12)
+  it('curates 14 distinct nocturnal Watchmaker palettes with OKLCH C <= 0.11 and ΔE >= 0.04 between adjacent cells', () => {
+    expect(PALETTES.length).toBeGreaterThanOrEqual(14)
 
     const ids = new Set(PALETTES.map((p) => p.id))
     const titles = new Set(PALETTES.map((p) => p.title))
@@ -57,13 +56,11 @@ describe('Hue OKLab colour math & palettes', () => {
     for (const p of PALETTES) {
       const grid = generateGradientGrid(p.corners, cols, rows)
 
-      // Every cell must be warm / zero blue dominance and low-chroma matte (OKLCH C <= 0.07).
+      // Every cell must keep low-glare nocturnal chroma (OKLCH C <= 0.11).
       for (const hex of grid) {
-        const [r, , b] = hexToRgb(hex)
-        expect(r).toBeGreaterThan(b)
         const lab = hexToOklab(hex)
         const chroma = Math.hypot(lab.a, lab.b)
-        expect(chroma).toBeLessThanOrEqual(0.07)
+        expect(chroma).toBeLessThanOrEqual(0.11)
       }
 
       // Strict neighbor distinguishability constraint: ΔE(OKLab) >= 0.04 on the largest grid.

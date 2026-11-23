@@ -1,6 +1,7 @@
 /* ==========================================================================
-   Pond — Low Light flat ambient koi pond
-   Pure true-black water (#000000), flat matte border, zero shadows or vignettes.
+   Pond — Watchmaker Ink & Brass moonlit obsidian reflection pool
+   Crisp #000000 water surface over AmbientBackdrop, whisper hairline rim,
+   zero shadows or vignettes.
    ========================================================================== */
 
 .pond-frame {
@@ -10,7 +11,7 @@
   min-height: 260px;
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--c-bg);
+  background: #000000;
   border: 1px solid var(--c-line);
 }
 

@@ -103,7 +103,7 @@ export default function HueScreen({ onExit }: GameScreenProps) {
   const darkTileIds = useMemo(() => {
     const dark = new Set<number>()
     for (const tile of state.tiles) {
-      if (tile.pinned && hexToOklab(tile.color).L < 0.54) {
+      if (tile.pinned && hexToOklab(tile.color).L < 0.58) {
         dark.add(tile.id)
       }
     }

@@ -86,49 +86,77 @@ function buildSvgPathD(path: readonly Cell[]): string {
 /**
  * Distinct flat geometric endpoint shape (~60% of a 100×100 cell) for each
  * of the 7 pairs so colour-blind players can solve every board effortlessly.
+ * Connected endpoints show a crisp inner circuit-pin highlight dot.
  */
-function EndpointShape({ color, cx, cy }: { color: PieceColor; cx: number; cy: number }) {
+function EndpointShape({
+  color,
+  cx,
+  cy,
+  connected,
+}: {
+  color: PieceColor
+  cx: number
+  cy: number
+  connected: boolean
+}) {
   const fill = STONE_VAR[color]
 
   switch (color) {
-    // Pair 0 (ember / clay): filled disc
+    // Pair 0 (ember / Deep Navy Slate): filled disc
     case 'ember':
-      return <circle cx={cx} cy={cy} r={29} fill={fill} />
+      return (
+        <>
+          <circle cx={cx} cy={cy} r={29} fill={fill} />
+          {connected && <circle className="thread-bead__pin" cx={cx} cy={cy} r={6.5} fill="var(--c-ink)" />}
+        </>
+      )
 
-    // Pair 1 (saffron / ochre): thick ring (hollow circle)
+    // Pair 1 (saffron / Antique Brass): thick ring (hollow circle)
     case 'saffron':
       return (
         <>
           <circle cx={cx} cy={cy} r={24} fill="var(--c-surface-1)" />
           <circle cx={cx} cy={cy} r={24} fill="none" stroke={fill} strokeWidth={10} />
+          {connected && <circle className="thread-bead__pin" cx={cx} cy={cy} r={7.5} fill={fill} />}
         </>
       )
 
-    // Pair 2 (honey / straw): rounded square
+    // Pair 2 (honey / Pine Verdigris): rounded square
     case 'honey':
-      return <rect x={cx - 26} y={cy - 26} width={52} height={52} rx={9} fill={fill} />
+      return (
+        <>
+          <rect x={cx - 26} y={cy - 26} width={52} height={52} rx={9} fill={fill} />
+          {connected && <circle className="thread-bead__pin" cx={cx} cy={cy} r={6.5} fill="var(--c-ink)" />}
+        </>
+      )
 
-    // Pair 3 (moss / sage): diamond
+    // Pair 3 (moss / Oxblood): diamond
     case 'moss':
       return (
-        <polygon
-          points={`${cx},${cy - 31} ${cx + 31},${cy} ${cx},${cy + 31} ${cx - 31},${cy}`}
-          fill={fill}
-          strokeLinejoin="round"
-        />
+        <>
+          <polygon
+            points={`${cx},${cy - 31} ${cx + 31},${cy} ${cx},${cy + 31} ${cx - 31},${cy}`}
+            fill={fill}
+            strokeLinejoin="round"
+          />
+          {connected && <circle className="thread-bead__pin" cx={cx} cy={cy} r={6.5} fill="var(--c-ink)" />}
+        </>
       )
 
-    // Pair 4 (clay / rosewood): triangle
+    // Pair 4 (clay / Smoky Indigo): triangle
     case 'clay':
       return (
-        <polygon
-          points={`${cx},${cy - 29} ${cx + 29},${cy + 22} ${cx - 29},${cy + 22}`}
-          fill={fill}
-          strokeLinejoin="round"
-        />
+        <>
+          <polygon
+            points={`${cx},${cy - 29} ${cx + 29},${cy + 22} ${cx - 29},${cy + 22}`}
+            fill={fill}
+            strokeLinejoin="round"
+          />
+          {connected && <circle className="thread-bead__pin" cx={cx} cy={cy + 5} r={6} fill="var(--c-ink)" />}
+        </>
       )
 
-    // Pair 5 (rose / stone): hollow square
+    // Pair 5 (rose / Titanium Pewter): hollow square
     case 'rose':
       return (
         <>
@@ -143,15 +171,19 @@ function EndpointShape({ color, cx, cy }: { color: PieceColor; cx: number; cy: n
             stroke={fill}
             strokeWidth={10}
           />
+          {connected && <circle className="thread-bead__pin" cx={cx} cy={cy} r={7.5} fill={fill} />}
         </>
       )
 
-    // Pair 6 (sand / bone): plus / cross
+    // Pair 6 (sand / Moon Ivory): plus / cross
     case 'sand':
       return (
         <>
           <rect x={cx - 29} y={cy - 10} width={58} height={20} rx={5} fill={fill} />
           <rect x={cx - 10} y={cy - 29} width={20} height={58} rx={5} fill={fill} />
+          {connected && (
+            <circle className="thread-bead__pin" cx={cx} cy={cy} r={5.5} fill="var(--c-accent-ink)" />
+          )}
         </>
       )
   }
@@ -551,7 +583,7 @@ export default function ThreadScreen({ onExit }: GameScreenProps) {
                           data-active={active || undefined}
                           style={{ transformOrigin: `${cx}px ${cy}px` }}
                         >
-                          <EndpointShape color={pair.color} cx={cx} cy={cy} />
+                          <EndpointShape color={pair.color} cx={cx} cy={cy} connected={connected} />
                         </g>
                       )
                     })

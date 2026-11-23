@@ -1,0 +1,205 @@
+/* ==========================================================================
+   Lanterns — Watchmaker Ink & Brass memory sigil cards
+   3D rotateY(180deg) flip with machined crosshair guilloché backs,
+   12 bespoke astronomical sigils in Watchmaker tones, settled brass-tick
+   matched state. Zero gradients, zero Y-offset shadows, zero mix-blend-mode.
+   ========================================================================== */
+
+.lanterns-stage {
+  container-type: size;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.lanterns-board {
+  --cols: 4;
+  --rows: 4;
+  width: min(100cqw, calc(100cqh * var(--cols) / var(--rows)), 392px);
+  aspect-ratio: var(--cols) / var(--rows);
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  gap: clamp(8px, 2.4cqi, 10px);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* --- Flipping card slot -------------------------------------------------- */
+
+.lantern-card {
+  --sigil-color: var(--p-ochre);
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-sm);
+  perspective: 800px;
+  cursor: pointer;
+}
+
+.lantern-card:disabled {
+  cursor: default;
+}
+
+.lantern-card[data-focused='true'] {
+  outline: 2px solid var(--c-ink-2);
+  outline-offset: 2px;
+}
+
+/* Watchmaker tone bindings */
+.lantern-card[data-tone='ochre'] {
+  --sigil-color: var(--p-ochre);
+}
+
+.lantern-card[data-tone='clay'] {
+  --sigil-color: var(--p-clay);
+}
+
+.lantern-card[data-tone='straw'] {
+  --sigil-color: var(--p-straw);
+}
+
+.lantern-card[data-tone='sage'] {
+  --sigil-color: var(--p-sage);
+}
+
+.lantern-card[data-tone='rosewood'] {
+  --sigil-color: var(--p-rosewood);
+}
+
+.lantern-card[data-tone='stone'] {
+  --sigil-color: var(--p-stone);
+}
+
+.lantern-card[data-tone='bone'] {
+  --sigil-color: var(--p-bone);
+}
+
+.lantern-card__inner {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 320ms var(--ease-out);
+  will-change: transform;
+}
+
+.lantern-card[data-flipped='true'] .lantern-card__inner {
+  transform: rotateY(180deg);
+}
+
+.lantern-card__face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-sm);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* --- Face-down machined guilloché back ----------------------------------- */
+
+.lantern-card__face--back {
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  color: var(--c-ink-4);
+  transition:
+    background-color var(--d-fast) ease,
+    border-color var(--d-fast) ease,
+    color var(--d-fast) ease;
+}
+
+.lantern-card__back-mark {
+  width: 48%;
+  height: 48%;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lantern-card:not([data-flipped='true']):hover .lantern-card__face--back {
+    background: var(--c-surface-3);
+    border-color: var(--c-line-strong);
+    color: var(--c-ink-3);
+  }
+}
+
+/* --- Face-up astronomical sigil front ------------------------------------ */
+
+.lantern-card__face--front {
+  transform: rotateY(180deg);
+  background: var(--c-surface-3);
+  border: 1px solid var(--c-line-strong);
+  transition:
+    background-color 280ms var(--ease-out),
+    border-color 280ms var(--ease-out);
+}
+
+.lantern-card__sigil {
+  width: 58%;
+  height: 58%;
+  color: var(--sigil-color);
+  transition: opacity 280ms var(--ease-out);
+}
+
+/* Hairline brass corner tick for settled matched pairs */
+.lantern-card__tick {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-top: 1px solid var(--c-accent-dim);
+  border-right: 1px solid var(--c-accent-dim);
+  opacity: 0;
+  transition: opacity 260ms var(--ease-out);
+}
+
+.lantern-card[data-matched='true'] .lantern-card__face--front {
+  background: var(--c-surface-1);
+  border-color: var(--c-line);
+}
+
+.lantern-card[data-matched='true'] .lantern-card__sigil {
+  opacity: 0.44;
+}
+
+.lantern-card[data-matched='true'] .lantern-card__tick {
+  opacity: 1;
+}
+
+/* --- Reduced motion: calm opacity crossfade instead of 3D flip ----------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .lantern-card__inner {
+    transform: none !important;
+    transform-style: flat;
+    transition: none;
+  }
+
+  .lantern-card__face--back {
+    opacity: 1;
+    transition: opacity 180ms ease;
+  }
+
+  .lantern-card__face--front {
+    transform: none;
+    opacity: 0;
+    transition:
+      opacity 180ms ease,
+      background-color 180ms ease,
+      border-color 180ms ease;
+  }
+
+  .lantern-card[data-flipped='true'] .lantern-card__face--back {
+    opacity: 0;
+  }
+
+  .lantern-card[data-flipped='true'] .lantern-card__face--front {
+    opacity: 1;
+  }
+}

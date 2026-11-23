@@ -1,7 +1,7 @@
 /* ==========================================================================
-   Kindle — Lull v2 "Low Light" monotonic Ash -> Bone ramp
-   Grid directly on true black, flat tiles, UI font (weight 500, tnum),
-   zero gradients, zero bevels, zero shadows.
+   Kindle — Watchmaker Ink & Brass Slate-Graphite -> Brass -> Moon Ivory ramp
+   Grid directly on true black, precision micro-framed tiles, UI font
+   (weight 500, tnum), zero gradients, zero bevels, zero shadows.
    ========================================================================== */
 
 .kindle-stage {
@@ -44,6 +44,7 @@
 .kindle-slot {
   border-radius: var(--r-sm);
   background: var(--c-surface-1);
+  border: 1px solid var(--c-line);
 }
 
 /* --- Positioned tile layer (GPU translate3d gliding) --------------------- */
@@ -84,22 +85,39 @@
   z-index: 1;
 }
 
-/* --- Flat matte tiles (UI font, weight 500, tnum) ------------------------ */
+/* --- Machined Watchmaker tiles (UI font, weight 500, tnum) --------------- */
 
 .kindle-tile__inner {
-  --tile-bg: #1e1c1a;
+  --tile-bg: #171a20;
   --tile-fg: var(--c-ink-2);
+  --tile-border: rgb(220 226 235 / 0.08);
+  position: relative;
   width: 100%;
   height: 100%;
   display: grid;
   place-items: center;
   border-radius: var(--r-sm);
   background: var(--tile-bg);
+  border: 1px solid var(--tile-border);
   color: var(--tile-fg);
   font-family: var(--font-ui);
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.02em;
+}
+
+/* Subtle 3px corner milestone dot on 128+ tiles */
+.kindle-tile__inner[data-milestone='true']::after {
+  content: '';
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.48;
+  pointer-events: none;
 }
 
 /* Responsive UI numeral sizing across 1 to 5+ digits */
@@ -125,62 +143,66 @@
   letter-spacing: -0.03em;
 }
 
-/* --- Monotonic Ash -> Bone value ramp (no hue jumps, grows brighter) ----- */
+/* --- Watchmaker Slate-Graphite -> Titanium -> Antique Brass -> Ivory ----- */
 
 .kindle-tile__inner[data-tier='2'] {
-  --tile-bg: #1e1c1a;
+  --tile-bg: #171a20;
   --tile-fg: var(--c-ink-2);
 }
 
 .kindle-tile__inner[data-tier='4'] {
-  --tile-bg: #2a2723;
+  --tile-bg: #20252e;
   --tile-fg: var(--c-ink-2);
 }
 
 .kindle-tile__inner[data-tier='8'] {
-  --tile-bg: #3a352f;
-  --tile-fg: var(--c-ink-2);
+  --tile-bg: #2a3442;
+  --tile-fg: var(--c-ink);
 }
 
 .kindle-tile__inner[data-tier='16'] {
-  --tile-bg: #504840;
-  --tile-fg: var(--c-ink-2);
+  --tile-bg: #364b5e;
+  --tile-fg: var(--c-ink);
 }
 
 .kindle-tile__inner[data-tier='32'] {
-  --tile-bg: #6b5f51;
+  --tile-bg: #3e6157;
   --tile-fg: var(--c-ink);
 }
 
 .kindle-tile__inner[data-tier='64'] {
-  --tile-bg: #857561;
+  --tile-bg: #585275;
   --tile-fg: var(--c-ink);
 }
 
 .kindle-tile__inner[data-tier='128'] {
-  --tile-bg: #a08b70;
-  --tile-fg: var(--c-accent-ink);
+  --tile-bg: #87434b;
+  --tile-fg: var(--c-ink);
 }
 
 .kindle-tile__inner[data-tier='256'] {
-  --tile-bg: #b9a282;
+  --tile-bg: #9e7f43;
   --tile-fg: var(--c-accent-ink);
+  --tile-border: rgb(18 16 11 / 0.12);
 }
 
 .kindle-tile__inner[data-tier='512'] {
-  --tile-bg: #cdb998;
+  --tile-bg: #b89450;
   --tile-fg: var(--c-accent-ink);
+  --tile-border: rgb(18 16 11 / 0.12);
 }
 
 .kindle-tile__inner[data-tier='1024'] {
-  --tile-bg: #ddcdb2;
+  --tile-bg: #c9b07c;
   --tile-fg: var(--c-accent-ink);
+  --tile-border: rgb(18 16 11 / 0.12);
 }
 
 .kindle-tile__inner[data-tier='2048'],
 .kindle-tile__inner[data-tier='4096'] {
-  --tile-bg: #eae0cc;
+  --tile-bg: #dce0e6;
   --tile-fg: var(--c-accent-ink);
+  --tile-border: rgb(18 16 11 / 0.12);
 }
 
 /* --- Tile animations (GPU transform & opacity only, never scale(0)) ------ */

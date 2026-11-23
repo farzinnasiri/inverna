@@ -1,6 +1,6 @@
 /* ==========================================================================
-   Settle — Lull v2 "Low Light" Dusk Stones & handheld thumb deck
-   Flat matte stones, true black gaps, zero gradients, zero shadows.
+   Settle — Watchmaker Ink & Brass machined blocks & handheld thumb deck
+   Milled keycap blocks, true black gaps, zero gradients, zero shadows.
    ========================================================================== */
 
 .settle-arena {
@@ -22,6 +22,9 @@
   position: relative;
   height: var(--board-h);
   width: calc(var(--board-h) / 2);
+  padding: 3px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-line);
   background: var(--c-bg);
   touch-action: none;
   overflow: hidden;
@@ -38,7 +41,7 @@
   background: var(--c-bg);
 }
 
-/* --- Cells (flat matte Dusk Stones) -------------------------------------- */
+/* --- Cells (machined Watchmaker hardware blocks) ------------------------- */
 
 .settle-cell {
   position: relative;
@@ -46,53 +49,82 @@
   background: var(--c-surface-1);
 }
 
-/* Direct mapping of engine data-color keys to v2 Dusk Stone tokens */
+/* Direct mapping of engine data-color keys to Watchmaker tokens */
 .settle-cell[data-color='ember'],
 .settle-mini__cell[data-color='ember'],
 .settle-dissolve-cell[data-color='ember'] {
   --cell-hue: var(--p-clay);
+  --cell-edge: rgb(255 255 255 / 0.14);
+  --cell-pip: rgb(255 255 255 / 0.18);
 }
 
 .settle-cell[data-color='saffron'],
 .settle-mini__cell[data-color='saffron'],
 .settle-dissolve-cell[data-color='saffron'] {
   --cell-hue: var(--p-ochre);
+  --cell-edge: rgb(18 16 11 / 0.16);
+  --cell-pip: rgb(18 16 11 / 0.18);
 }
 
 .settle-cell[data-color='honey'],
 .settle-mini__cell[data-color='honey'],
 .settle-dissolve-cell[data-color='honey'] {
   --cell-hue: var(--p-straw);
+  --cell-edge: rgb(255 255 255 / 0.14);
+  --cell-pip: rgb(255 255 255 / 0.18);
 }
 
 .settle-cell[data-color='moss'],
 .settle-mini__cell[data-color='moss'],
 .settle-dissolve-cell[data-color='moss'] {
   --cell-hue: var(--p-sage);
+  --cell-edge: rgb(255 255 255 / 0.14);
+  --cell-pip: rgb(255 255 255 / 0.18);
 }
 
 .settle-cell[data-color='clay'],
 .settle-mini__cell[data-color='clay'],
 .settle-dissolve-cell[data-color='clay'] {
   --cell-hue: var(--p-rosewood);
+  --cell-edge: rgb(255 255 255 / 0.14);
+  --cell-pip: rgb(255 255 255 / 0.18);
 }
 
 .settle-cell[data-color='rose'],
 .settle-mini__cell[data-color='rose'],
 .settle-dissolve-cell[data-color='rose'] {
   --cell-hue: var(--p-stone);
+  --cell-edge: rgb(255 255 255 / 0.14);
+  --cell-pip: rgb(255 255 255 / 0.18);
 }
 
 .settle-cell[data-color='sand'],
 .settle-mini__cell[data-color='sand'],
 .settle-dissolve-cell[data-color='sand'] {
   --cell-hue: var(--p-bone);
+  --cell-edge: rgb(18 16 11 / 0.16);
+  --cell-pip: rgb(18 16 11 / 0.18);
 }
 
 .settle-cell--filled,
 .settle-mini__cell {
   border-radius: 4px;
   background: var(--cell-hue);
+  border: 1px solid var(--cell-edge, rgb(255 255 255 / 0.14));
+}
+
+/* Tactile recessed inner watch-component pip on filled playfield blocks */
+.settle-cell--filled::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  background: var(--cell-pip, rgb(255 255 255 / 0.18));
+  pointer-events: none;
 }
 
 /* Ghost piece: crisp 1px ink4 outline, transparent fill */
@@ -126,10 +158,10 @@
 
 .settle-dissolve-layer {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc((100% - 38px) * 0.2 + 6px);
+  left: 3px;
+  right: 3px;
+  bottom: 3px;
+  height: calc((100% - 44px) * 0.2 + 6px);
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   grid-template-rows: repeat(4, 1fr);
@@ -276,11 +308,12 @@
   width: 100%;
   max-width: 392px;
   margin: 0 auto;
+  padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
 }
 
-/* Left: Tactile matte Cross D-Pad (~132px x 132px) */
+/* Left: Precision matte Cross D-Pad (126px x 126px) */
 .settle-dpad {
-  --arm: 44px;
+  --arm: 42px;
   display: grid;
   grid-template-columns: repeat(3, var(--arm));
   grid-template-rows: repeat(3, var(--arm));
@@ -346,11 +379,11 @@
 }
 
 .settle-dpad__dimple {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: var(--c-surface-1);
-  border: 1px solid var(--c-line);
+  border: 1px solid var(--c-line-strong);
 }
 
 .settle-dpad__arm:active:not(:disabled),
@@ -365,12 +398,12 @@
   cursor: default;
 }
 
-/* Bottom-middle: Quiet Hold pill (Select/Start position) */
+/* Bottom-middle: Quiet Hold pill (Select/Start position, clear of home bar) */
 .settle-hold-pill {
   align-self: flex-end;
-  margin-bottom: 4px;
+  margin-bottom: 12px;
   height: 30px;
-  padding: 0 13px;
+  padding: 0 14px;
   border-radius: var(--r-pill);
   background: var(--c-surface-1);
   border: 1px solid var(--c-line);
@@ -423,6 +456,16 @@
     background-color var(--d-fast) ease,
     color var(--d-fast) ease,
     opacity var(--d-fast) ease;
+}
+
+/* Tactile inner machined groove ring on A / B buttons */
+.settle-ab__btn::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px solid var(--c-line);
+  pointer-events: none;
 }
 
 /* Big A button (58px, higher & right): Rotate */
