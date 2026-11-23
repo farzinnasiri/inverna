@@ -121,7 +121,8 @@ export function HomeScreen() {
       <section className="game-grid" aria-label="Games">
         {ordered.map((g, idx) => {
           const isFeatured = idx === 0
-          const isSecondWide = ordered.length >= 10 && idx === 6
+          // With 11 games, 1 wide tile (span 2) + 10 single tiles = 12 cells (exact 4x3 bento!)
+          const isSecondWide = ordered.length === 10 && idx === 6
           const isWide = isFeatured || isSecondWide
           const showMini = isFeatured && lastGame === g.id
           return (

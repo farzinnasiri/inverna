@@ -127,5 +127,32 @@ export function ContinuePreview({ id, demo }: { id: GameId; demo?: boolean }) {
     )
   }
 
+  if (id === 'cascade') {
+    const save = readJSON<{
+      state?: { cols?: number; rows?: number; tiles?: { row: number; col: number; color: string }[] }
+    }>('game:cascade', {})
+    const tiles = save.state?.tiles
+    const cols = save.state?.cols ?? 9
+    const rows = save.state?.rows ?? 11
+    if (!tiles || tiles.length === 0) return null
+    const grid = Array<string | null>(cols * rows).fill(null)
+    for (const t of tiles) {
+      if (t.row >= 0 && t.row < rows && t.col >= 0 && t.col < cols) {
+        grid[t.row * cols + t.col] = `var(--p-${t.color})`
+      }
+    }
+    return (
+      <div
+        className="mini-board mini-board--hue"
+        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
+        aria-hidden
+      >
+        {grid.map((bg, i) => (
+          <span key={i} className="mini-cell" style={{ background: bg ?? 'var(--c-bg)' }} />
+        ))}
+      </div>
+    )
+  }
+
   return null
 }

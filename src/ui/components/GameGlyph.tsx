@@ -17,6 +17,18 @@ export function GameGlyph({ id }: { id: GameId }) {
           <rect x="12.5" y="11.5" width="7" height="7" rx="1.8" fill="var(--p-clay)" />
         </svg>
       )
+    case 'cascade':
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden>
+          <rect x="4" y="4" width="7" height="7" rx="1.6" fill="var(--p-clay)" />
+          <rect x="12.5" y="4" width="7" height="7" rx="1.6" fill="var(--p-straw)" />
+          <rect x="21" y="4" width="7" height="7" rx="1.6" fill="var(--p-straw)" />
+          <rect x="4" y="12.5" width="7" height="7" rx="1.6" fill="var(--p-clay)" />
+          <rect x="13" y="14" width="7" height="7" rx="1.6" fill="var(--p-ochre)" transform="rotate(14 16.5 17.5)" />
+          <rect x="21.5" y="19.5" width="7" height="7" rx="1.6" fill="var(--p-sage)" transform="rotate(-18 25 23)" />
+          <rect x="5" y="22" width="7" height="7" rx="1.6" fill="var(--p-bone)" transform="rotate(24 8.5 25.5)" />
+        </svg>
+      )
     case 'hue':
       return (
         <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden>

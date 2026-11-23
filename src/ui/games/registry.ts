@@ -5,6 +5,7 @@ import type { GameScreenProps } from '@/ui/components/GameShell'
 /** All 10 game screens, code-split so each loads only when opened. */
 export const GAME_SCREENS: Partial<Record<GameId, LazyExoticComponent<ComponentType<GameScreenProps>>>> = {
   settle: lazy(() => import('./settle/SettleScreen')),
+  cascade: lazy(() => import('./cascade/CascadeScreen')),
   hue: lazy(() => import('./hue/HueScreen')),
   thread: lazy(() => import('./thread/ThreadScreen')),
   kindle: lazy(() => import('./kindle/KindleScreen')),

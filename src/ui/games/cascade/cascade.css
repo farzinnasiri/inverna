@@ -1,0 +1,48 @@
+/* ==========================================================================
+   Cascade — Watchmaker Ink & Brass tactile falling-tile mosaic
+   Pure #000000 void, crisp hairline bezel, zero shadows or gradients.
+   ========================================================================== */
+
+.cascade-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Canvas extends cleanly below the stage so detached tiles tumble past the
+   bottom hairline bezel without clipping, while remaining pointer-events: none
+   so the controls below stay unobstructed. */
+.cascade-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: calc(100% + 96px);
+  display: block;
+  pointer-events: none;
+}
+
+.cascade-controls {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.cascade-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.cascade-undo__count {
+  min-width: 16px;
+  color: var(--c-ink-3);
+}

@@ -5,6 +5,7 @@
  */
 export type GameId =
   | 'settle'
+  | 'cascade'
   | 'hue'
   | 'thread'
   | 'kindle'
@@ -36,6 +37,14 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Falling blocks',
     line: 'Fit the pieces, clear the rows. The pace never climbs.',
     effect: 'Visuospatial focus',
+    status: 'ready',
+  },
+  {
+    id: 'cascade',
+    name: 'Cascade',
+    classic: 'Falling tiles',
+    line: 'Tap matching clusters and watch the tiles tumble away.',
+    effect: 'Tactile release',
     status: 'ready',
   },
   {
