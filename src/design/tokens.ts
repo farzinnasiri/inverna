@@ -1,5 +1,5 @@
 /**
- * Lull v2 — "Low Light" design tokens.
+ * Lull v3 — "Watchmaker Ink & Brass" design tokens.
  *
  * Pure TypeScript (no DOM imports) so React Native / Expo reuses this file
  * directly. Warmth is a token transform in OKLab, never an overlay:
@@ -8,37 +8,41 @@
 
 export const color = {
   bg: '#000000',
-  surface1: '#0E0D0C',
-  surface2: '#171614',
-  surface3: '#22201D',
-  line: 'rgb(232 224 212 / 0.08)',
-  lineStrong: 'rgb(232 224 212 / 0.14)',
+  surface1: '#0C0D10',
+  surface2: '#14161A',
+  surface3: '#1E2127',
+  line: 'rgb(220 226 235 / 0.08)',
+  lineStrong: 'rgb(220 226 235 / 0.15)',
 
-  ink: '#DAD4CB',
-  ink2: '#A8A198',
-  ink3: '#7A746D',
-  ink4: '#4A4642',
+  ink: '#DCE0E6',
+  ink2: '#9BA2AD',
+  ink3: '#6C737E',
+  ink4: '#41464F',
 
-  accent: '#C4A57C',
-  accentInk: '#14110D',
-  accentDim: '#7D6A51',
-  accentWash: 'rgb(196 165 124 / 0.12)',
+  accent: '#C2A15F',
+  accentInk: '#12100B',
+  accentDim: '#7A673D',
+  accentWash: 'rgb(194 161 95 / 0.14)',
 } as const
 
-/** Seven matte, desaturated "Dusk stones" — chroma <= 0.07 OKLCH, zero blue. */
+/**
+ * Seven architectural nocturnal tones — Watchmaker Ink & Brass.
+ * Rich, crisp, zero concealer-beige / makeup blush.
+ * Kept under the 7 stone keys so all engines & CSS stay compatible.
+ */
 export const pieces = {
-  clay: '#A6705B',
-  ochre: '#B48F5E',
-  straw: '#CBBA8F',
-  sage: '#8B9372',
-  rosewood: '#9E6866',
-  stone: '#8A817A',
-  bone: '#DCD2C2',
+  clay: '#3D5A73',      // Deep Navy Slate
+  ochre: '#B89450',     // Antique Brass
+  straw: '#497362',     // Pine Verdigris
+  sage: '#8F434A',      // Oxblood
+  rosewood: '#5B567D',  // Smoky Indigo
+  stone: '#6F7782',     // Titanium Pewter
+  bone: '#CBD0D8',      // Moon Ivory
 } as const
 
 export type PieceStone = keyof typeof pieces
 
-/** Maps logical game piece keys onto the 7 Dusk stones. */
+/** Maps logical game piece keys onto the 7 Watchmaker tones. */
 export const legacyPieceMap = {
   ember: 'clay',
   saffron: 'ochre',
@@ -49,17 +53,17 @@ export const legacyPieceMap = {
   sand: 'bone',
 } as const satisfies Record<string, PieceStone>
 
-/** Warm twins at warmth = 1 (lower blue channel, gently lower lightness). */
+/** Warm twins at warmth = 1 (lower blue emission, gently softer lightness). */
 const warmInkTargets = {
-  ink: '#D9C6A8',
-  ink2: '#A8977D',
-  ink3: '#7A6E5C',
-  ink4: '#4A4339',
-  accent: '#C29864',
-  accentDim: '#7A5E3E',
+  ink: '#DBD0BE',
+  ink2: '#9E9382',
+  ink3: '#736B5E',
+  ink4: '#47423A',
+  accent: '#C2964F',
+  accentDim: '#785E33',
 } as const
 
-const WARM_AMBER_TARGET = '#C48A47'
+const WARM_AMBER_TARGET = '#BA8D4B'
 
 export const font = {
   ui: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Variable', system-ui, sans-serif",
@@ -189,7 +193,7 @@ export function resolveTokens(warmth = 0): ResolvedTokens {
   const resolvedPieces = {} as { -readonly [K in keyof typeof pieces]: string }
   const lScale = 1 - 0.1 * w
   for (const key of Object.keys(pieces) as PieceStone[]) {
-    resolvedPieces[key] = lerpHexOklab(pieces[key], WARM_AMBER_TARGET, 0.25 * w, lScale)
+    resolvedPieces[key] = lerpHexOklab(pieces[key], WARM_AMBER_TARGET, 0.22 * w, lScale)
   }
 
   return { warmth: w, color: resolvedColor, pieces: resolvedPieces }
@@ -214,13 +218,9 @@ function kebab(s: string) {
   return s.replace(/[A-Z0-9]/g, (m) => `-${m.toLowerCase()}`)
 }
 
-/**
- * Apply tokens to :root. Re-applies only when warmth changes by >= 0.02
- * (or on first boot) so updates are invisible and zero-cost.
- */
 export function applyTokens(opts?: { warmth?: number; root?: HTMLElement; force?: boolean }): void {
   const w = clamp01(opts?.warmth ?? 0)
-  const step = Math.round(w * 50) // 0.02 steps
+  const step = Math.round(w * 50)
   const force = opts?.force ?? lastStep === -1
   if (!force && step === lastStep) return
   lastStep = step
@@ -233,7 +233,6 @@ export function applyTokens(opts?: { warmth?: number; root?: HTMLElement; force?
     const set = (k: string, v: string) => root.style.setProperty(k, v)
     for (const [k, v] of Object.entries(resolved.color)) set(`--c-${kebab(k)}`, v)
     for (const [k, v] of Object.entries(resolved.pieces)) set(`--p-${k}`, v)
-    // Logical aliases so existing engine color keys map cleanly onto Dusk stones
     for (const [legacy, stone] of Object.entries(legacyPieceMap)) {
       if (!(legacy in resolved.pieces)) set(`--p-${legacy}`, resolved.pieces[stone])
     }

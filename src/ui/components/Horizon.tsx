@@ -1,25 +1,46 @@
 import type { CSSProperties } from 'react'
 
+const TICKS = Array.from({ length: 25 }, (_, i) => i)
+
 /**
- * Quiet geometric horizon: a 1px hairline with a 10px muted-sand disc.
- * - `position` (0..1) tracks evening progression along the line (left → centre).
- * - `set` (0..1) sinks the disc gently below the hairline during wind-down.
+ * Watchmaker-grade Evening Timeline.
+ * Precision graduated ruler showing current position moving cleanly from
+ * `startLabel` (e.g. evening start or session start) toward `endLabel` (bedtime).
  */
-export function Horizon({ set = 0, position = 0.5 }: { set?: number; position?: number }) {
-  const clampedPos = Math.min(0.88, Math.max(0.12, position))
-  const clampedSet = Math.min(1, Math.max(0, set))
+export function Horizon({
+  progress = 0.5,
+  startLabel,
+  endLabel,
+}: {
+  progress?: number
+  startLabel: string
+  endLabel: string
+}) {
+  const p = Math.min(1, Math.max(0, progress))
   return (
-    <div
-      className="horizon"
-      style={{ '--set': clampedSet, '--pos': `${clampedPos * 100}%` } as CSSProperties}
-      aria-hidden
-    >
-      <div className="horizon__above">
-        <span className="horizon__disc" />
+    <div className="timeline" style={{ '--p': p } as CSSProperties} aria-hidden>
+      <div className="timeline__track">
+        <div className="timeline__ticks">
+          {TICKS.map((i) => {
+            const frac = i / (TICKS.length - 1)
+            const major = i % 6 === 0
+            const passed = frac <= p + 0.005
+            return (
+              <span
+                key={i}
+                className="timeline__tick"
+                data-major={major || undefined}
+                data-passed={passed || undefined}
+              />
+            )
+          })}
+        </div>
+        <div className="timeline__bar" />
+        <div className="timeline__needle" />
       </div>
-      <div className="horizon__line" />
-      <div className="horizon__below">
-        <span className="horizon__trace" />
+      <div className="timeline__anchors t-label num">
+        <span>{startLabel}</span>
+        <span>{endLabel}</span>
       </div>
     </div>
   )

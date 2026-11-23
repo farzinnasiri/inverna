@@ -12,7 +12,7 @@ import { useSession } from '../state/session'
 import { useSettings } from '../state/settings'
 import { useSound } from '../state/sound'
 
-function formatNowShort(d: Date): string {
+function formatClock(d: Date): string {
   const h = d.getHours() % 12 || 12
   return `${h}:${String(d.getMinutes()).padStart(2, '0')}`
 }
@@ -39,24 +39,36 @@ export function HomeScreen() {
 
   let heroValue = bedtimeText
   let heroLabel = 'Bedtime'
-  let horizonPos = 0.5
-  let horizonSet = 0
+  let timelineProgress = 0.25
+  let startAnchor = formatClock(dateNow)
+  let endAnchor = bedtimeText
 
   if (session) {
     const rem = Math.max(1, Math.ceil((session.minutes * 60 - sessionElapsed(session, now)) / 60))
     heroValue = `${rem} min`
     heroLabel = 'Winding down'
-    horizonPos = 0.5
-    horizonSet = sessionProgress(session, now)
+    timelineProgress = sessionProgress(session, now)
+    startAnchor = 'Start'
+    endAnchor = `${session.minutes}m`
   } else if (phase === 'bedtime') {
-    heroValue = formatNowShort(dateNow)
+    heroValue = formatClock(dateNow)
     heroLabel = 'Past bedtime'
-    horizonPos = 0.5
-    horizonSet = 0.35
+    timelineProgress = 1
+    startAnchor = bedtimeText
+    endAnchor = 'Now'
   } else if (minsUntil !== null && minsUntil <= 180) {
     heroValue = `${minsUntil} min`
     heroLabel = `until ${bedtimeText}`
-    horizonPos = 0.16 + 0.34 * (phase === 'winding' ? eveningProgress : Math.max(0, 1 - minsUntil / 180))
+    const windowMins = phase === 'winding' ? schedule.leadMinutes : 180
+    timelineProgress = phase === 'winding' ? eveningProgress : Math.max(0.05, 1 - minsUntil / windowMins)
+    const windowStart = new Date(now - (windowMins - minsUntil) * 60_000)
+    startAnchor = formatClock(windowStart)
+    endAnchor = bedtimeText
+  } else {
+    // Daytime / early evening: show 24h day progress softly
+    timelineProgress = Math.min(0.95, Math.max(0.08, (dateNow.getHours() * 60 + dateNow.getMinutes()) / 1440))
+    startAnchor = formatClock(dateNow)
+    endAnchor = bedtimeText
   }
 
   const ready = GAMES.filter((g) => g.status === 'ready')
@@ -67,12 +79,23 @@ export function HomeScreen() {
     ...ready.filter((g) => g.id !== featuredId),
   ]
 
+  // Playful asymmetrical 3-column bento rhythm for 10 tiles:
+  // Row 1: [2-wide featured] [1]
+  // Row 2: [1] [1] [1]
+  // Row 3: [1] [2-wide accent]
+  // Row 4: [1] [1] [1]
+  // Row 5 (if 10th): sits cleanly if needed — wait: 2+1 + 1+1+1 + 1+2 + 1+1+1 = 10 tiles across 4 crisp rows!
+  // Let's verify: idx 0 (span 2), idx 1 (1) => row 1 (2 items)
+  // idx 2, 3, 4 (1,1,1) => row 2 (3 items)
+  // idx 5 (1), idx 6 (span 2) => row 3 (2 items)
+  // idx 7, 8, 9 (1,1,1) => row 4 (3 items)
+  // Total = 10 games in 4 perfectly balanced rectangular rows! Zero orphan slots!
   return (
     <div className="home">
       <section className="home-hero" aria-label="Bedtime">
         <div className="t-hero">{heroValue}</div>
         <div className="t-label home-hero__label">{heroLabel}</div>
-        <Horizon set={horizonSet} position={horizonPos} />
+        <Horizon progress={timelineProgress} startLabel={startAnchor} endLabel={endAnchor} />
       </section>
 
       <div className="home-action">
@@ -89,7 +112,7 @@ export function HomeScreen() {
           </Button>
         ) : (
           <Button size="sm" variant="quiet" onClick={() => setWindDownOpen(true)}>
-            <Moon size={16} strokeWidth={1.5} aria-hidden />
+            <Moon size={15} strokeWidth={1.5} aria-hidden />
             Wind down
           </Button>
         )}
@@ -97,8 +120,10 @@ export function HomeScreen() {
 
       <section className="game-grid" aria-label="Games">
         {ordered.map((g, idx) => {
-          const isWide = idx === 0
-          const showMini = isWide && lastGame === g.id
+          const isFeatured = idx === 0
+          const isSecondWide = ordered.length >= 10 && idx === 6
+          const isWide = isFeatured || isSecondWide
+          const showMini = isFeatured && lastGame === g.id
           return (
             <button
               key={g.id}
@@ -107,11 +132,7 @@ export function HomeScreen() {
               onClick={() => openGame(g.id)}
             >
               <span className="game-tile__visual">
-                {showMini ? (
-                  <ContinuePreview id={g.id} />
-                ) : (
-                  <GameGlyph id={g.id} />
-                )}
+                {showMini ? <ContinuePreview id={g.id} /> : <GameGlyph id={g.id} />}
               </span>
               {showMini && (
                 <span className="game-tile__fallback">

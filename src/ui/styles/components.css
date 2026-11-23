@@ -99,6 +99,10 @@
   cursor: default;
 }
 
+.icon-btn--lit {
+  color: var(--c-ink);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .icon-btn:hover:not(:disabled) {
     color: var(--c-ink);
@@ -457,7 +461,7 @@
   margin-top: 20px;
 }
 
-/* --- Floating iOS pill tab island + Night button ------------------------ */
+/* --- Floating iOS pill tab island (dead-centered) + right controls ------ */
 
 .dock {
   position: absolute;
@@ -465,12 +469,22 @@
   right: 0;
   bottom: var(--island-offset);
   z-index: 50;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
   gap: 10px;
   pointer-events: none;
   padding-inline: 16px;
+}
+
+.dock__spacer {
+  min-width: 0;
+}
+
+.dock__right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .island {
@@ -481,7 +495,7 @@
   height: 52px;
   padding: 4px;
   border-radius: 26px;
-  background: rgb(23 22 20 / 0.72);
+  background: rgb(20 22 26 / 0.78);
   backdrop-filter: blur(24px) saturate(130%);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--c-line-strong);
@@ -492,13 +506,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-width: 112px;
-  max-width: 152px;
+  gap: 7px;
+  min-width: 104px;
+  max-width: 140px;
   height: 44px;
-  padding: 0 16px;
+  padding: 0 14px;
   border-radius: 22px;
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 500;
   letter-spacing: -0.005em;
   color: var(--c-ink-3);
@@ -513,7 +527,7 @@
   position: absolute;
   inset: 0;
   border-radius: 22px;
-  background: rgb(232 224 212 / 0.1);
+  background: rgb(220 226 235 / 0.1);
 }
 
 .island__content {
@@ -578,7 +592,7 @@
   height: 52px;
   flex: none;
   border-radius: 50%;
-  background: rgb(23 22 20 / 0.72);
+  background: rgb(20 22 26 / 0.78);
   backdrop-filter: blur(24px) saturate(130%);
   -webkit-backdrop-filter: blur(24px) saturate(130%);
   border: 1px solid var(--c-line-strong);
@@ -615,17 +629,84 @@
   flex-direction: column;
   padding-top: var(--safe-top);
   padding-bottom: var(--safe-bottom);
-  background: var(--c-bg);
+  background: rgb(0 0 0 / 0.84);
   user-select: none;
   -webkit-user-select: none;
 }
 
 .game__top {
   display: grid;
-  grid-template-columns: 52px 1fr 52px;
+  grid-template-columns: 88px 1fr 88px;
   align-items: center;
   height: 52px;
   padding: 0 6px;
+}
+
+.game__top-left {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.game__top-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* --- In-game audio sheet ------------------------------------------------- */
+
+.audio-sheet {
+  display: grid;
+  gap: 14px;
+}
+
+.audio-sheet__vol {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 4px;
+}
+
+.audio-sheet__vol-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.audio-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.audio-chip {
+  height: 36px;
+  padding: 0 13px;
+  border-radius: var(--r-pill);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--c-ink-2);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    border-color var(--d-fast) ease,
+    color var(--d-fast) ease;
+}
+
+.audio-chip:active {
+  transform: scale(0.96);
+}
+
+.audio-chip[aria-pressed='true'] {
+  color: var(--c-ink);
+  background: var(--c-surface-3);
+  border-color: var(--c-accent-dim);
+}
+
+.audio-sheet__toggles {
+  display: grid;
 }
 
 .game__title {

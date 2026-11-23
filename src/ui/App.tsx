@@ -2,6 +2,7 @@ import { Suspense, useEffect } from 'react'
 import { AnimatePresence, MotionConfig } from 'motion/react'
 import { GAMES, type GameId } from '@/core/games/catalog'
 import { sound } from '@/platform'
+import { AmbientBackdrop } from './components/AmbientBackdrop'
 import { NightFilterOverlay } from './components/NightFilterOverlay'
 import { NightSheet } from './components/NightSheet'
 import { SessionCurtain } from './components/SessionCurtain'
@@ -47,6 +48,8 @@ export function App() {
   return (
     <MotionConfig reducedMotion="user">
       <div className="app">
+        <AmbientBackdrop />
+
         <div className="frame">
           <div className="viewport" aria-hidden={Boolean(ActiveGame)}>
             {tab === 'play' && <HomeScreen />}

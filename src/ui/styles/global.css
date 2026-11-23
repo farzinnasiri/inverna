@@ -6,19 +6,19 @@
 
 :root {
   --c-bg: #000000;
-  --c-surface-1: #0e0d0c;
-  --c-surface-2: #171614;
-  --c-surface-3: #22201d;
-  --c-line: rgb(232 224 212 / 0.08);
-  --c-line-strong: rgb(232 224 212 / 0.14);
-  --c-ink: #dad4cb;
-  --c-ink-2: #a8a198;
-  --c-ink-3: #7a746d;
-  --c-ink-4: #4a4642;
-  --c-accent: #c4a57c;
-  --c-accent-ink: #14110d;
-  --c-accent-dim: #7d6a51;
-  --c-accent-wash: rgb(196 165 124 / 0.12);
+  --c-surface-1: #0c0d10;
+  --c-surface-2: #14161a;
+  --c-surface-3: #1e2127;
+  --c-line: rgb(220 226 235 / 0.08);
+  --c-line-strong: rgb(220 226 235 / 0.15);
+  --c-ink: #dce0e6;
+  --c-ink-2: #9ba2ad;
+  --c-ink-3: #6c737e;
+  --c-ink-4: #41464f;
+  --c-accent: #c2a15f;
+  --c-accent-ink: #12100b;
+  --c-accent-dim: #7a673d;
+  --c-accent-wash: rgb(194 161 95 / 0.14);
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter Variable', system-ui, sans-serif;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -185,12 +185,22 @@ input {
   background: var(--c-bg);
 }
 
+.ambient-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
 .frame {
   position: relative;
+  z-index: 2;
   max-width: var(--frame);
   height: 100%;
   margin: 0 auto;
-  background: var(--c-bg);
+  background: transparent;
 }
 
 @media (min-width: 560px) {

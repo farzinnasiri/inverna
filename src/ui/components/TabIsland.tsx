@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'motion/react'
-import { LayoutGrid, Moon, Waves } from 'lucide-react'
+import { LayoutGrid, SlidersHorizontal, Waves } from 'lucide-react'
 import { sessionProgress } from '@/core/session'
 import { presetById } from '@/core/sound/catalog'
 import { useNav } from '../state/nav'
@@ -8,9 +8,9 @@ import { useSession } from '../state/session'
 import { useSound } from '../state/sound'
 
 /**
- * Floating iOS pill tab island (Play | Sounds) + detached circular Night button.
- * When sound plays, the Sounds segment morphs to show live level bars + the
- * preset name so there is never a second stacked bar.
+ * Centered floating iOS pill tab island (Play | Sounds) + detached circular
+ * Night controls button on the right (SlidersHorizontal — never reads as a
+ * light/dark theme toggle).
  */
 export function TabIsland() {
   const tab = useNav((s) => s.tab)
@@ -42,6 +42,8 @@ export function TabIsland() {
 
   return (
     <div className="dock">
+      <div className="dock__spacer" aria-hidden />
+
       <nav className="island" aria-label="Main navigation">
         <button
           type="button"
@@ -57,7 +59,7 @@ export function TabIsland() {
             />
           )}
           <span className="island__content">
-            <LayoutGrid size={19} strokeWidth={1.5} aria-hidden />
+            <LayoutGrid size={18} strokeWidth={1.5} aria-hidden />
             <span className="island__label">Play</span>
           </span>
         </button>
@@ -83,37 +85,39 @@ export function TabIsland() {
                 <span />
               </span>
             ) : (
-              <Waves size={19} strokeWidth={1.5} aria-hidden />
+              <Waves size={18} strokeWidth={1.5} aria-hidden />
             )}
             <span className="island__label">{soundLabel}</span>
           </span>
         </button>
       </nav>
 
-      <button
-        type="button"
-        className="night-fab"
-        aria-label="Night settings"
-        aria-expanded={nightOpen}
-        onClick={() => setNightOpen(true)}
-      >
-        {session && (
-          <svg className="night-fab__arc" viewBox="0 0 52 52" aria-hidden>
-            <circle
-              cx="26"
-              cy="26"
-              r={r}
-              fill="none"
-              stroke="var(--c-accent-dim)"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference * (1 - Math.max(0.04, progress))}
-            />
-          </svg>
-        )}
-        <Moon size={21} strokeWidth={1.5} />
-      </button>
+      <div className="dock__right">
+        <button
+          type="button"
+          className="night-fab"
+          aria-label="Evening settings"
+          aria-expanded={nightOpen}
+          onClick={() => setNightOpen(true)}
+        >
+          {session && (
+            <svg className="night-fab__arc" viewBox="0 0 52 52" aria-hidden>
+              <circle
+                cx="26"
+                cy="26"
+                r={r}
+                fill="none"
+                stroke="var(--c-accent)"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={circumference * (1 - Math.max(0.04, progress))}
+              />
+            </svg>
+          )}
+          <SlidersHorizontal size={19} strokeWidth={1.5} />
+        </button>
+      </div>
     </div>
   )
 }

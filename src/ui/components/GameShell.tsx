@@ -1,8 +1,11 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronLeft, Pause } from 'lucide-react'
+import { ChevronLeft, Pause, Volume2, VolumeX } from 'lucide-react'
 import { gameMeta, type GameId } from '@/core/games/catalog'
 import { easeArray } from '@/design/tokens'
+import { useSettings } from '../state/settings'
+import { useSound } from '../state/sound'
+import { GameAudioSheet } from './GameAudioSheet'
 import { Button, IconButton, Sheet } from './controls'
 
 export interface GameScreenProps {
@@ -16,8 +19,8 @@ export interface Stat {
 
 /**
  * Quiet frame for every game.
- * Top bar: back · 17/600 game name · pause.
- * Stats: one centred t-label line (e.g. "8 · best 120").
+ * Top bar: back · 17/600 game name · audio sheet + pause.
+ * Stats: one centred t-label line (e.g. "score 8 · best 120").
  */
 export function GameShell({
   gameId,
@@ -42,6 +45,11 @@ export function GameShell({
 }) {
   const meta = gameMeta(gameId)
   const [showHow, setShowHow] = useState(false)
+  const [audioOpen, setAudioOpen] = useState(false)
+
+  const ambientPlaying = useSound((s) => s.playing)
+  const sfx = useSettings((s) => s.sfx)
+  const allMuted = !ambientPlaying && !sfx
 
   useEffect(() => {
     const onVis = () => document.hidden && onPauseChange(true)
@@ -62,13 +70,26 @@ export function GameShell({
       transition={{ duration: 0.28, ease: easeArray.out }}
     >
       <header className="game__top">
-        <IconButton label="Back" onClick={onExit}>
-          <ChevronLeft size={22} strokeWidth={1.5} />
-        </IconButton>
+        <div className="game__top-left">
+          <IconButton label="Back" onClick={onExit}>
+            <ChevronLeft size={22} strokeWidth={1.5} />
+          </IconButton>
+        </div>
+
         <h1 className="game__title">{meta.name}</h1>
-        <IconButton label="Pause" onClick={() => onPauseChange(true)}>
-          <Pause size={20} strokeWidth={1.5} />
-        </IconButton>
+
+        <div className="game__top-right">
+          <IconButton
+            label="Sound"
+            onClick={() => setAudioOpen(true)}
+            className={ambientPlaying ? 'icon-btn--lit' : ''}
+          >
+            {allMuted ? <VolumeX size={19} strokeWidth={1.5} /> : <Volume2 size={19} strokeWidth={1.5} />}
+          </IconButton>
+          <IconButton label="Pause" onClick={() => onPauseChange(true)}>
+            <Pause size={19} strokeWidth={1.5} />
+          </IconButton>
+        </div>
       </header>
 
       {stats && stats.length > 0 && (
@@ -87,6 +108,8 @@ export function GameShell({
       <main className="game__stage">{children}</main>
 
       {controls && <footer className="game__controls">{controls}</footer>}
+
+      <GameAudioSheet open={audioOpen} onClose={() => setAudioOpen(false)} />
 
       <Sheet open={paused} onClose={() => onPauseChange(false)} label="Paused">
         <h2 className="t-title">{meta.name}</h2>

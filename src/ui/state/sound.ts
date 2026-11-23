@@ -3,21 +3,17 @@ import { presetById, type Mix } from '@/core/sound/catalog'
 import { sound } from '@/platform'
 import { useSettings } from './settings'
 
-/**
- * Runtime sound state. The engine is the source of truth for audio; this
- * store mirrors what is playing so the UI can render it.
- */
 interface SoundState {
   playing: boolean
-  /** Preset id when a preset is playing, null for a custom mix. */
   presetId: string | null
   mix: Mix | null
-  /** Epoch ms when the sleep timer fades sound out, null = no timer. */
+  /** User-controlled ambient master volume 0..1. */
+  volume: number
   stopAt: number | null
   playPreset: (id: string, timerMinutes?: number) => void
   playMix: (mix: Mix, timerMinutes?: number) => void
-  /** Live-edit the current mix (Sounds screen sliders). */
   updateMix: (mix: Mix) => void
+  setVolume: (volume: number) => void
   setTimer: (minutes: number) => void
   stop: (fadeSeconds?: number) => void
 }
@@ -28,13 +24,14 @@ export const useSound = create<SoundState>()((set, get) => ({
   playing: false,
   presetId: null,
   mix: null,
+  volume: 0.85,
   stopAt: null,
   playPreset: (id, timerMinutes) => {
     const preset = presetById(id)
     if (!preset) return
     void sound.unlock()
-    sound.setMaster(1, 0.5)
-    sound.setMix(preset.mix, 2)
+    sound.setMaster(get().volume, 0.5)
+    sound.setMix(preset.mix, 1.8)
     set({
       playing: true,
       presetId: id,
@@ -44,8 +41,8 @@ export const useSound = create<SoundState>()((set, get) => ({
   },
   playMix: (mix, timerMinutes) => {
     void sound.unlock()
-    sound.setMaster(1, 0.5)
-    sound.setMix(mix, 1.5)
+    sound.setMaster(get().volume, 0.5)
+    sound.setMix(mix, 1.4)
     set({
       playing: true,
       presetId: null,
@@ -57,10 +54,15 @@ export const useSound = create<SoundState>()((set, get) => ({
     if (get().playing) sound.setMix(mix, 0.25)
     set({ mix, presetId: null })
   },
+  setVolume: (raw) => {
+    const volume = Math.min(1, Math.max(0, raw))
+    sound.setMaster(volume, 0.12)
+    set({ volume })
+  },
   setTimer: (minutes) => {
     if (get().playing) set({ stopAt: timerToStopAt(minutes) })
   },
-  stop: (fadeSeconds = 1.5) => {
+  stop: (fadeSeconds = 1.4) => {
     sound.stop(fadeSeconds)
     set({ playing: false, stopAt: null })
   },
