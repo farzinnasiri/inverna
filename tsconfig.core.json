@@ -1,0 +1,18 @@
+{
+  // Portability guard: src/core must compile with NO DOM and NO React.
+  // Everything in here moves to React Native / Expo unchanged.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["src/core"]
+}

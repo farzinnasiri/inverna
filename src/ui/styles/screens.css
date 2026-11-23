@@ -1,0 +1,639 @@
+/* ==========================================================================
+   Lull — screens & authored visual moments
+   ========================================================================== */
+
+/* --- Horizon hero (the signature sunset) --------------------------------- */
+
+.horizon {
+  position: relative;
+  height: 224px;
+  margin: -4px -22px 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  isolation: isolate;
+}
+
+.horizon__sky {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    76% 68% at 50% 74%,
+    rgb(255 122 51 / calc(0.22 - var(--set, 0) * 0.14)),
+    rgb(92 42 22 / calc(0.16 - var(--set, 0) * 0.1)) 48%,
+    transparent 78%
+  );
+  animation: horizon-breath var(--d-breath) ease-in-out infinite;
+}
+
+@keyframes horizon-breath {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.horizon__stage {
+  position: relative;
+  width: 100%;
+  height: 152px;
+  overflow: hidden;
+}
+
+.horizon__sun-clip {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+.horizon__sun {
+  position: absolute;
+  left: 50%;
+  bottom: -62px;
+  width: 156px;
+  height: 156px;
+  margin-left: -78px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 34%,
+    var(--c-candle) 0%,
+    var(--c-glow) 36%,
+    var(--c-ember) 74%,
+    #b63d14 100%
+  );
+  box-shadow:
+    0 0 46px 6px rgb(255 122 51 / 0.28),
+    0 -2px 18px rgb(255 217 160 / 0.25) inset;
+  transform: translateY(calc(var(--set, 0) * 102px));
+  transition: transform 2.4s var(--ease-out);
+  will-change: transform;
+}
+
+/* Slow drifting embers above the horizon */
+.horizon__embers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.horizon__ember {
+  position: absolute;
+  bottom: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--c-glow);
+  opacity: 0;
+  animation: ember-rise var(--dur, 16s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+@keyframes ember-rise {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.8);
+  }
+  18% {
+    opacity: 0.55;
+  }
+  75% {
+    opacity: 0.22;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dx, 14px), -148px, 0) scale(0.4);
+  }
+}
+
+/* Horizon hairline & water reflection */
+.horizon__line {
+  position: relative;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 6%,
+    rgb(255 180 94 / 0.22) 28%,
+    rgb(255 217 160 / 0.55) 50%,
+    rgb(255 180 94 / 0.22) 72%,
+    transparent 94%
+  );
+}
+
+.horizon__water {
+  position: relative;
+  width: 100%;
+  height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  background: linear-gradient(180deg, rgb(255 122 51 / 0.08), transparent 90%);
+}
+
+.horizon__shimmer {
+  height: 2px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent, var(--c-ember), var(--c-glow), var(--c-ember), transparent);
+  opacity: calc((1 - var(--set, 0) * 0.7) * var(--o, 0.45));
+  animation: shimmer-sway var(--d-breath) ease-in-out infinite;
+}
+
+@keyframes shimmer-sway {
+  0%,
+  100% {
+    transform: scaleX(0.92);
+  }
+  50% {
+    transform: scaleX(1.06);
+  }
+}
+
+/* --- Home screen --------------------------------------------------------- */
+
+.home-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.home-head__greeting {
+  display: grid;
+  gap: 6px;
+}
+
+.home-cta {
+  margin-top: 22px;
+}
+
+.session-card {
+  margin-top: 20px;
+  padding: 16px 18px;
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(100% 120% at 100% 0%, rgb(255 122 51 / 0.12), transparent 65%),
+    var(--c-night-2);
+  box-shadow: 0 0 0 1px var(--c-line) inset;
+  display: grid;
+  gap: 12px;
+}
+
+.session-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.session-card__meta {
+  display: grid;
+  gap: 2px;
+}
+
+.session-card__bar {
+  height: 3px;
+  border-radius: 99px;
+  background: var(--c-night-3);
+  overflow: hidden;
+}
+
+.session-card__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--c-coal), var(--c-ember), var(--c-glow));
+  transform-origin: left center;
+  transition: transform 1s linear;
+}
+
+/* --- Game shelf (editorial rows, not repetitive boxes) ------------------- */
+
+.shelf {
+  margin-top: 34px;
+}
+
+.shelf__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.shelf__list {
+  display: grid;
+}
+
+.game-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 15px 4px;
+  text-align: left;
+  border-bottom: 1px solid var(--c-line-soft);
+  transition:
+    transform var(--d-press) var(--ease-out),
+    opacity var(--d-fast) ease;
+}
+
+.game-row:last-child {
+  border-bottom: 0;
+}
+
+.game-row:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.game-row--soon {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .game-row:not(:disabled):hover .game-row__glyph {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px var(--c-line) inset,
+      0 10px 22px -12px rgb(0 0 0 / 0.8);
+  }
+  .game-row:not(:disabled):hover .game-row__chevron {
+    color: var(--c-glow);
+    transform: translateX(2px);
+  }
+}
+
+.game-row__glyph {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-md);
+  background: var(--c-night-2);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  transition:
+    transform var(--d-fast) var(--ease-out),
+    box-shadow var(--d-fast) ease;
+}
+
+.game-row__info {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.game-row__top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.game-row__name {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 20px;
+  font-weight: 420;
+  line-height: 1.15;
+  color: var(--c-ink);
+}
+
+.game-row__classic {
+  font-size: 13px;
+  color: var(--c-ink-3);
+}
+
+.game-row__line {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--c-ink-2);
+}
+
+.game-row__effect {
+  font-size: 12px;
+  color: var(--c-ink-3);
+  margin-top: 1px;
+}
+
+.game-row__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-ink-3);
+}
+
+.game-row__chevron {
+  transition:
+    color var(--d-fast) ease,
+    transform var(--d-fast) var(--ease-out);
+}
+
+.game-row__tag {
+  font-size: 11.5px;
+  font-weight: 560;
+  letter-spacing: 0.03em;
+  color: var(--c-ink-3);
+  padding: 4px 9px;
+  border-radius: var(--r-pill);
+  background: var(--c-night-2);
+}
+
+.shelf__divider {
+  margin-top: 28px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+/* --- Sounds screen ------------------------------------------------------- */
+
+.screen-head {
+  padding-top: 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.preset-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.preset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 15px 18px;
+  border-radius: var(--r-md);
+  background: var(--c-night-1);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  text-align: left;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    box-shadow var(--d-fast) ease;
+}
+
+.preset:active {
+  transform: scale(0.985);
+}
+
+.preset[data-active='true'] {
+  background:
+    radial-gradient(90% 140% at 100% 50%, rgb(255 122 51 / 0.14), transparent 70%),
+    var(--c-night-2);
+  box-shadow: 0 0 0 1px rgb(255 180 94 / 0.4) inset;
+}
+
+.preset__info {
+  display: grid;
+  gap: 2px;
+}
+
+.preset__name {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 19px;
+  font-weight: 420;
+  color: var(--c-ink);
+}
+
+.preset__dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--c-ink-3);
+  background: var(--c-night-2);
+  transition:
+    background-color var(--d-fast) ease,
+    color var(--d-fast) ease;
+}
+
+.preset[data-active='true'] .preset__dot {
+  background: var(--c-ember);
+  color: #2a0f04;
+}
+
+.band-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.band {
+  display: grid;
+  gap: 3px;
+  padding: 14px 15px;
+  border-radius: var(--r-md);
+  background: var(--c-night-1);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  text-align: left;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    box-shadow var(--d-fast) ease;
+}
+
+.band:active {
+  transform: scale(0.975);
+}
+
+.band[data-active='true'] {
+  background: var(--c-night-2);
+  box-shadow: 0 0 0 1px rgb(255 180 94 / 0.45) inset;
+}
+
+.band__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.band__name {
+  font-family: var(--font-display);
+  font-variation-settings: 'SOFT' 100;
+  font-size: 18px;
+  font-weight: 420;
+  color: var(--c-ink);
+}
+
+.band__hz {
+  font-size: 12.5px;
+  color: var(--c-glow);
+}
+
+.band[data-restful='false'] .band__hz {
+  color: var(--c-ink-3);
+}
+
+.band__hint {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--c-ink-3);
+}
+
+.note-box {
+  margin-top: 14px;
+  padding: 13px 15px;
+  border-radius: var(--r-md);
+  background: var(--c-night-1);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--c-ink-3);
+}
+
+/* --- Night screen -------------------------------------------------------- */
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.day {
+  height: 38px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--c-ink-3);
+  background: var(--c-night-1);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    color var(--d-fast) ease,
+    box-shadow var(--d-fast) ease;
+}
+
+.day:active {
+  transform: scale(0.95);
+}
+
+.day[aria-pressed='true'] {
+  color: #2a0f04;
+  background: var(--c-glow);
+  box-shadow: none;
+}
+
+.time-input {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  border: 0;
+  background: var(--c-night-2);
+  box-shadow: 0 0 0 1px var(--c-line) inset;
+  color: var(--c-ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 550;
+}
+
+.time-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) sepia(0.5) saturate(2) hue-rotate(-15deg);
+  cursor: pointer;
+}
+
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.swatch {
+  height: 26px;
+  border-radius: var(--r-xs);
+}
+
+/* --- Wind-down sheet ----------------------------------------------------- */
+
+.preset-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pill {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r-pill);
+  font-size: 14px;
+  font-weight: 520;
+  color: var(--c-ink-2);
+  background: var(--c-night-2);
+  box-shadow: 0 0 0 1px var(--c-line-soft) inset;
+  transition:
+    transform var(--d-press) var(--ease-out),
+    background-color var(--d-fast) ease,
+    color var(--d-fast) ease,
+    box-shadow var(--d-fast) ease;
+}
+
+.pill:active {
+  transform: scale(0.96);
+}
+
+.pill[aria-pressed='true'] {
+  color: var(--c-candle);
+  background: var(--c-coal);
+  box-shadow: 0 0 0 1px rgb(255 180 94 / 0.45) inset;
+}
+
+/* --- Session fade-to-black curtain -------------------------------------- */
+
+.curtain {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: #000;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.curtain__inner {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  max-width: 280px;
+}
+
+.curtain__wake {
+  margin-top: 26px;
+  font-size: 13px;
+  color: var(--c-ink-3);
+  opacity: 0.65;
+  padding: 10px 18px;
+  border-radius: var(--r-pill);
+  transition: opacity var(--d-fast) ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .curtain__wake:hover {
+    opacity: 1;
+  }
+}

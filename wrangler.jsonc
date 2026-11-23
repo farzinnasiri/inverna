@@ -1,0 +1,10 @@
+{
+  // Static deploy on Cloudflare Workers (assets only, no server code).
+  // `pnpm deploy` builds and ships ./dist.
+  "name": "lull",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

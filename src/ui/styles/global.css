@@ -1,0 +1,267 @@
+/* ==========================================================================
+   Lull — base layer
+   Tokens arrive as CSS variables from src/design/tokens.ts (applyTokens).
+   Fallbacks below keep first paint correct before JS runs.
+   ========================================================================== */
+
+:root {
+  --c-night-0: #0a0605;
+  --c-ink: #f1dcc4;
+  --font-ui: 'Figtree Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --frame: 440px;
+  --tabbar-h: 68px;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--c-night-0);
+  color: var(--c-ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+/* --- Browser surfaces carry the design too ------------------------------ */
+
+::selection {
+  background: rgb(255 122 51 / 0.32);
+  color: var(--c-candle);
+}
+
+input {
+  caret-color: var(--c-ember);
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--c-glow);
+  outline-offset: 3px;
+  border-radius: var(--r-sm);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-line) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--c-line);
+  border-radius: 99px;
+}
+
+/* --- Type ---------------------------------------------------------------- */
+
+.t-display,
+.t-title,
+.t-heading,
+.t-serif {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  font-variation-settings: 'SOFT' 100, 'WONK' 0;
+  text-wrap: balance;
+}
+
+.t-display {
+  font-size: 44px;
+  line-height: 1.02;
+  font-weight: 330;
+  letter-spacing: -0.025em;
+}
+
+.t-title {
+  font-size: 34px;
+  line-height: 1.06;
+  font-weight: 350;
+  letter-spacing: -0.02em;
+}
+
+.t-heading {
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 420;
+  letter-spacing: -0.012em;
+}
+
+.t-body {
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--c-ink-2);
+  text-wrap: pretty;
+}
+
+.t-small {
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--c-ink-2);
+  text-wrap: pretty;
+}
+
+.t-caption {
+  font-size: 12.5px;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  color: var(--c-ink-3);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+em.t-accent {
+  font-style: italic;
+  color: var(--c-glow);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* --- Frame --------------------------------------------------------------- */
+
+.app {
+  position: relative;
+  height: 100%;
+  isolation: isolate;
+}
+
+.frame {
+  position: relative;
+  max-width: var(--frame);
+  height: 100%;
+  margin: 0 auto;
+}
+
+/* Desktop: the column sits in a quiet room, hairlines at its edges. */
+@media (min-width: 560px) {
+  .frame {
+    border-inline: 1px solid var(--c-line-soft);
+  }
+}
+
+.scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--safe-top);
+  padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 96px);
+}
+
+.page {
+  padding: 20px 22px 0;
+}
+
+/* --- Ambient room light (behind everything) ----------------------------- */
+
+.room {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 45% at 50% 108%, rgb(255 122 51 / 0.1), transparent 70%),
+    radial-gradient(60% 40% at 50% -10%, rgb(92 42 22 / 0.18), transparent 70%),
+    var(--c-night-0);
+}
+
+/* --- Night filter: the screen as a night-light -------------------------- */
+/* Multiply with deep orange strips blue (and some green); black dims.     */
+
+.night-filter {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.night-filter__warm {
+  position: absolute;
+  inset: 0;
+  background: #ff5a14;
+  mix-blend-mode: multiply;
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-out);
+}
+
+.night-filter__dim {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-out);
+}
+
+/* --- Reduced motion: fewer and gentler, not zero ------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
