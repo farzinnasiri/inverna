@@ -15,4 +15,6 @@ export const GAME_SCREENS: Partial<Record<GameId, LazyExoticComponent<ComponentT
   weave: lazy(() => import('./weave/WeaveScreen')),
   patience: lazy(() => import('./patience/PatienceScreen')),
   lanterns: lazy(() => import('./lanterns/LanternsScreen')),
+  rally: lazy(() => import('./rally/RallyScreen')),
+  chime: lazy(() => import('./chime/ChimeScreen')),
 }

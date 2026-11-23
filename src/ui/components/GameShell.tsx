@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronLeft, Pause, Volume2, VolumeX } from 'lucide-react'
+import { ChevronLeft, CircleHelp, Pause, Volume2, VolumeX } from 'lucide-react'
 import { gameMeta, type GameId } from '@/core/games/catalog'
 import { easeArray } from '@/design/tokens'
 import { useSettings } from '../state/settings'
@@ -19,7 +19,7 @@ export interface Stat {
 
 /**
  * Quiet frame for every game.
- * Top bar: back · 17/600 game name · audio sheet + pause.
+ * Top bar: back + how-to (?) · 17/600 game name · audio + pause.
  * Stats: one centred t-label line (e.g. "score 8 · best 120").
  */
 export function GameShell({
@@ -44,7 +44,7 @@ export function GameShell({
   children: ReactNode
 }) {
   const meta = gameMeta(gameId)
-  const [showHow, setShowHow] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [audioOpen, setAudioOpen] = useState(false)
 
   const ambientPlaying = useSound((s) => s.playing)
@@ -56,10 +56,6 @@ export function GameShell({
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [onPauseChange])
-
-  useEffect(() => {
-    if (!paused) setShowHow(false)
-  }, [paused])
 
   return (
     <motion.div
@@ -73,6 +69,9 @@ export function GameShell({
         <div className="game__top-left">
           <IconButton label="Back" onClick={onExit}>
             <ChevronLeft size={22} strokeWidth={1.5} />
+          </IconButton>
+          <IconButton label="How to play" onClick={() => setHelpOpen(true)}>
+            <CircleHelp size={19} strokeWidth={1.5} />
           </IconButton>
         </div>
 
@@ -111,33 +110,37 @@ export function GameShell({
 
       <GameAudioSheet open={audioOpen} onClose={() => setAudioOpen(false)} />
 
+      <Sheet open={helpOpen} onClose={() => setHelpOpen(false)} label={`How to play ${meta.name}`}>
+        <h2 className="t-title">{meta.name}</h2>
+        <p className="t-label" style={{ marginTop: 4 }}>
+          {meta.classic}
+        </p>
+        <div className="howto">{howTo}</div>
+        <div className="sheet__actions">
+          <Button variant="quiet" block onClick={() => setHelpOpen(false)}>
+            Got it
+          </Button>
+        </div>
+      </Sheet>
+
       <Sheet open={paused} onClose={() => onPauseChange(false)} label="Paused">
         <h2 className="t-title">{meta.name}</h2>
         <p className="t-label" style={{ marginTop: 4 }}>
           {meta.classic}
         </p>
-        <AnimatePresence initial={false}>
-          {showHow && (
-            <motion.div
-              className="howto"
-              initial={{ opacity: 0, y: -4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.2, ease: easeArray.out }}
-            >
-              {howTo}
-            </motion.div>
-          )}
-        </AnimatePresence>
         <div className="sheet__actions">
           <Button variant="primary" block onClick={() => onPauseChange(false)}>
             Resume
           </Button>
-          {!showHow && (
-            <Button block onClick={() => setShowHow(true)}>
-              How to play
-            </Button>
-          )}
+          <Button
+            block
+            onClick={() => {
+              onPauseChange(false)
+              setHelpOpen(true)
+            }}
+          >
+            How to play
+          </Button>
           {onRestart && (
             <Button
               block

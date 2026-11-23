@@ -118,5 +118,26 @@ export function GameGlyph({ id }: { id: GameId }) {
           <circle cx="22.25" cy="16" r="2.1" fill="var(--c-accent-ink)" />
         </svg>
       )
+    case 'rally':
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
+          <rect x="11" y="5" width="10" height="3" rx="1.5" fill="var(--p-clay)" />
+          <line x1="6" y1="16" x2="26" y2="16" stroke="var(--c-ink-4)" strokeWidth="1.2" strokeDasharray="3 3" />
+          <circle cx="19" cy="12" r="2.5" fill="var(--p-ochre)" />
+          <rect x="10" y="24" width="12" height="3" rx="1.5" fill="var(--p-bone)" />
+        </svg>
+      )
+    case 'chime':
+      return (
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
+          <rect x="4" y="5" width="7" height="4" rx="1.2" fill="var(--p-sage)" />
+          <rect x="12.5" y="5" width="7" height="4" rx="1.2" fill="var(--p-ochre)" />
+          <rect x="21" y="5" width="7" height="4" rx="1.2" fill="var(--p-straw)" />
+          <rect x="4" y="10.5" width="7" height="4" rx="1.2" fill="var(--p-clay)" />
+          <rect x="21" y="10.5" width="7" height="4" rx="1.2" fill="var(--p-rosewood)" />
+          <circle cx="16" cy="18.5" r="2.3" fill="var(--p-ochre)" />
+          <rect x="10" y="24.5" width="12" height="3" rx="1.5" fill="var(--p-bone)" />
+        </svg>
+      )
   }
 }

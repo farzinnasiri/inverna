@@ -121,8 +121,13 @@ export function HomeScreen() {
       <section className="game-grid" aria-label="Games">
         {ordered.map((g, idx) => {
           const isFeatured = idx === 0
-          // With 11 games, 1 wide tile (span 2) + 10 single tiles = 12 cells (exact 4x3 bento!)
-          const isSecondWide = ordered.length === 10 && idx === 6
+          // Balanced asymmetrical 5x3 bento for 13 games:
+          // Row 1: [0: span 2] [1]
+          // Row 2: [2] [3] [4]
+          // Row 3: [5] [6: span 2]
+          // Row 4: [7] [8] [9]
+          // Row 5: [10] [11] [12]
+          const isSecondWide = ordered.length >= 13 && idx === 6
           const isWide = isFeatured || isSecondWide
           const showMini = isFeatured && lastGame === g.id
           return (

@@ -15,6 +15,8 @@ export type GameId =
   | 'weave'
   | 'patience'
   | 'lanterns'
+  | 'rally'
+  | 'chime'
 
 export type GameStatus = 'ready' | 'soon'
 
@@ -117,6 +119,22 @@ export const GAMES: readonly GameMeta[] = [
     classic: 'Memory pairs',
     line: 'Turn two lanterns. Remember where the light was.',
     effect: 'Soft recall',
+    status: 'ready',
+  },
+  {
+    id: 'rally',
+    name: 'Rally',
+    classic: 'Vertical Pong',
+    line: 'Return the ball up the court. Easy, medium, or hard.',
+    effect: 'Steady rhythm',
+    status: 'ready',
+  },
+  {
+    id: 'chime',
+    name: 'Chime',
+    classic: 'Breakout',
+    line: 'Bounce the ball to clear every block above.',
+    effect: 'Calm precision',
     status: 'ready',
   },
 ]
