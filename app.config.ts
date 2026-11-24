@@ -13,6 +13,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/images/icon.png',
   ios: {
     bundleIdentifier: 'com.oooflabs.lull',
+    buildNumber: '1',
     supportsTablet: true,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,

@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 5.2.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "development-device": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "distribution": "store",
+      "ios": {
+        "buildConfiguration": "Release"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "bundleIdentifier": "com.oooflabs.lull",
+        "appleTeamId": "LFJY887CD3",
+        "ascApiKeyPath": "$HOME/.config/oooflabs/apple/AuthKey_Q6F666S4RG.p8",
+        "ascApiKeyId": "Q6F666S4RG",
+        "ascApiKeyIssuerId": "f282a20b-2313-4ca7-b771-69e0ea111692"
+      }
+    }
+  }
+}

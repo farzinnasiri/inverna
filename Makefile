@@ -3,20 +3,24 @@ SHELL := /bin/bash
 
 PORT ?= 8081
 
-.PHONY: help install dev dev-portless web start expo ios android check typecheck test sounds build-web deploy doctor
+.PHONY: help install dev dev-portless dev-client web start expo ios android check typecheck test sounds build-web deploy doctor \
+	build-ios-dev build-ios-sim build-ios-preview build-ios-testflight submit-testflight builds credentials
 
 help: ## List available commands
-	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "make %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "make %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 install: ## Install dependencies with pnpm
 	pnpm install
 
 # --- Develop --------------------------------------------------------------
 
-dev: dev-portless ## Run Lull through Portless (named local URL + LAN Metro for Expo Go)
+dev: dev-portless ## Run Lull through Portless (named local URL + LAN Metro)
 
-dev-portless: ## Run Lull through Portless (auto-picks a free Metro port, works alongside other apps)
+dev-portless: ## Run Lull through Portless (auto-picks free port, works alongside other apps)
 	node scripts/dev-portless.mjs
+
+dev-client: ## Run Metro for your installed iPhone development build (--dev-client --lan + Portless)
+	EXPO_DEV_CLIENT=1 node scripts/dev-portless.mjs
 
 web: ## Start Expo web dev server directly on PORT (default 8081)
 	pnpm exec expo start --web --lan --port $(PORT)
@@ -31,6 +35,32 @@ ios: ## Launch on iOS Simulator
 
 android: ## Launch on Android Emulator
 	pnpm exec expo start --android
+
+# --- Cloud Builds via React Native Deploy (GitHub Actions) ----------------
+
+build-ios-dev: ## Cloud-build signed iPhone development build (expo-dev-client) on GitHub Actions
+	rnd build --platform ios --profile development-device
+
+build-ios-sim: ## Cloud-build iOS Simulator development build on GitHub Actions
+	rnd build --platform ios --profile development
+
+build-ios-preview: ## Cloud-build standalone ad-hoc preview IPA on GitHub Actions
+	rnd build --platform ios --profile preview
+
+build-ios-testflight: ## Cloud-build signed App Store / TestFlight IPA on GitHub Actions
+	rnd build --platform ios --profile production
+
+submit-testflight: ## Download latest production IPA and submit to TestFlight via asc
+	rnd build:download --platform ios
+	@IPA=$$(ls -t build/*.ipa 2>/dev/null | head -n 1); \
+	if [ -z "$$IPA" ]; then (cd build && unzip -o *.zip); IPA=$$(ls -t build/*.ipa | head -n 1); fi; \
+	rnd submit --platform ios --profile production --path "$$IPA"
+
+builds: ## List recent React Native Deploy builds
+	rnd build:list
+
+credentials: ## Verify GitHub Actions signing secrets for iOS
+	rnd credentials --platform ios
 
 # --- Quality --------------------------------------------------------------
 
