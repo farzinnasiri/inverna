@@ -182,7 +182,12 @@ export function createHarmonicPadController(
     const warmFilter = ctx.createBiquadFilter()
     warmFilter.type = 'lowpass'
     warmFilter.frequency.value = descent.padCutoffHz
-    warmFilter.Q.value = 0.65
+    warmFilter.Q.value = -3.01
+    try {
+      warmFilter.frequency.setValueAtTime(descent.padCutoffHz, now)
+    } catch {
+      /* mock fallback */
+    }
 
     // 4-voice gently breathing chord bed
     const voices: PadVoice[] = meta.padHz.map((freq, idx) => {
@@ -242,13 +247,23 @@ export function createHarmonicPadController(
     breathLfo.frequency.value = descent.breathHz
 
     const breathFilterDepth = ctx.createGain()
-    breathFilterDepth.gain.value = breathEnabled ? descent.padCutoffHz * 0.22 * (descent.breathDepth / 0.24) : 0
+    const initBreathFilter = breathEnabled ? descent.padCutoffHz * 0.22 * (descent.breathDepth / 0.24) : 0
+    breathFilterDepth.gain.value = initBreathFilter
 
     const breathGainNode = ctx.createGain()
-    breathGainNode.gain.value = 1 - (breathEnabled ? descent.breathDepth * 0.45 : 0)
+    const initBreathAmp = breathEnabled ? descent.breathDepth * 0.45 : 0
+    breathGainNode.gain.value = 1 - initBreathAmp
 
     const breathGainDepth = ctx.createGain()
-    breathGainDepth.gain.value = breathEnabled ? descent.breathDepth * 0.45 : 0
+    breathGainDepth.gain.value = initBreathAmp
+
+    try {
+      breathFilterDepth.gain.setValueAtTime(initBreathFilter, now)
+      breathGainNode.gain.setValueAtTime(1 - initBreathAmp, now)
+      breathGainDepth.gain.setValueAtTime(initBreathAmp, now)
+    } catch {
+      /* mock fallback */
+    }
 
     breathLfo.connect(breathFilterDepth)
     breathFilterDepth.connect(warmFilter.frequency)
@@ -258,14 +273,22 @@ export function createHarmonicPadController(
 
     // Cortical Phase-Locked AM Modulator (1.5 - 9 Hz, speaker + headphone effective!)
     const amVca = ctx.createGain()
-    amVca.gain.value = 1 - descent.amDepth * 0.5
+    const initAmAmp = descent.amDepth * 0.5
+    amVca.gain.value = 1 - initAmAmp
 
     const amLfo = ctx.createOscillator()
     amLfo.type = 'sine'
     amLfo.frequency.value = clamp(descent.modHz, 0.5, 16)
 
     const amDepthGain = ctx.createGain()
-    amDepthGain.gain.value = descent.amDepth * 0.5
+    amDepthGain.gain.value = initAmAmp
+
+    try {
+      amVca.gain.setValueAtTime(1 - initAmAmp, now)
+      amDepthGain.gain.setValueAtTime(initAmAmp, now)
+    } catch {
+      /* mock fallback */
+    }
 
     amLfo.connect(amDepthGain)
     amDepthGain.connect(amVca.gain)
@@ -300,6 +323,11 @@ export function createHarmonicPadController(
 
     const outputGain = ctx.createGain()
     outputGain.gain.value = 0
+    try {
+      outputGain.gain.setValueAtTime(0, now)
+    } catch {
+      /* mock fallback */
+    }
 
     warmFilter.connect(breathGainNode)
     breathGainNode.connect(amVca)

@@ -18,6 +18,13 @@ export interface SoundEngine {
   setDescent?(snapshot: DescentSnapshot, rampSeconds?: number): void
   setHarmonicKey?(keyId: HarmonicKeyId): void
   setMaster(volume: number, rampSeconds?: number): void
+  /**
+   * Schedule a CoreAudio/WebAudio-thread fade-out on the native audio timeline so
+   * sleep timers fade cleanly to silence on time even when iOS suspends JS while locked.
+   */
+  scheduleSleepFade?(delaySeconds: number, fadeSeconds?: number): void
+  /** Cancel any pending native sleep-timer fade-out and restore unity gain. */
+  cancelSleepFade?(): void
   stop(fadeSeconds?: number, opts?: { hideNotification?: boolean }): void
   cue(name: CueName, volume?: number): void
   setCuesEnabled(enabled: boolean): void

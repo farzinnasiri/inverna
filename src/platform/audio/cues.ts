@@ -1,12 +1,23 @@
 import type { CueName } from '@/core/sound/engine'
 import { DEFAULT_HARMONIC_KEY, resolveGameNotes, type HarmonicKeyId, type QuantizedNote } from '@/core/sound/harmonics'
-import { clamp, rampParam, safeDisconnect } from './params'
+import { clamp, rampParam, safeDisconnect, safeStop } from './params'
 import type { AudioContextLike, AudioNodeLike, BiquadFilterNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
 
 /**
+ * Web Audio / react-native-audio-api interpret BiquadFilter `Q` in dB for lowpass
+ * (`g = 10^(Q/20)`), so true flat Butterworth is `-3.01` dB (zero resonant peak).
+ */
+const BUTTERWORTH_Q_DB = -3.01
+const MAX_ACTIVE_CUE_VOICES = 8
+
+let activeCueVoices = 0
+
+/**
  * Shared warm stereo echo-bloom bus for interactive game notes.
- * Routes cues through dual damped delays and an Iso-descent warmth filter so
- * every tap/place/clear dissolves seamlessly into the nocturnal soundscape.
+ *
+ * Uses a strictly cycle-free **feedforward** two-tap stereo bloom (`wetFilter -> delayL`
+ * + `delayL -> damp -> delayR`, ZERO recursive feedback edges) so it is mathematically
+ * impossible to self-oscillate, accumulate noise, or latch glitches across preset switches.
  */
 export interface CueBloomBus {
   readonly input: GainNodeLike
@@ -30,26 +41,28 @@ export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeL
       wetFilter = ctx.createBiquadFilter()
       wetFilter.type = 'lowpass'
       wetFilter.frequency.value = 1280
-      wetFilter.Q.value = 0.55
+      wetFilter.Q.value = BUTTERWORTH_Q_DB
+      try {
+        wetFilter.frequency.setValueAtTime(1280, ctx.currentTime)
+      } catch {
+        /* mock fallback */
+      }
 
+      // Strictly feedforward stereo bloom: tap 1 (L, 185ms) feeds damped tap 2 (R, +265ms)
       const delayL = ctx.createDelay(1)
       delayL.delayTime.value = 0.185
-      const fbL = ctx.createGain()
-      fbL.gain.value = 0.22
+
+      const tap2Damp = ctx.createGain()
+      tap2Damp.gain.value = 0.44
 
       const delayR = ctx.createDelay(1)
       delayR.delayTime.value = 0.265
-      const fbR = ctx.createGain()
-      fbR.gain.value = 0.2
 
       input.connect(wetSend)
       wetSend.connect(wetFilter)
       wetFilter.connect(delayL)
-      wetFilter.connect(delayR)
-      delayL.connect(fbL)
-      fbL.connect(delayR)
-      delayR.connect(fbR)
-      fbR.connect(delayL)
+      delayL.connect(tap2Damp)
+      tap2Damp.connect(delayR)
 
       if (typeof ctx.createStereoPanner === 'function') {
         const panL = ctx.createStereoPanner()
@@ -66,7 +79,7 @@ export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeL
         delayR.connect(destination)
       }
 
-      extraNodes.push(wetSend, wetFilter, delayL, fbL, delayR, fbR)
+      extraNodes.push(wetSend, wetFilter, delayL, tap2Damp, delayR)
     } catch {
       // Dry path already connected cleanly.
     }
@@ -91,19 +104,24 @@ function playQuantizedNote(
   note: QuantizedNote,
   vol: number,
 ): void {
+  if (activeCueVoices >= MAX_ACTIVE_CUE_VOICES) return
+  activeCueVoices += 1
+
   const start = ctx.currentTime + note.delay
-  const stopAt = start + note.attack + note.decay + 0.04
+  const dur = note.attack + note.decay
+  const stopAt = start + dur + 0.04
 
   const filter = ctx.createBiquadFilter()
   filter.type = 'lowpass'
   filter.frequency.value = clamp(note.cutoff, 320, 4200)
-  filter.Q.value = 0.6
+  filter.Q.value = BUTTERWORTH_Q_DB
 
   const env = ctx.createGain()
   const peak = Math.max(0.0002, note.gain * vol)
+  env.gain.value = 0.0001
   env.gain.setValueAtTime(0.0001, start)
   env.gain.linearRampToValueAtTime(peak, start + note.attack)
-  env.gain.exponentialRampToValueAtTime(0.0001, start + note.attack + note.decay)
+  env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
 
   const fundamental = ctx.createOscillator()
   fundamental.type = 'sine'
@@ -141,7 +159,25 @@ function playQuantizedNote(
     env.connect(destination)
   }
 
-  fundamental.onended = () => {
+  let cleaned = false
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    activeCueVoices = Math.max(0, activeCueVoices - 1)
+    if (fallbackTimer !== null) {
+      clearTimeout(fallbackTimer)
+      fallbackTimer = null
+    }
+    // CRITICAL for react-native-audio-api: clear `onended = null` so the native
+    // AudioEventEmitter unsubscribes and releases the C++ node from its registry!
+    try {
+      fundamental.onended = null
+    } catch {
+      /* ignore */
+    }
+    safeStop(fundamental)
+    safeStop(overtone)
     safeDisconnect(fundamental)
     safeDisconnect(overtone)
     safeDisconnect(overtoneGainNode)
@@ -149,6 +185,9 @@ function playQuantizedNote(
     safeDisconnect(env)
     safeDisconnect(panner)
   }
+
+  fundamental.onended = cleanup
+  fallbackTimer = setTimeout(cleanup, Math.ceil((note.delay + dur + 0.35) * 1000))
 
   fundamental.start(start)
   fundamental.stop(stopAt)

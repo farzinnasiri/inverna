@@ -53,6 +53,7 @@ interface AudioGraph {
   textureAmLfo: OscillatorNodeLike
   textureAmDepth: GainNodeLike
   ambientGateGain: GainNodeLike
+  sleepFadeGain: GainNodeLike
   masterGain: GainNodeLike
   cueBloom: CueBloomBus
   limiter: DynamicsCompressorNodeLike | null
@@ -198,10 +199,11 @@ export function createNeuroSoundEngine({
       // Master Iso-descent warmth high-shelf across natural texture layers:
       // smoothly tilts highs down (-0.5 -> -5.5 dB) as bedtime deepens without
       // brick-wall lowpassing crisp rain drops or fire crackles into mud!
+      const initWarmthGain = -(0.5 + descent.progress * 5.0)
       const masterWarmthFilter = ctx.createBiquadFilter()
       masterWarmthFilter.type = 'highshelf'
       masterWarmthFilter.frequency.value = descent.masterCutoffHz
-      masterWarmthFilter.gain.value = -(0.5 + descent.progress * 5.0)
+      masterWarmthFilter.gain.value = initWarmthGain
 
       // Gentle asymmetric 0.1 Hz (~4s rise / ~6s release) breath swell across the texture bed
       const textureBreathVca = ctx.createGain()
@@ -247,10 +249,32 @@ export function createNeuroSoundEngine({
       const ambientGateGain = ctx.createGain()
       ambientGateGain.gain.value = 1
 
+      // Dedicated CoreAudio-scheduled sleep-timer fade node (runs on native audio thread
+      // even when iOS suspends JS while the phone is locked!).
+      const sleepFadeGain = ctx.createGain()
+      sleepFadeGain.gain.value = 1
+
       const masterGain = ctx.createGain()
       masterGain.gain.value = masterVolume
 
-      // Output protection: DynamicsCompressor on Web, warm analog WaveShaper soft-limiter on native C++
+      // Anchor initial automation values on ParamRenderQueue so react-native-audio-api@1.0.1
+      // never falls back to C++ defaultValue_ (1.0) on the first rampParam() call.
+      const t0 = ctx.currentTime
+      try {
+        masterWarmthFilter.frequency.setValueAtTime(descent.masterCutoffHz, t0)
+        masterWarmthFilter.gain.setValueAtTime(initWarmthGain, t0)
+        textureBreathVca.gain.setValueAtTime(0.94, t0)
+        textureBreathDepth.gain.setValueAtTime(0.06, t0)
+        textureAmVca.gain.setValueAtTime(1 - initTexAm, t0)
+        textureAmDepth.gain.setValueAtTime(initTexAm, t0)
+        ambientGateGain.gain.setValueAtTime(1, t0)
+        sleepFadeGain.gain.setValueAtTime(1, t0)
+        masterGain.gain.setValueAtTime(masterVolume, t0)
+      } catch {
+        /* mock fallback */
+      }
+
+      // Output protection: DynamicsCompressor on Web, latency-free tanh WaveShaper on native C++
       let limiter: DynamicsCompressorNodeLike | null = null
       let softClipper: WaveShaperNodeLike | null = null
       let busOutput: AudioNodeLike = ctx.destination
@@ -273,7 +297,9 @@ export function createNeuroSoundEngine({
         try {
           softClipper = ctx.createWaveShaper()
           softClipper.curve = createSoftTanhCurve()
-          softClipper.oversample = '2x'
+          // Keep oversample 'none' on native C++: avoids r8brain 2x upsample/downsample
+          // resampler latency & audio-thread CPU spikes during 120Hz games & locked sleep.
+          softClipper.oversample = 'none'
           softClipper.connect(ctx.destination)
           busOutput = softClipper
         } catch {
@@ -282,14 +308,16 @@ export function createNeuroSoundEngine({
         }
       }
 
-      const cueBloom = createCueBloomBus(ctx, busOutput)
+      // Route cueBloom through masterGain so volume & output protection cover game cues cleanly
+      const cueBloom = createCueBloomBus(ctx, masterGain)
 
       textureBus.connect(masterWarmthFilter)
       masterWarmthFilter.connect(textureBreathVca)
       textureBreathVca.connect(textureAmVca)
       textureAmVca.connect(ambientGateGain)
 
-      ambientGateGain.connect(masterGain)
+      ambientGateGain.connect(sleepFadeGain)
+      sleepFadeGain.connect(masterGain)
       masterGain.connect(busOutput)
 
       const pad = createHarmonicPadController(ctx, ambientGateGain)
@@ -320,6 +348,7 @@ export function createNeuroSoundEngine({
         textureAmLfo,
         textureAmDepth,
         ambientGateGain,
+        sleepFadeGain,
         masterGain,
         cueBloom,
         limiter,
@@ -397,6 +426,37 @@ export function createNeuroSoundEngine({
     }
   }
 
+  const clearSleepFadeOnGraph = (g: AudioGraph, restoreRamp = 0.15) => {
+    rampParam(g.sleepFadeGain.gain, 1, restoreRamp, g.ctx.currentTime)
+  }
+
+  const scheduleSleepFadeOnGraph = (g: AudioGraph, delaySeconds: number, fadeSeconds = 12) => {
+    const safeDelay = Math.max(0.1, Number.isFinite(delaySeconds) ? delaySeconds : 0)
+    const safeFade = Math.min(safeDelay, Math.max(0.5, Number.isFinite(fadeSeconds) ? fadeSeconds : 12))
+    const now = g.ctx.currentTime
+    const fadeStart = now + Math.max(0, safeDelay - safeFade)
+    const fadeEnd = now + safeDelay
+    const param = g.sleepFadeGain.gain
+
+    try {
+      if (typeof param.cancelAndHoldAtTime === 'function') {
+        param.cancelAndHoldAtTime(now)
+      } else {
+        param.cancelScheduledValues(now)
+      }
+      const cur = Number.isFinite(param.value) ? param.value : 1
+      param.setValueAtTime(cur, now)
+      if (cur < 0.999) {
+        const recoverEnd = Math.min(fadeStart, now + 0.25)
+        param.linearRampToValueAtTime(1, recoverEnd)
+      }
+      param.setValueAtTime(1, fadeStart)
+      param.linearRampToValueAtTime(0, fadeEnd)
+    } catch {
+      /* fallback handled by JS SessionCurtain */
+    }
+  }
+
   const stopAmbient = (fadeSeconds = 1.5, hideNotification = false) => {
     running = false
     clearStopTimer()
@@ -408,6 +468,20 @@ export function createNeuroSoundEngine({
 
     for (const id of activeLayers.keys()) clearLayerTimer(id)
     g.classical.stop()
+
+    // Cancel any future sleepFadeGain ramp (keep its current value so fade-out stays click-free!)
+    try {
+      const now = g.ctx.currentTime
+      const curSleep = Number.isFinite(g.sleepFadeGain.gain.value) ? g.sleepFadeGain.gain.value : 1
+      if (typeof g.sleepFadeGain.gain.cancelAndHoldAtTime === 'function') {
+        g.sleepFadeGain.gain.cancelAndHoldAtTime(now)
+      } else {
+        g.sleepFadeGain.gain.cancelScheduledValues(now)
+      }
+      g.sleepFadeGain.gain.setValueAtTime(curSleep, now)
+    } catch {
+      /* ignore */
+    }
 
     if (safeFade <= 0.002) {
       rampParam(g.ambientGateGain.gain, 0, 0, g.ctx.currentTime)
@@ -463,6 +537,10 @@ export function createNeuroSoundEngine({
     })
 
     rampParam(g.ambientGateGain.gain, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
+    // If a previous sleep timer already faded sleepFadeGain down, bring it back cleanly on play
+    if ((g.sleepFadeGain.gain.value ?? 1) < 0.99) {
+      clearSleepFadeOnGraph(g, Math.min(safeFade, 0.35))
+    }
 
     for (const id of ALL_LAYER_IDS) {
       const gain = clamp(mix.layers[id] ?? 0, 0, 1)
@@ -551,6 +629,21 @@ export function createNeuroSoundEngine({
       if (!graph) return
       const safeRamp = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0.2)
       rampParam(graph.masterGain.gain, masterVolume, safeRamp, graph.ctx.currentTime)
+    },
+
+    scheduleSleepFade(delaySeconds: number, fadeSeconds = 12) {
+      const g = ensureGraph()
+      if (!g) return
+      if (!Number.isFinite(delaySeconds) || delaySeconds <= 0) {
+        clearSleepFadeOnGraph(g, 0.2)
+        return
+      }
+      scheduleSleepFadeOnGraph(g, delaySeconds, fadeSeconds)
+    },
+
+    cancelSleepFade() {
+      if (!graph) return
+      clearSleepFadeOnGraph(graph, 0.2)
     },
 
     stop(fadeSeconds = 1.5, opts?: { hideNotification?: boolean }) {

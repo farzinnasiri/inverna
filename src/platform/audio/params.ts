@@ -11,43 +11,53 @@ export function clamp(value: number, min: number, max: number): number {
 
 /**
  * Smoothly ramps an AudioParam from its current value to `target` without clicks.
- * Uses `cancelAndHoldAtTime` where supported, falling back to `cancelScheduledValues`
- * + `setValueAtTime` for Safari, native runtimes, and lightweight test mocks.
+ *
+ * CRITICAL for `react-native-audio-api@1.0.1` (`ParamRenderQueue.cpp`):
+ * - Setting `param.value = x` does NOT push an event into `ParamRenderQueue`, so
+ *   calling `linearRampToValueAtTime` without a preceding `setValueAtTime` falls back
+ *   to C++ `defaultValue_` (e.g. `1.0` for GainNodes!) and `startTime = 0`.
+ * - `cancelAndHoldAtTime(now)` does NOT insert a `SET_VALUE` anchor when the queue is
+ *   empty or the previous ramp already ended, causing the next ramp to start at the
+ *   old expired `endTime` (an instant jump/pop!).
+ *
+ * Always anchoring `setValueAtTime(currentVal, safeNow)` immediately before
+ * `linearRampToValueAtTime` makes ramps click-free on BOTH Web Audio and native C++.
  */
 export function rampParam(param: AudioParamLike, target: number, rampSeconds: number, now: number): void {
   const safeNow = Number.isFinite(now) ? Math.max(0, now) : 0
   const duration = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0)
+  const safeTarget = Number.isFinite(target) ? target : 0
+  const currentVal = Number.isFinite(param.value) ? param.value : safeTarget
 
   try {
     if (typeof param.cancelAndHoldAtTime === 'function') {
       param.cancelAndHoldAtTime(safeNow)
     } else {
       param.cancelScheduledValues(safeNow)
-      param.setValueAtTime(param.value, safeNow)
     }
   } catch {
     try {
       param.cancelScheduledValues(safeNow)
-      param.setValueAtTime(param.value, safeNow)
     } catch {
-      param.value = target
+      param.value = safeTarget
       return
     }
   }
 
   if (duration <= 0.002) {
     try {
-      param.setValueAtTime(target, safeNow)
+      param.setValueAtTime(safeTarget, safeNow)
     } catch {
-      param.value = target
+      param.value = safeTarget
     }
     return
   }
 
   try {
-    param.linearRampToValueAtTime(target, safeNow + duration)
+    param.setValueAtTime(currentVal, safeNow)
+    param.linearRampToValueAtTime(safeTarget, safeNow + duration)
   } catch {
-    param.value = target
+    param.value = safeTarget
   }
 }
 

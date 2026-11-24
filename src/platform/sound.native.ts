@@ -124,7 +124,9 @@ export function createPlatformSoundEngine(): SoundEngine {
     createContext: () => {
       try {
         void prepareSession()
-        return new AudioContext() as unknown as AudioContextLike
+        // Use 'balanced' (1024 frames = 21.3 ms IO buffer instead of 128 frames = 2.66 ms)
+        // for 8x more real-time CoreAudio headroom during 120Hz games & locked-screen sleep.
+        return new AudioContext({ latencyHint: 'balanced' }) as unknown as AudioContextLike
       } catch {
         return null
       }

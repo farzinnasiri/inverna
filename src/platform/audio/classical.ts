@@ -57,10 +57,11 @@ function triggerFeltPianoNote(
   const lp = ctx.createBiquadFilter()
   lp.type = 'lowpass'
   lp.frequency.value = clamp(opts.cutoff, 320, 2600)
-  lp.Q.value = 0.55
+  lp.Q.value = -3.01
 
   const env = ctx.createGain()
   const peak = Math.max(0.0002, opts.gain)
+  env.gain.value = 0.0001
   env.gain.setValueAtTime(0.0001, start)
   env.gain.linearRampToValueAtTime(peak, start + opts.attack)
   env.gain.exponentialRampToValueAtTime(0.0001, start + opts.attack + opts.decay)
@@ -98,7 +99,20 @@ function triggerFeltPianoNote(
     env.connect(destination)
   }
 
-  osc1.onended = () => {
+  let cleaned = false
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    if (fallbackTimer !== null) {
+      clearTimeout(fallbackTimer)
+      fallbackTimer = null
+    }
+    try {
+      osc1.onended = null
+    } catch {
+      /* ignore */
+    }
     safeDisconnect(osc1)
     safeDisconnect(osc2)
     safeDisconnect(ovGain)
@@ -106,6 +120,9 @@ function triggerFeltPianoNote(
     safeDisconnect(env)
     safeDisconnect(panner)
   }
+
+  osc1.onended = cleanup
+  fallbackTimer = setTimeout(cleanup, Math.ceil((opts.delay + opts.attack + opts.decay + 0.45) * 1000))
 
   osc1.start(start)
   osc1.stop(stopAt)

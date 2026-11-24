@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { formatBedtime12h, formatHHMM } from '@/core/night'
 import { sessionDone, sessionLevels } from '@/core/session'
 import { sound } from '@/platform'
@@ -29,9 +29,12 @@ export function SessionCurtain() {
     const tick = () => {
       const now = Date.now()
 
-      // Ambient sleep timer check
+      // Ambient sleep timer check:
+      // Native CoreAudio `sleepFadeGain` already smoothly faded to 0 on time even while locked;
+      // tear down idle sources & hide Now Playing immediately once expired (zero re-fade click).
       if (playing && stopAt && now >= stopAt) {
-        stopSound(4, { hideNotification: true })
+        const alreadyFaded = now - stopAt > 1500
+        stopSound(alreadyFaded ? 0.05 : 2.5, { hideNotification: true })
       }
 
       // Wind-down session progression
@@ -55,7 +58,13 @@ export function SessionCurtain() {
 
     tick()
     const id = setInterval(tick, 1000)
-    return () => clearInterval(id)
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') tick()
+    })
+    return () => {
+      clearInterval(id)
+      appSub.remove()
+    }
   }, [session, ended, finish, playing, stopAt, stopSound])
 
   if (!ended && curtainOpacity <= 0.01) return null

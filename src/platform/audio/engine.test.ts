@@ -348,6 +348,7 @@ describe('createNeuroSoundEngine — lifecycle, soft-clipper & native compatibil
     expect(ctx.compressors).toHaveLength(0)
     expect(ctx.shapers).toHaveLength(1)
     expect(ctx.shapers[0]!.curve).toBeInstanceOf(Float32Array)
+    expect(ctx.shapers[0]!.oversample).toBe('none')
     expect(ctx.shapers[0]!.connections.some((c) => c.target === ctx.destination)).toBe(true)
 
     engine.stop(0)
@@ -499,6 +500,27 @@ describe('createNeuroSoundEngine — background-safe layers, harmonic pad & AM d
     expect(rates.some((r) => Math.abs(r - 0.87 / 3) < 1e-4)).toBe(true)
     expect(rates.some((r) => Math.abs(r - 0.853 / 6) < 1e-4)).toBe(true)
     expect(rates.some((r) => Math.abs(r - 1 / 6) < 1e-4)).toBe(true)
+
+    // Verify native CoreAudio sleep-timer fade-out schedules exact setValueAtTime + linearRampToValueAtTime
+    // on sleepFadeGain (immune to iOS JS timer throttling while phone is locked!)
+    engine.scheduleSleepFade?.(900, 12)
+    const fadeGain = ctx.gains.find((g) =>
+      g.gain.calls.some(
+        (c) => c.method === 'linearRampToValueAtTime' && c.args[0] === 0 && Math.abs(c.args[1]! - (ctx.currentTime + 900)) < 1e-4,
+      ),
+    )
+    expect(fadeGain).toBeDefined()
+    expect(
+      fadeGain!.gain.calls.some(
+        (c) => c.method === 'setValueAtTime' && c.args[0] === 1 && Math.abs(c.args[1]! - (ctx.currentTime + 888)) < 1e-4,
+      ),
+    ).toBe(true)
+
+    engine.cancelSleepFade?.()
+    expect(fadeGain!.gain.calls.some((c) => c.method === 'cancelAndHoldAtTime')).toBe(true)
+    expect(
+      fadeGain!.gain.calls.some((c) => c.method === 'linearRampToValueAtTime' && c.args[0] === 1),
+    ).toBe(true)
 
     engine.stop(0)
   })

@@ -23,7 +23,17 @@ interface SoundState {
   stop: (fadeSeconds?: number, opts?: { hideNotification?: boolean }) => void
 }
 
+const SLEEP_FADE_SECONDS = 12
+
 const timerToStopAt = (minutes: number | undefined) => (minutes && minutes > 0 ? Date.now() + minutes * 60_000 : null)
+
+function syncNativeSleepFade(minutes: number | undefined) {
+  if (minutes && minutes > 0) {
+    sound.scheduleSleepFade?.(minutes * 60, SLEEP_FADE_SECONDS)
+  } else {
+    sound.cancelSleepFade?.()
+  }
+}
 
 function inferIconFromMix(mix: Mix | null): SoundIconId {
   if (!mix) return 'rain'
@@ -62,10 +72,12 @@ function nowPlayingSubtitle(hint: string, mins: number): string {
 
 export const useSound = create<SoundState>()((set, get) => {
   sound.onExternalPause?.(() => {
+    sound.cancelSleepFade?.()
     set({ playing: false, stopAt: null })
   })
   sound.onExternalPlay?.(() => {
     const mins = useSettings.getState().sleepTimer
+    syncNativeSleepFade(mins)
     set({ playing: true, stopAt: timerToStopAt(mins) })
   })
 
@@ -100,6 +112,7 @@ export const useSound = create<SoundState>()((set, get) => {
       })
       sound.setMaster(get().volume, 0.5)
       sound.setMix(preset.mix, 1.4)
+      syncNativeSleepFade(mins)
       set({
         playing: true,
         presetId: preset.id,
@@ -125,6 +138,7 @@ export const useSound = create<SoundState>()((set, get) => {
       })
       sound.setMaster(get().volume, 0.5)
       sound.setMix({ ...mix, harmonicKey: key }, 1.2)
+      syncNativeSleepFade(mins)
       set({
         playing: true,
         presetId: null,
@@ -166,6 +180,7 @@ export const useSound = create<SoundState>()((set, get) => {
           icon: preset?.icon ?? inferIconFromMix(get().mix),
           scene: preset?.scene,
         })
+        syncNativeSleepFade(minutes)
         set({ stopAt: timerToStopAt(minutes) })
       }
     },
