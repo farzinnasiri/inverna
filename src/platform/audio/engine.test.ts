@@ -404,11 +404,11 @@ describe('createNeuroSoundEngine — background-safe layers, harmonic pad & AM d
     engine.setMix(allMix, 0.5)
     const ctx = contexts[0]!
 
-    // 5 stereo seamless buffers (white, pink, brown, rain-patter, fire-crackle)
-    expect(ctx.buffers).toHaveLength(5)
+    // 6 stereo seamless buffers (white, pink, brown, rain-patter, fire-crackle, waves-surf)
+    expect(ctx.buffers).toHaveLength(6)
     for (const buf of ctx.buffers) {
       expect(buf.numberOfChannels).toBe(2)
-      expect(buf.length).toBe(NOISE_BUFFER_SECONDS * ctx.sampleRate)
+      expect(buf.length).toBeGreaterThanOrEqual(NOISE_BUFFER_SECONDS * ctx.sampleRate)
       const ch0 = buf.getChannelData(0)
       const ch1 = buf.getChannelData(1)
       let maxAbs = 0

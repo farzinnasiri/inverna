@@ -18,6 +18,7 @@ import {
   PRESETS,
   presetById,
   SILENT_MIX,
+  type SoundIconId,
 } from '@/core/sound/catalog'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
@@ -40,13 +41,29 @@ const TIMER_OPTIONS = [
   { value: 60, label: 'Fade out in 60 min' },
 ] as const
 
+function inferIcon(mix: typeof SILENT_MIX): SoundIconId {
+  if (mix.classicalMotif === 'reverie') return 'feather'
+  if (mix.classicalMotif === 'adagio') return 'disc'
+  if (mix.classicalMotif === 'nocturne') return 'piano'
+  const l = mix.layers
+  const ranked: [SoundIconId, number][] = [
+    ['rain', l.rain ?? 0],
+    ['waves', l.waves ?? 0],
+    ['fire', l.fire ?? 0],
+    ['wind', l.wind ?? 0],
+    ['moon', (l.brown ?? 0) + (l.pink ?? 0) * 0.5],
+  ]
+  ranked.sort((a, b) => b[1] - a[1])
+  return ranked[0]![1] > 0.05 ? ranked[0]![0] : 'rain'
+}
+
 /**
- * Sound Sanctuary:
- * - Clean Watchmaker header + quiet tappable rhythm pill (opens unified Mix studio -> Rhythm tab).
- * - Breathing 0.1 Hz Dial.
- * - 12 authored soundscapes across 2 horizontally swipeable pages of 6 (Night | Reverie)
- *   with consistent sensory subtitles (zero truncation, zero jargon).
- * - Volume bar + Fade timer + Mix button (opens unified Mix studio -> Layers tab).
+ * Balanced Sound Sanctuary:
+ * - Top bar holds Timer chip, centered Soundscape Title, and Mix button (zero dead top void, spacious bottom!).
+ * - Enlarged Hero Watchmaker Dial with the playing soundscape's exact icon in the center.
+ * - Quiet rhythm pill (`θ Theta · 5.0 Hz`) sits directly beneath the dial.
+ * - Swipeable 2-page x 6-card soundscape browser with clean minimal page dots only.
+ * - Spacious Volume slider above the native Liquid Glass tab bar.
  */
 export default function SoundsScreen() {
   const { insets, isCompact, sideMargin } = useResponsiveLayout()
@@ -65,7 +82,6 @@ export default function SoundsScreen() {
   const setSoundTimer = useSound((s) => s.setTimer)
 
   const customMix = useSettings((s) => s.mix)
-  const hasCustomMix = useSettings((s) => s.hasCustomMix)
   const savedPreset = useSettings((s) => s.sessionPreset)
   const sleepTimer = useSettings((s) => s.sleepTimer)
   const hapticsOn = useSettings((s) => s.haptics)
@@ -87,6 +103,7 @@ export default function SoundsScreen() {
   const currentPreset = currentId === 'custom' ? null : (presetById(currentId) ?? PRESETS[0]!)
   const currentName = currentPreset ? currentPreset.name : 'Custom mix'
   const displayMix = playing && activeMix ? activeMix : (currentPreset?.mix ?? customMix)
+  const currentIcon: SoundIconId = currentPreset?.icon ?? inferIcon(displayMix)
 
   const openStudio = (tab: StudioTab) => {
     if (hapticsOn) haptics.play('light')
@@ -101,13 +118,9 @@ export default function SoundsScreen() {
       return
     }
     setSelectedId(id)
-    if (id !== 'custom') setSettings({ sessionPreset: id })
+    setSettings({ sessionPreset: id })
     if (autoPlay) {
-      if (id === 'custom') {
-        playMix(customMix, sleepTimer)
-      } else {
-        playPreset(id, sleepTimer)
-      }
+      playPreset(id, sleepTimer)
     }
   }
 
@@ -132,14 +145,6 @@ export default function SoundsScreen() {
     selectPreset(next.id, playing)
   }
 
-  const goToPage = (nextPage: 0 | 1) => {
-    if (hapticsOn) haptics.play('light')
-    setPageIdx(nextPage)
-    if (pagerWidth > 0) {
-      pagerRef.current?.scrollTo({ x: nextPage * pagerWidth, animated: true })
-    }
-  }
-
   const onPagerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (pagerWidth <= 0) return
     const idx = Math.round(e.nativeEvent.contentOffset.x / pagerWidth) === 1 ? 1 : 0
@@ -152,7 +157,7 @@ export default function SoundsScreen() {
       ? `${descent.phaseLabel} · Tune`
       : `${bandMeta?.greek ?? 'θ'} ${descent.bandLabel} · ${descent.modHz.toFixed(1)} Hz`
 
-  const timerLabel = sleepTimer > 0 ? `Fades in ${sleepTimer}m` : 'No fade timer'
+  const compactTimer = sleepTimer > 0 ? `${sleepTimer}m` : 'Off'
 
   return (
     <View style={styles.root}>
@@ -163,23 +168,66 @@ export default function SoundsScreen() {
           styles.content,
           {
             paddingHorizontal: sideMargin,
-            paddingTop: insets.top + (isCompact ? 8 : 14),
-            paddingBottom: Platform.OS === 'ios' ? 18 : Math.max(insets.bottom, 16) + 88,
+            paddingTop: insets.top + (isCompact ? 8 : 12),
+            paddingBottom: Platform.OS === 'ios' ? 22 : Math.max(insets.bottom, 16) + 92,
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.frame, { gap: isCompact ? 11 : 14 }]}>
-          {/* Header + quiet rhythm pill (taps into unified Mix -> Rhythm) */}
-          <View style={styles.head}>
-            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 25 : 29 }]}>
+        <View style={[styles.frame, { gap: isCompact ? 14 : 18 }]}>
+          {/* Top Watchmaker utility bar: Timer | Title | Mix */}
+          <View style={styles.topBar}>
+            <Pressable
+              onPress={() => {
+                if (hapticsOn) haptics.play('light')
+                setTimerOpen(true)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Sleep fade-out timer"
+              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
+            >
+              <GlassSurface variant="pill" radius={999} interactive style={styles.topChip}>
+                <Timer size={14} strokeWidth={1.7} color={sleepTimer > 0 ? color.accent : color.ink3} />
+                <Text style={[styles.topChipText, { color: sleepTimer > 0 ? color.ink : color.ink3 }]}>
+                  {compactTimer}
+                </Text>
+              </GlassSurface>
+            </Pressable>
+
+            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 22 : 25 }]} numberOfLines={1}>
               {currentName}
             </Text>
+
+            <Pressable
+              onPress={() => openStudio('layers')}
+              accessibilityRole="button"
+              accessibilityLabel="Open mix studio"
+              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
+            >
+              <GlassSurface variant="pill" radius={999} interactive style={styles.topChip}>
+                <SlidersHorizontal size={14} strokeWidth={1.7} color={color.ink2} />
+                <Text style={[styles.topChipText, { color: color.ink }]}>Mix</Text>
+              </GlassSurface>
+            </Pressable>
+          </View>
+
+          {/* Enlarged Hero Watchmaker Dial with active soundscape icon + Rhythm pill directly below */}
+          <View style={styles.heroCenter}>
+            <SoundField
+              mix={displayMix}
+              playing={playing}
+              label={currentName}
+              icon={currentIcon}
+              breathHz={descent.breathHz}
+              onToggle={togglePlayback}
+              onSwipe={swipePreset}
+            />
+
             <Pressable
               onPress={() => openStudio('rhythm')}
               accessibilityRole="button"
-              accessibilityLabel="Tune rhythm and bedtime descent"
-              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1, marginTop: 3 }]}
+              accessibilityLabel="Tune wave rhythm and bedtime descent"
+              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
             >
               <GlassSurface variant="pill" radius={999} accent={playing} style={styles.telemetryPill}>
                 <View style={[styles.pulseDot, { backgroundColor: playing ? color.accent : color.ink3 }]} />
@@ -191,161 +239,107 @@ export default function SoundsScreen() {
             </Pressable>
           </View>
 
-          {/* Breathing 0.1 Hz Acoustic Dial */}
-          <View style={styles.dialWrap}>
-            <SoundField
-              mix={displayMix}
-              playing={playing}
-              label={currentName}
-              breathHz={descent.breathHz}
-              onToggle={togglePlayback}
-              onSwipe={swipePreset}
-            />
-          </View>
-
-          {/* Page switcher header (Night 6 | Reverie 6 + optional Custom pill) */}
-          <View style={styles.pageHeader}>
-            <View style={styles.pageTabs}>
-              {PRESET_PAGES.map((pg) => {
-                const active = pageIdx === pg.id
-                return (
-                  <Pressable
-                    key={pg.id}
-                    onPress={() => goToPage(pg.id)}
-                    style={[
-                      styles.pageTab,
-                      active
-                        ? {
-                            backgroundColor: color.accentWash,
-                            borderColor: color.accentDim,
-                          }
-                        : {
-                            backgroundColor: 'transparent',
-                            borderColor: 'transparent',
-                          },
-                    ]}
-                  >
-                    <Text style={[styles.pageTabText, { color: active ? color.accent : color.ink3 }]}>
-                      {pg.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-              {hasCustomMix ? (
-                <Pressable
-                  onPress={() => selectPreset('custom', true)}
-                  style={[
-                    styles.pageTab,
-                    currentId === 'custom'
-                      ? { backgroundColor: color.accentWash, borderColor: color.accentDim }
-                      : { backgroundColor: 'transparent', borderColor: 'transparent' },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.pageTabText,
-                      { color: currentId === 'custom' ? color.accent : color.ink3 },
-                    ]}
-                  >
-                    Custom
-                  </Text>
-                </Pressable>
-              ) : null}
+          {/* Swipeable 2-page x 6-card soundscape browser + minimal page dots */}
+          <View style={styles.browserBlock}>
+            <View
+              style={styles.pagerWrap}
+              onLayout={(e: LayoutChangeEvent) => {
+                const w = Math.floor(e.nativeEvent.layout.width)
+                if (w > 0 && w !== pagerWidth) setPagerWidth(w)
+              }}
+            >
+              <ScrollView
+                ref={pagerRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onPagerScrollEnd}
+                scrollEventThrottle={32}
+              >
+                {PRESET_PAGES.map((pg) => {
+                  const pageItems = PRESETS.filter((p) => p.page === pg.id)
+                  return (
+                    <View
+                      key={pg.id}
+                      style={[styles.gridPage, { width: pagerWidth || '100%', gap: isCompact ? 9 : 10 }]}
+                    >
+                      {pageItems.map((item) => {
+                        const selected = item.id === currentId
+                        const live = playing && selected
+                        return (
+                          <Pressable
+                            key={item.id}
+                            onPress={() => selectPreset(item.id, true)}
+                            style={({ pressed }) => [
+                              styles.cardWrap,
+                              {
+                                opacity: pressed ? 0.85 : 1,
+                                transform: [{ scale: pressed ? 0.97 : 1 }],
+                              },
+                            ]}
+                          >
+                            <GlassSurface
+                              variant="card"
+                              radius={18}
+                              accent={live || selected}
+                              interactive
+                              style={[styles.presetCard, { minHeight: isCompact ? 62 : 68 }]}
+                            >
+                              <View style={styles.presetTop}>
+                                <View style={styles.presetTitleRow}>
+                                  <SoundGlyph
+                                    icon={item.icon}
+                                    size={15}
+                                    color={live || selected ? color.accent : color.ink2}
+                                  />
+                                  <Text
+                                    numberOfLines={1}
+                                    style={[styles.presetName, { color: live || selected ? color.ink : color.ink2 }]}
+                                  >
+                                    {item.name}
+                                  </Text>
+                                </View>
+                                {live ? <View style={[styles.liveDot, { backgroundColor: color.accent }]} /> : null}
+                              </View>
+                              <Text numberOfLines={1} style={[styles.presetHint, { color: color.ink3 }]}>
+                                {item.hint}
+                              </Text>
+                            </GlassSurface>
+                          </Pressable>
+                        )
+                      })}
+                    </View>
+                  )
+                })}
+              </ScrollView>
             </View>
 
             <View style={styles.pageDots}>
-              {[0, 1].map((idx) => (
-                <View
-                  key={idx}
-                  style={[
-                    styles.pageDot,
-                    {
-                      width: pageIdx === idx ? 14 : 5,
-                      backgroundColor: pageIdx === idx ? color.accent : 'rgba(255,255,255,0.22)',
-                    },
-                  ]}
-                />
+              {PRESET_PAGES.map((pg) => (
+                <Pressable
+                  key={pg.id}
+                  onPress={() => {
+                    if (hapticsOn) haptics.play('light')
+                    setPageIdx(pg.id)
+                    if (pagerWidth > 0) pagerRef.current?.scrollTo({ x: pg.id * pagerWidth, animated: true })
+                  }}
+                  hitSlop={10}
+                >
+                  <View
+                    style={[
+                      styles.pageDot,
+                      {
+                        width: pageIdx === pg.id ? 18 : 6,
+                        backgroundColor: pageIdx === pg.id ? color.accent : 'rgba(255,255,255,0.22)',
+                      },
+                    ]}
+                  />
+                </Pressable>
               ))}
             </View>
           </View>
 
-          {/* Horizontally swipeable 2-page x 6-card soundscape browser */}
-          <View
-            style={styles.pagerWrap}
-            onLayout={(e: LayoutChangeEvent) => {
-              const w = Math.floor(e.nativeEvent.layout.width)
-              if (w > 0 && w !== pagerWidth) setPagerWidth(w)
-            }}
-          >
-            <ScrollView
-              ref={pagerRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={onPagerScrollEnd}
-              scrollEventThrottle={32}
-            >
-              {PRESET_PAGES.map((pg) => {
-                const pageItems = PRESETS.filter((p) => p.page === pg.id)
-                return (
-                  <View
-                    key={pg.id}
-                    style={[styles.gridPage, { width: pagerWidth || '100%', gap: isCompact ? 8 : 9 }]}
-                  >
-                    {pageItems.map((item) => {
-                      const selected = item.id === currentId
-                      const live = playing && selected
-                      return (
-                        <Pressable
-                          key={item.id}
-                          onPress={() => selectPreset(item.id, true)}
-                          style={({ pressed }) => [
-                            styles.cardWrap,
-                            {
-                              opacity: pressed ? 0.85 : 1,
-                              transform: [{ scale: pressed ? 0.97 : 1 }],
-                            },
-                          ]}
-                        >
-                          <GlassSurface
-                            variant="card"
-                            radius={17}
-                            accent={live || selected}
-                            interactive
-                            style={[styles.presetCard, { minHeight: isCompact ? 58 : 63 }]}
-                          >
-                            <View style={styles.presetTop}>
-                              <View style={styles.presetTitleRow}>
-                                <SoundGlyph
-                                  icon={item.icon}
-                                  size={15}
-                                  color={live || selected ? color.accent : color.ink2}
-                                />
-                                <Text
-                                  numberOfLines={1}
-                                  style={[styles.presetName, { color: live || selected ? color.ink : color.ink2 }]}
-                                >
-                                  {item.name}
-                                </Text>
-                              </View>
-                              {live ? (
-                                <View style={[styles.liveDot, { backgroundColor: color.accent }]} />
-                              ) : null}
-                            </View>
-                            <Text numberOfLines={1} style={[styles.presetHint, { color: color.ink3 }]}>
-                              {item.hint}
-                            </Text>
-                          </GlassSurface>
-                        </Pressable>
-                      )
-                    })}
-                  </View>
-                )
-              })}
-            </ScrollView>
-          </View>
-
-          {/* Volume bar */}
+          {/* Spacious Volume bar */}
           <GlassSurface variant="card" radius={20} style={styles.volumeBar}>
             <Volume2 size={16} strokeWidth={1.65} color={color.ink2} />
             <View style={{ flex: 1 }}>
@@ -353,34 +347,6 @@ export default function SoundsScreen() {
             </View>
             <Text style={[styles.volPct, { color: color.accent }]}>{Math.round(volume * 100)}%</Text>
           </GlassSurface>
-
-          {/* Timer + Unified Mix studio controls */}
-          <View style={styles.pillRow}>
-            <Pressable
-              onPress={() => {
-                if (hapticsOn) haptics.play('light')
-                setTimerOpen(true)
-              }}
-              style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.85 : 1 }]}
-            >
-              <GlassSurface variant="pill" radius={22} interactive style={styles.pillBtn}>
-                <Timer size={15} strokeWidth={1.65} color={color.accent} />
-                <Text style={[styles.pillText, { color: color.ink }]} numberOfLines={1}>
-                  {timerLabel}
-                </Text>
-              </GlassSurface>
-            </Pressable>
-
-            <Pressable
-              onPress={() => openStudio('layers')}
-              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-            >
-              <GlassSurface variant="pill" radius={22} interactive style={[styles.pillBtn, { paddingHorizontal: 22 }]}>
-                <SlidersHorizontal size={15} strokeWidth={1.65} color={color.ink2} />
-                <Text style={[styles.pillText, { color: color.ink }]}>Mix</Text>
-              </GlassSurface>
-            </Pressable>
-          </View>
         </View>
       </ScrollView>
 
@@ -433,27 +399,49 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
   },
   frame: {
     width: '100%',
     maxWidth: FRAME_MAX_WIDTH,
     alignItems: 'center',
   },
-  head: {
+  topBar: {
+    width: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  topChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 13,
+  },
+  topChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   heading: {
+    flex: 1,
+    textAlign: 'center',
     fontWeight: '400',
-    letterSpacing: -0.6,
+    letterSpacing: -0.5,
+  },
+  heroCenter: {
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 4,
   },
   telemetryPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    height: 29,
-    paddingHorizontal: 12,
+    height: 31,
+    paddingHorizontal: 14,
   },
   pulseDot: {
     width: 6,
@@ -461,46 +449,13 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   telemetryText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '500',
     fontVariant: ['tabular-nums'],
   },
-  dialWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageHeader: {
+  browserBlock: {
     width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: -4,
-  },
-  pageTabs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  pageTab: {
-    paddingHorizontal: 11,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  pageTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.1,
-  },
-  pageDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingRight: 2,
-  },
-  pageDot: {
-    height: 5,
-    borderRadius: 2.5,
+    gap: 12,
   },
   pagerWrap: {
     width: '100%',
@@ -514,9 +469,9 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   presetCard: {
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-    gap: 3,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    gap: 4,
     justifyContent: 'center',
   },
   presetTop: {
@@ -542,11 +497,21 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   presetHint: {
-    fontSize: 11.5,
+    fontSize: 12,
+  },
+  pageDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  pageDot: {
+    height: 5,
+    borderRadius: 2.5,
   },
   volumeBar: {
     width: '100%',
-    height: 50,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -558,22 +523,5 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     minWidth: 36,
     textAlign: 'right',
-  },
-  pillRow: {
-    width: '100%',
-    flexDirection: 'row',
-    gap: 10,
-  },
-  pillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    height: 44,
-    paddingHorizontal: 16,
-  },
-  pillText: {
-    fontSize: 13.5,
-    fontWeight: '500',
   },
 })

@@ -700,7 +700,6 @@ export function Sheet({
         </Animated.View>
 
         <Animated.View
-          {...dismissResponder.panHandlers}
           style={[
             styles.sheetWrap,
             {
@@ -716,7 +715,10 @@ export function Sheet({
               },
             ]}
           >
-            <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.28)' }]} />
+            {/* Swipe-to-dismiss lives ONLY on the top grab area so vertical faders/sliders never drag the sheet */}
+            <View {...dismissResponder.panHandlers} style={styles.sheetGrabArea}>
+              <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.28)' }]} />
+            </View>
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
               {children}
             </ScrollView>
@@ -921,15 +923,19 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: 0,
     borderColor: 'rgba(255, 255, 255, 0.14)',
-    paddingTop: 10,
+    paddingTop: 2,
     paddingHorizontal: 20,
     overflow: 'hidden',
   },
+  sheetGrabArea: {
+    width: '100%',
+    paddingTop: 10,
+    paddingBottom: 14,
+    alignItems: 'center',
+  },
   sheetGrab: {
-    width: 36,
+    width: 38,
     height: 4,
     borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 16,
   },
 })

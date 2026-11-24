@@ -1,6 +1,6 @@
 import { Image } from 'react-native'
 import { AudioContext, AudioManager, PlaybackNotificationManager } from 'react-native-audio-api'
-import type { SoundSceneId } from '@/core/sound/catalog'
+import type { SoundIconId } from '@/core/sound/catalog'
 import type { NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
 import { createNeuroSoundEngine, type NowPlayingState } from './audio'
 import type { AudioContextLike } from './audio/types'
@@ -8,26 +8,31 @@ import type { AudioContextLike } from './audio/types'
 const DEFAULT_ARTWORK_MODULE = require('../../assets/images/icon.png')
 
 /**
- * Per-soundscape 512x512 Watchmaker PNG artworks so Dynamic Island & Lock Screen
- * display each sound signature's own bespoke icon rather than a generic icon.
+ * Exact 1-to-1 512x512 Watchmaker PNG artworks matching EVERY in-app soundscape icon
+ * so Dynamic Island & Lock Screen always show the exact icon of the playing soundscape.
  */
-const SCENE_ARTWORK_MODULES: Record<SoundSceneId, number> = {
-  rain: require('../../assets/artwork/scene-rain.png'),
-  classical: require('../../assets/artwork/scene-classical.png'),
-  fire: require('../../assets/artwork/scene-fire.png'),
-  waves: require('../../assets/artwork/scene-waves.png'),
-  delta: require('../../assets/artwork/scene-delta.png'),
-  wind: require('../../assets/artwork/scene-wind.png'),
-  reverie: require('../../assets/artwork/scene-reverie.png'),
+const ICON_ARTWORK_MODULES: Record<SoundIconId, number> = {
+  rain: require('../../assets/artwork/icon-rain.png'),
+  piano: require('../../assets/artwork/icon-piano.png'),
+  fire: require('../../assets/artwork/icon-fire.png'),
+  waves: require('../../assets/artwork/icon-waves.png'),
+  moon: require('../../assets/artwork/icon-moon.png'),
+  wind: require('../../assets/artwork/icon-wind.png'),
+  feather: require('../../assets/artwork/icon-feather.png'),
+  disc: require('../../assets/artwork/icon-disc.png'),
+  orbit: require('../../assets/artwork/icon-orbit.png'),
+  book: require('../../assets/artwork/icon-book.png'),
+  trees: require('../../assets/artwork/icon-trees.png'),
+  compass: require('../../assets/artwork/icon-compass.png'),
 }
 
 const artworkUriCache = new Map<string, string | undefined>()
 
-function resolveArtworkUri(scene?: SoundSceneId): string | undefined {
-  const key = scene ?? 'default'
+function resolveArtworkUri(icon?: SoundIconId): string | undefined {
+  const key = icon ?? 'default'
   if (artworkUriCache.has(key)) return artworkUriCache.get(key)
   try {
-    const mod = scene ? SCENE_ARTWORK_MODULES[scene] : DEFAULT_ARTWORK_MODULE
+    const mod = icon ? ICON_ARTWORK_MODULES[icon] : DEFAULT_ARTWORK_MODULE
     const resolved = Image.resolveAssetSource(mod)
     const uri = resolved?.uri || undefined
     artworkUriCache.set(key, uri)
@@ -83,7 +88,7 @@ export function createPlatformSoundEngine(): SoundEngine {
         void PlaybackNotificationManager.hide().catch(() => {})
         return
       }
-      const artwork = resolveArtworkUri(meta?.scene)
+      const artwork = resolveArtworkUri(meta?.icon)
       const showPromise = PlaybackNotificationManager.show({
         title: meta?.title ?? 'Theta rain',
         artist: 'Lull',

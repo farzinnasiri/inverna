@@ -1,5 +1,5 @@
 import type { DescentSnapshot } from './arc'
-import type { Mix, SoundSceneId } from './catalog'
+import type { Mix, SoundIconId, SoundSceneId } from './catalog'
 import type { HarmonicKeyId } from './harmonics'
 
 export type CueName = 'tap' | 'place' | 'clear' | 'chime' | 'undo'
@@ -7,7 +7,8 @@ export type CueName = 'tap' | 'place' | 'clear' | 'chime' | 'undo'
 export interface NowPlayingMeta {
   title: string
   subtitle?: string
-  /** Drives bespoke per-soundscape Dynamic Island & Lock Screen artwork. */
+  /** Drives exact 1-to-1 per-soundscape Dynamic Island & Lock Screen artwork. */
+  icon?: SoundIconId
   scene?: SoundSceneId
 }
 

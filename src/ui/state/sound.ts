@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { computeDescent, type DescentSnapshot } from '@/core/sound/arc'
-import { DEFAULT_PRESET_ID, presetById, type Mix, type SoundSceneId } from '@/core/sound/catalog'
+import { DEFAULT_PRESET_ID, presetById, type Mix, type SoundIconId } from '@/core/sound/catalog'
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { sound } from '@/platform'
 import { useSession } from './session'
@@ -25,17 +25,18 @@ interface SoundState {
 
 const timerToStopAt = (minutes: number | undefined) => (minutes && minutes > 0 ? Date.now() + minutes * 60_000 : null)
 
-function inferSceneFromMix(mix: Mix | null): SoundSceneId {
+function inferIconFromMix(mix: Mix | null): SoundIconId {
   if (!mix) return 'rain'
-  if (mix.classicalMotif === 'reverie') return 'reverie'
-  if (mix.classicalMotif) return 'classical'
+  if (mix.classicalMotif === 'reverie') return 'feather'
+  if (mix.classicalMotif === 'adagio') return 'disc'
+  if (mix.classicalMotif === 'nocturne') return 'piano'
   const l = mix.layers
-  const ranked: [SoundSceneId, number][] = [
+  const ranked: [SoundIconId, number][] = [
     ['rain', l.rain ?? 0],
     ['waves', l.waves ?? 0],
     ['fire', l.fire ?? 0],
     ['wind', l.wind ?? 0],
-    ['delta', (l.brown ?? 0) + (l.pink ?? 0) * 0.6 + (mix.band === 'delta' ? 0.5 : 0)],
+    ['moon', (l.brown ?? 0) + (l.pink ?? 0) * 0.6 + (mix.band === 'delta' ? 0.5 : 0)],
   ]
   ranked.sort((a, b) => b[1] - a[1])
   return ranked[0]![1] > 0.05 ? ranked[0]![0] : 'rain'
@@ -94,6 +95,7 @@ export const useSound = create<SoundState>()((set, get) => {
       sound.setNowPlayingMeta?.({
         title: preset.name,
         subtitle: nowPlayingSubtitle(preset.hint, mins),
+        icon: preset.icon,
         scene: preset.scene,
       })
       sound.setMaster(get().volume, 0.5)
@@ -113,13 +115,13 @@ export const useSound = create<SoundState>()((set, get) => {
       const mins = timerMinutes ?? useSettings.getState().sleepTimer
       const key = mix.harmonicKey ?? get().harmonicKey ?? DEFAULT_HARMONIC_KEY
       const descent = buildDescentSnapshot(null)
-      const scene = inferSceneFromMix(mix)
+      const icon = inferIconFromMix(mix)
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(descent, 0.6)
       sound.setNowPlayingMeta?.({
         title: 'Custom mix',
         subtitle: nowPlayingSubtitle('Your layered blend', mins),
-        scene,
+        icon,
       })
       sound.setMaster(get().volume, 0.5)
       sound.setMix({ ...mix, harmonicKey: key }, 1.2)
@@ -142,7 +144,7 @@ export const useSound = create<SoundState>()((set, get) => {
         sound.setNowPlayingMeta?.({
           title: 'Custom mix',
           subtitle: nowPlayingSubtitle('Your layered blend', mins),
-          scene: inferSceneFromMix(nextMix),
+          icon: inferIconFromMix(nextMix),
         })
         sound.setMix(nextMix, 0.25)
       }
@@ -161,7 +163,8 @@ export const useSound = create<SoundState>()((set, get) => {
         sound.setNowPlayingMeta?.({
           title: preset?.name ?? 'Custom mix',
           subtitle: nowPlayingSubtitle(preset?.hint ?? 'Your layered blend', minutes),
-          scene: preset?.scene ?? inferSceneFromMix(get().mix),
+          icon: preset?.icon ?? inferIconFromMix(get().mix),
+          scene: preset?.scene,
         })
         set({ stopAt: timerToStopAt(minutes) })
       }
