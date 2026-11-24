@@ -1,4 +1,4 @@
-import { DEFAULT_HARMONIC_KEY, harmonicKeyMeta, type HarmonicKeyId } from '@/core/sound/harmonics'
+import { DEFAULT_HARMONIC_KEY, harmonicKeyMeta, type CueTimbre, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { clamp, rampParam, safeDisconnect, safeStop } from './params'
 import type {
   AudioContextLike,
@@ -75,12 +75,39 @@ interface ActivePadGraph {
   outputGain: GainNodeLike
 }
 
-function createWarmWave(ctx: AudioContextLike): unknown | null {
+/**
+ * Distinct acoustic timbre per composition so each soundscape has its own
+ * organic harmonic character (felt fifths, bowed cello, lunar glass, velvet sub, twilight harp).
+ */
+const TIMBRE_HARMONICS: Record<CueTimbre, number[]> = {
+  felt: [0, 1.0, 0.25, 0.08, 0.02],
+  'warm-bell': [0, 1.0, 0.36, 0.16, 0.06, 0.025],
+  glass: [0, 1.0, 0.14, 0.22, 0.04, 0.09],
+  velvet: [0, 1.0, 0.09, 0.015],
+  harp: [0, 1.0, 0.18, 0.14, 0.09, 0.04],
+}
+
+function createTimbreWave(ctx: AudioContextLike, timbre: CueTimbre): unknown | null {
   if (typeof ctx.createPeriodicWave !== 'function') return null
   try {
-    // Soft felt-bowed harmonic profile: strong fundamental, gentle 2nd, whisper 3rd & 4th
-    const real = new Float32Array([0, 0, 0, 0, 0])
-    const imag = new Float32Array([0, 1.0, 0.22, 0.07, 0.02])
+    const imagVals = TIMBRE_HARMONICS[timbre] ?? TIMBRE_HARMONICS.felt
+    const real = new Float32Array(imagVals.length)
+    const imag = new Float32Array(imagVals)
+    return ctx.createPeriodicWave(real, imag)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Asymmetric 0.10 Hz cardiorespiratory breath wave (~3.9s inhale rise / ~6.1s exhale release)
+ * using sin(w*t) + 0.24*sin(2*w*t) — runs 100% natively in CoreAudio/Oboe.
+ */
+export function createAsymmetricBreathWave(ctx: AudioContextLike): unknown | null {
+  if (typeof ctx.createPeriodicWave !== 'function') return null
+  try {
+    const real = new Float32Array([0, 0, 0, 0])
+    const imag = new Float32Array([0, 1.0, 0.24, 0.04])
     return ctx.createPeriodicWave(real, imag)
   } catch {
     return null
@@ -150,7 +177,7 @@ export function createHarmonicPadController(
   const buildGraph = (keyId: HarmonicKeyId): ActivePadGraph => {
     const now = ctx.currentTime
     const meta = harmonicKeyMeta(keyId)
-    const warmWave = createWarmWave(ctx)
+    const warmWave = createTimbreWave(ctx, meta.timbre)
 
     const warmFilter = ctx.createBiquadFilter()
     warmFilter.type = 'lowpass'
@@ -200,9 +227,18 @@ export function createHarmonicPadController(
       return { oscA, oscB, vca, lfo, lfoDepth }
     })
 
-    // 0.1 Hz Cardiorespiratory resonance breath swell (modulates filter warmth + subtle gain)
+    // Asymmetric 0.1 Hz Cardiorespiratory resonance breath swell (~4s rise / ~6s release)
     const breathLfo = ctx.createOscillator()
-    breathLfo.type = 'sine'
+    const breathWave = createAsymmetricBreathWave(ctx)
+    if (breathWave && typeof breathLfo.setPeriodicWave === 'function') {
+      try {
+        breathLfo.setPeriodicWave(breathWave)
+      } catch {
+        breathLfo.type = 'sine'
+      }
+    } else {
+      breathLfo.type = 'sine'
+    }
     breathLfo.frequency.value = descent.breathHz
 
     const breathFilterDepth = ctx.createGain()
@@ -310,7 +346,7 @@ export function createHarmonicPadController(
       now,
     )
 
-    const amAmp = clamp(descent.amDepth * 0.5, 0, 0.24)
+    const amAmp = clamp(descent.amDepth * 0.65, 0, 0.28)
     rampParam(g.amLfo.frequency, clamp(descent.modHz, 0.5, 16), ramp, now)
     rampParam(g.amVca.gain, 1 - amAmp, ramp, now)
     rampParam(g.amDepthGain.gain, amAmp, ramp, now)
@@ -352,10 +388,19 @@ export function createHarmonicPadController(
       } else if (keyId !== currentKey) {
         currentKey = keyId
         const meta = harmonicKeyMeta(keyId)
+        const nextWave = createTimbreWave(ctx, meta.timbre)
         const now = ctx.currentTime
         const glide = Math.max(0.35, Math.min(safeFade, 1.4))
         graph.voices.forEach((v, idx) => {
           const f = meta.padHz[idx] ?? meta.rootHz
+          if (nextWave && typeof v.oscA.setPeriodicWave === 'function' && typeof v.oscB.setPeriodicWave === 'function') {
+            try {
+              v.oscA.setPeriodicWave(nextWave)
+              v.oscB.setPeriodicWave(nextWave)
+            } catch {
+              /* keep existing wave */
+            }
+          }
           rampParam(v.oscA.frequency, f * (1 - DETUNE_RATIO), glide, now)
           rampParam(v.oscB.frequency, f * (1 + DETUNE_RATIO), glide, now)
         })

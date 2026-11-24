@@ -39,6 +39,8 @@ export interface DescentSnapshot {
   masterCutoffHz: number
   /** Harmonic pad low-pass warmth cutoff in Hz. */
   padCutoffHz: number
+  /** Shared game-cue stereo bloom filter cutoff in Hz (warms down with bedtime). */
+  cueBloomCutoffHz: number
   /** Slow stereo rocking LFO frequency in Hz. */
   spatialHz: number
   /** 0..1 darkening applied to interactive game cues. */
@@ -171,12 +173,13 @@ export function computeDescent(opts: ComputeDescentOptions): DescentSnapshot {
     phaseLabel,
     bandLabel: bandLabelForHz(modHz),
     modHz,
-    amDepth: Number((lerp(0.14, 0.28, t) * mult).toFixed(3)),
+    amDepth: Number((lerp(0.20, 0.34, t) * mult).toFixed(3)),
     binauralScale: mult,
-    breathHz: Number(lerp(0.105, 0.088, t).toFixed(3)), // ~9.5s -> ~11.4s resonance cycle
-    breathDepth: Number(lerp(0.14, 0.30, t).toFixed(3)),
-    masterCutoffHz: Math.round(lerp(3400, 740, t)),
-    padCutoffHz: Math.round(lerp(1220, 400, t)),
+    breathHz: Number(lerp(0.105, 0.088, t).toFixed(3)), // ~9.5s -> ~11.4s asymmetric 4s/6s resonance cycle
+    breathDepth: Number(lerp(0.16, 0.32, t).toFixed(3)),
+    masterCutoffHz: Math.round(lerp(3200, 680, t)),
+    padCutoffHz: Math.round(lerp(1220, 390, t)),
+    cueBloomCutoffHz: Math.round(lerp(1580, 620, t)),
     spatialHz: Number(lerp(0.085, 0.052, t).toFixed(3)),
     cueDarkness: Number(t.toFixed(3)),
     minutesToBed: bed.minutesToBed,

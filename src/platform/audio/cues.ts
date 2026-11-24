@@ -1,15 +1,16 @@
 import type { CueName } from '@/core/sound/engine'
 import { DEFAULT_HARMONIC_KEY, resolveGameNotes, type HarmonicKeyId, type QuantizedNote } from '@/core/sound/harmonics'
-import { clamp, safeDisconnect } from './params'
-import type { AudioContextLike, AudioNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
+import { clamp, rampParam, safeDisconnect } from './params'
+import type { AudioContextLike, AudioNodeLike, BiquadFilterNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
 
 /**
  * Shared warm stereo echo-bloom bus for interactive game notes.
- * Routes cues through dual damped delays so every tap/place/clear dissolves
- * seamlessly into the nocturnal soundscape instead of sounding like dry UI clicks.
+ * Routes cues through dual damped delays and an Iso-descent warmth filter so
+ * every tap/place/clear dissolves seamlessly into the nocturnal soundscape.
  */
 export interface CueBloomBus {
   readonly input: GainNodeLike
+  setWarmth(cutoffHz: number, rampSeconds: number): void
   dispose(): void
 }
 
@@ -19,13 +20,14 @@ export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeL
   input.connect(destination)
 
   const extraNodes: AudioNodeLike[] = []
+  let wetFilter: BiquadFilterNodeLike | null = null
 
   if (typeof ctx.createDelay === 'function') {
     try {
       const wetSend = ctx.createGain()
       wetSend.gain.value = 0.24
 
-      const wetFilter = ctx.createBiquadFilter()
+      wetFilter = ctx.createBiquadFilter()
       wetFilter.type = 'lowpass'
       wetFilter.frequency.value = 1280
       wetFilter.Q.value = 0.55
@@ -72,6 +74,10 @@ export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeL
 
   return {
     input,
+    setWarmth(cutoffHz, rampSeconds) {
+      if (!wetFilter) return
+      rampParam(wetFilter.frequency, clamp(cutoffHz, 420, 2600), Math.max(0.08, rampSeconds), ctx.currentTime)
+    },
     dispose() {
       safeDisconnect(input)
       for (const n of extraNodes) safeDisconnect(n)

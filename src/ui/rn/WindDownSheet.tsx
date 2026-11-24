@@ -13,10 +13,10 @@ import { Button, Segmented, Sheet } from './controls'
 import { GlassSurface } from './Glass'
 
 const DURATIONS = [
-  { value: 10, label: '10m' },
   { value: 15, label: '15m' },
-  { value: 20, label: '20m' },
   { value: 30, label: '30m' },
+  { value: 45, label: '45m' },
+  { value: 60, label: '60m' },
 ] as const
 
 /**

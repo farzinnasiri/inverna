@@ -6,7 +6,7 @@ import { createBinauralController, type BinauralController } from './binaural'
 import { createNoiseBufferBank, type NoiseBufferBank } from './buffers'
 import { createCueBloomBus, playHarmonicCue, type CueBloomBus } from './cues'
 import { createAmbientLayer, type AmbientLayer } from './layers'
-import { createHarmonicPadController, type HarmonicPadController } from './pad'
+import { createAsymmetricBreathWave, createHarmonicPadController, type HarmonicPadController } from './pad'
 import { clamp, rampParam, safeDisconnect, safeStop } from './params'
 import type {
   AudioContextLike,
@@ -40,6 +40,9 @@ interface AudioGraph {
   textureBreathVca: GainNodeLike
   textureBreathLfo: OscillatorNodeLike
   textureBreathDepth: GainNodeLike
+  textureAmVca: GainNodeLike
+  textureAmLfo: OscillatorNodeLike
+  textureAmDepth: GainNodeLike
   ambientGateGain: GainNodeLike
   masterGain: GainNodeLike
   cueBloom: CueBloomBus
@@ -99,6 +102,7 @@ export function createNeuroSoundEngine({
     breathDepth: 0.22,
     masterCutoffHz: 2100,
     padCutoffHz: 820,
+    cueBloomCutoffHz: 1120,
     spatialHz: 0.068,
     cueDarkness: 0.5,
     minutesToBed: null,
@@ -184,12 +188,21 @@ export function createNeuroSoundEngine({
       masterWarmthFilter.frequency.value = descent.masterCutoffHz
       masterWarmthFilter.Q.value = 0.55
 
-      // Gentle 0.1 Hz cardiorespiratory macro-swell across the texture bed
+      // Gentle asymmetric 0.1 Hz (~4s rise / ~6s release) breath swell across the texture bed
       const textureBreathVca = ctx.createGain()
       textureBreathVca.gain.value = 0.94
 
       const textureBreathLfo = ctx.createOscillator()
-      textureBreathLfo.type = 'sine'
+      const breathWave = createAsymmetricBreathWave(ctx)
+      if (breathWave && typeof textureBreathLfo.setPeriodicWave === 'function') {
+        try {
+          textureBreathLfo.setPeriodicWave(breathWave)
+        } catch {
+          textureBreathLfo.type = 'sine'
+        }
+      } else {
+        textureBreathLfo.type = 'sine'
+      }
       textureBreathLfo.frequency.value = descent.breathHz
 
       const textureBreathDepth = ctx.createGain()
@@ -198,6 +211,21 @@ export function createNeuroSoundEngine({
       textureBreathLfo.connect(textureBreathDepth)
       textureBreathDepth.connect(textureBreathVca.gain)
       textureBreathLfo.start(ctx.currentTime)
+
+      // Subtle coupled phase-locked AM shimmer on textures so noise-forward beds also entrain on speakers
+      const textureAmVca = ctx.createGain()
+      textureAmVca.gain.value = 1 - descent.amDepth * 0.24
+
+      const textureAmLfo = ctx.createOscillator()
+      textureAmLfo.type = 'sine'
+      textureAmLfo.frequency.value = clamp(descent.modHz, 0.5, 16)
+
+      const textureAmDepth = ctx.createGain()
+      textureAmDepth.gain.value = descent.amDepth * 0.24
+
+      textureAmLfo.connect(textureAmDepth)
+      textureAmDepth.connect(textureAmVca.gain)
+      textureAmLfo.start(ctx.currentTime)
 
       const ambientGateGain = ctx.createGain()
       ambientGateGain.gain.value = 1
@@ -241,7 +269,8 @@ export function createNeuroSoundEngine({
 
       textureBus.connect(masterWarmthFilter)
       masterWarmthFilter.connect(textureBreathVca)
-      textureBreathVca.connect(ambientGateGain)
+      textureBreathVca.connect(textureAmVca)
+      textureAmVca.connect(ambientGateGain)
 
       ambientGateGain.connect(masterGain)
       masterGain.connect(busOutput)
@@ -269,6 +298,9 @@ export function createNeuroSoundEngine({
         textureBreathVca,
         textureBreathLfo,
         textureBreathDepth,
+        textureAmVca,
+        textureAmLfo,
+        textureAmDepth,
         ambientGateGain,
         masterGain,
         cueBloom,
@@ -305,6 +337,13 @@ export function createNeuroSoundEngine({
     const texBreathAmp = breathOn ? clamp(descent.breathDepth * 0.28, 0, 0.12) : 0
     rampParam(g.textureBreathVca.gain, 1 - texBreathAmp, ramp, now)
     rampParam(g.textureBreathDepth.gain, texBreathAmp, ramp, now)
+
+    const texAmAmp = clamp(descent.amDepth * 0.26, 0, 0.12)
+    rampParam(g.textureAmLfo.frequency, clamp(descent.modHz, 0.5, 16), ramp, now)
+    rampParam(g.textureAmVca.gain, 1 - texAmAmp, ramp, now)
+    rampParam(g.textureAmDepth.gain, texAmAmp, ramp, now)
+
+    g.cueBloom.setWarmth(descent.cueBloomCutoffHz, ramp)
 
     g.pad.setDescent(
       {

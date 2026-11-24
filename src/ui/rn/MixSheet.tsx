@@ -1,8 +1,17 @@
 import { useRef } from 'react'
-import { PanResponder, StyleSheet, Text, View } from 'react-native'
+import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native'
 import { LAYERS, normalizeBand, type LayerId, type Mix, type SleepBandId } from '@/core/sound/catalog'
+import { DEFAULT_HARMONIC_KEY, HARMONIC_KEYS, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Button, Segmented, Sheet, Slider } from './controls'
+
+const KEY_CHIPS: { id: HarmonicKeyId; short: string }[] = [
+  { id: 'd-dorian', short: 'D Dor' },
+  { id: 'f-lydian', short: 'F Lyd' },
+  { id: 'c-maj9', short: 'C Maj9' },
+  { id: 'g-min9', short: 'G Min9' },
+  { id: 'a-min9', short: 'A Min9' },
+]
 
 const TONE_OPTIONS: { value: SleepBandId | 'off'; label: string }[] = [
   { value: 'off', label: 'Off' },
@@ -95,6 +104,7 @@ export function MixSheet({
   const activeBand = normalizeBand(mix.band)
   const toneValue: SleepBandId | 'off' = activeBand && mix.bandGain > 0.02 ? activeBand : 'off'
   const padGain = mix.padGain ?? 0
+  const activeKey: HarmonicKeyId = mix.harmonicKey ?? DEFAULT_HARMONIC_KEY
 
   const setLayer = (id: LayerId, v: number) => {
     onChange({ ...mix, layers: { ...mix.layers, [id]: v } })
@@ -102,6 +112,15 @@ export function MixSheet({
 
   const setPad = (v: number) => {
     onChange({ ...mix, padGain: v })
+  }
+
+  const setKey = (keyId: HarmonicKeyId) => {
+    onChange({
+      ...mix,
+      harmonicKey: keyId,
+      carrier: HARMONIC_KEYS[keyId].rootHz,
+      padGain: padGain > 0.02 ? padGain : 0.48,
+    })
   }
 
   const setTone = (next: SleepBandId | 'off') => {
@@ -140,6 +159,32 @@ export function MixSheet({
           </Text>
         </View>
         <Slider value={padGain} onChange={setPad} label="Harmonic pad level" />
+      </View>
+
+      <View style={styles.toneSection}>
+        <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Harmonic key</Text>
+        <View style={styles.keyRow}>
+          {KEY_CHIPS.map((k) => {
+            const active = activeKey === k.id
+            return (
+              <Pressable
+                key={k.id}
+                onPress={() => setKey(k.id)}
+                style={[
+                  styles.keyChip,
+                  {
+                    backgroundColor: active ? color.accentWash : color.surface2,
+                    borderColor: active ? color.accentDim : color.line,
+                  },
+                ]}
+              >
+                <Text style={[styles.keyText, { color: active ? color.accent : color.ink2 }]}>
+                  {k.short}
+                </Text>
+              </Pressable>
+            )
+          })}
+        </View>
       </View>
 
       <View style={styles.toneSection}>
@@ -213,5 +258,21 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12.5,
     fontWeight: '500',
+  },
+  keyRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  keyChip: {
+    flex: 1,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keyText: {
+    fontSize: 11.5,
+    fontWeight: '600',
   },
 })

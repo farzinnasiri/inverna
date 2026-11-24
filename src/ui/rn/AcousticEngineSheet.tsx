@@ -119,6 +119,13 @@ export function AcousticEngineSheet({
 
   const keyMeta = harmonicKeyMeta(harmonicKey)
   const breathSec = (1 / Math.max(0.05, descent.breathHz)).toFixed(1)
+  const trackingLine = descent.autoActive
+    ? descent.minutesToBed !== null && descent.minutesToBed > 0
+      ? `Live bedtime arc · ${descent.minutesToBed}m to lights out`
+      : 'Live bedtime arc · active now'
+    : autoDescent
+      ? 'Midpoint preview · auto-descends 60m before bed'
+      : 'Static midpoint · automatic bedtime descent paused'
 
   const handleDepth = (next: ModulationDepth) => {
     if (hapticsOn) haptics.play('light')
@@ -158,6 +165,9 @@ export function AcousticEngineSheet({
 
         {/* Live 60-minute Iso-descent curve + telemetry */}
         <GlassSurface variant="card" radius={20} style={styles.card}>
+          <Text style={[styles.trackStatus, { color: descent.autoActive ? color.accent : color.ink3 }]}>
+            {trackingLine}
+          </Text>
           <DescentCurveChart
             preset={preset}
             descent={descent}
@@ -240,19 +250,19 @@ export function AcousticEngineSheet({
           <View style={styles.pillar}>
             <Activity size={13} strokeWidth={1.7} color={color.accent} />
             <Text style={[styles.pillarText, { color: color.ink3 }]}>
-              Amplitude modulation drives cortical phase-locking without harsh sine buzz.
+              Iso-principle 60m descent pairs phase-locked AM modulation with gradual warmth roll-off.
             </Text>
           </View>
           <View style={styles.pillar}>
             <Waves size={13} strokeWidth={1.7} color={color.accent} />
             <Text style={[styles.pillarText, { color: color.ink3 }]}>
-              0.1 Hz swells mirror calm 6-breath/min baroreflex resonance over a 1/f noise floor.
+              Asymmetric 0.1 Hz swells (4s rise / 6s release) mirror calm baroreflex resonance over a 1/f floor.
             </Text>
           </View>
           <View style={styles.pillar}>
             <Sparkles size={13} strokeWidth={1.7} color={color.accent} />
             <Text style={[styles.pillarText, { color: color.ink3 }]}>
-              Synthesized live on your device in native C++ audio. Zero files, zero cloud.
+              Synthesized live on-device in native C++ audio. Zero audio files, zero cloud.
             </Text>
           </View>
         </View>
@@ -295,8 +305,14 @@ const styles = StyleSheet.create({
     lineHeight: 18.5,
   },
   card: {
-    paddingTop: 8,
+    paddingTop: 10,
     overflow: 'hidden',
+  },
+  trackStatus: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    paddingHorizontal: 14,
+    marginBottom: 2,
   },
   chartWrap: {
     paddingHorizontal: 10,

@@ -16,10 +16,10 @@ import { Button, HoldButton, LightSlider, Segmented, Sheet, Toggle } from './con
 import { GlassSurface } from './Glass'
 
 const WIND_DURATIONS = [
-  { value: 10, label: '10m' },
   { value: 15, label: '15m' },
-  { value: 20, label: '20m' },
   { value: 30, label: '30m' },
+  { value: 45, label: '45m' },
+  { value: 60, label: '60m' },
 ] as const
 
 export function NightSheet() {
@@ -139,9 +139,9 @@ export function NightSheet() {
           )}
 
           <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
-            <Text style={[styles.rowLabel, { color: color.ink }]}>Warm 45m before bed</Text>
+            <Text style={[styles.rowLabel, { color: color.ink }]}>Warm 60m before bed</Text>
             <Toggle
-              label="Warm 45 minutes before bed"
+              label="Warm 60 minutes before bed"
               checked={followBedtime}
               onChange={(v) => set({ followBedtime: v })}
             />

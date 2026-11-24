@@ -1,5 +1,6 @@
 import type { LayerId } from '@/core/sound/catalog'
 import type { NoiseBufferBank } from './buffers'
+import { createAsymmetricBreathWave } from './pad'
 import { clamp, rampParam, safeDisconnect, safeStop } from './params'
 import type {
   AudioBufferLike,
@@ -238,12 +239,24 @@ function createWavesLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destinat
   const foamGain = ctx.createGain()
   foamGain.gain.value = 0.34
 
-  // Shared surf lowpass and VCA paced near 0.10 Hz (10s cardiorespiratory breath resonance) + slow 13.7s swell
+  // Shared surf lowpass and VCA paced at asymmetric 0.10 Hz (~4s rise / ~6s release breath) + slow 13.7s swell
   const surfFilter = createFilter(ctx, 'lowpass', 600, 0.7)
   const surfVca = ctx.createGain()
   surfVca.gain.value = 0.55
 
-  const lfo1 = createLfo(ctx, 0.1, 0)
+  const lfo1 = ctx.createOscillator()
+  lfo1.frequency.value = 0.1
+  const breathWave = createAsymmetricBreathWave(ctx)
+  if (breathWave && typeof lfo1.setPeriodicWave === 'function') {
+    try {
+      lfo1.setPeriodicWave(breathWave)
+    } catch {
+      lfo1.type = 'sine'
+    }
+  } else {
+    lfo1.type = 'sine'
+  }
+  lfo1.start(ctx.currentTime)
   const lfo1FreqDepth = ctx.createGain()
   lfo1FreqDepth.gain.value = 250
   const lfo1GainDepth = ctx.createGain()

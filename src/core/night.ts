@@ -16,7 +16,7 @@ export interface Schedule {
   enabled: boolean
   /** "HH:MM", 24h. */
   bedtime: string
-  /** Minutes before bedtime when dimming begins. Fixed at 45 in v2 UI. */
+  /** Minutes before bedtime when dimming and acoustic descent begin (60m = 1 hour). */
   leadMinutes: number
   /** 0 = Sunday … 6 = Saturday. */
   days: number[]
@@ -25,7 +25,7 @@ export interface Schedule {
 export const DEFAULT_SCHEDULE: Schedule = {
   enabled: true,
   bedtime: '23:00',
-  leadMinutes: 45,
+  leadMinutes: 60,
   days: [0, 1, 2, 3, 4, 5, 6],
 }
 

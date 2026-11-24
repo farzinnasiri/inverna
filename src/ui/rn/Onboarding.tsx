@@ -20,7 +20,7 @@ import {
   Waves,
   Wind,
 } from 'lucide-react-native'
-import { PRESETS } from '@/core/sound/catalog'
+import { DEFAULT_PRESET_ID, PRESETS } from '@/core/sound/catalog'
 import { haptics, sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useNav } from '@/ui/state/nav'
@@ -163,6 +163,7 @@ export function Onboarding() {
 
   const schedule = useSettings((s) => s.schedule)
   const light = useSettings((s) => s.light)
+  const sessionPreset = useSettings((s) => s.sessionPreset)
   const hapticsOn = useSettings((s) => s.haptics)
   const sfxOn = useSettings((s) => s.sfx)
   const set = useSettings((s) => s.set)
@@ -301,7 +302,7 @@ export function Onboarding() {
                       When do you turn in?
                     </Text>
                     <Text style={[styles.subtitle, { color: color.ink2 }]}>
-                      Lull warms its palette and slows game pace 45 minutes before bed. You can adjust this anytime.
+                      Lull warms its palette and begins its acoustic descent one hour before bed. You can adjust this anytime.
                     </Text>
                   </View>
 
@@ -390,6 +391,7 @@ export function Onboarding() {
                   <View style={styles.soundList}>
                     {PRESETS.map((p) => {
                       const active = playing && presetId === p.id
+                      const selected = active || (!playing && (sessionPreset ?? DEFAULT_PRESET_ID) === p.id)
                       return (
                         <Pressable
                           key={p.id}
@@ -403,22 +405,22 @@ export function Onboarding() {
                             }
                           }}
                         >
-                          <GlassSurface variant="card" radius={18} accent={active} interactive style={styles.soundRow}>
+                          <GlassSurface variant="card" radius={18} accent={selected} interactive style={styles.soundRow}>
                             <View style={styles.soundRowLeft}>
                               <View
                                 style={[
                                   styles.soundIconWrap,
                                   {
-                                    backgroundColor: active
+                                    backgroundColor: selected
                                       ? color.accentWash
                                       : 'rgba(255,255,255,0.05)',
                                   },
                                 ]}
                               >
-                                <PresetGlyph id={p.id} color={active ? color.accent : color.ink2} />
+                                <PresetGlyph id={p.id} color={selected ? color.accent : color.ink2} />
                               </View>
                               <View style={{ flex: 1 }}>
-                                <Text style={[styles.soundName, { color: active ? color.ink : color.ink2 }]}>
+                                <Text style={[styles.soundName, { color: selected ? color.ink : color.ink2 }]}>
                                   {p.name}
                                 </Text>
                                 <Text style={[styles.soundHint, { color: color.ink3 }]} numberOfLines={1}>
@@ -426,25 +428,25 @@ export function Onboarding() {
                                 </Text>
                               </View>
                             </View>
-                            {p.badge ? (
+                            {active || p.badge ? (
                               <View
                                 style={{
                                   paddingHorizontal: 8,
                                   paddingVertical: 3,
                                   borderRadius: 999,
                                   borderWidth: 1,
-                                  borderColor: active ? color.accentDim : 'rgba(255,255,255,0.12)',
-                                  backgroundColor: active ? color.accentWash : 'rgba(255,255,255,0.04)',
+                                  borderColor: selected ? color.accentDim : 'rgba(255,255,255,0.12)',
+                                  backgroundColor: selected ? color.accentWash : 'rgba(255,255,255,0.04)',
                                 }}
                               >
                                 <Text
                                   style={{
                                     fontSize: 10.5,
                                     fontWeight: '600',
-                                    color: active ? color.accent : color.ink3,
+                                    color: selected ? color.accent : color.ink3,
                                   }}
                                 >
-                                  Default
+                                  {active ? 'Playing' : 'Preview'}
                                 </Text>
                               </View>
                             ) : null}
