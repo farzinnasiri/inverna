@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Easing,
@@ -7,6 +7,7 @@ import {
   Text,
   View,
   type LayoutChangeEvent,
+  type PanResponderGestureState,
 } from 'react-native'
 import { RotateCcw, Undo2 } from 'lucide-react-native'
 import {
@@ -21,8 +22,8 @@ import {
 } from '@/core/games/kindle/engine'
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { Button, IconButton } from '@/ui/rn/controls'
+import { GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
 
 interface KindleSave {
@@ -40,6 +41,8 @@ interface RenderTile {
   kind: 'normal' | 'new' | 'merged' | 'source' | 'extinguished'
 }
 
+const BOARD_INSET = 8
+const TILE_RADIUS = radius.lg - BOARD_INSET - 1
 const SLOTS = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => i)
 const MILESTONE_DURATION_MS = 3200
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
@@ -337,6 +340,7 @@ function KindleTileView({
           {
             backgroundColor: palette.bg,
             borderColor: palette.border,
+            borderCurve: 'continuous',
             opacity,
             transform: [{ scale }],
           },
@@ -363,21 +367,6 @@ function KindleTileView({
   )
 }
 
-function Icon({
-  as,
-  size,
-  strokeWidth = 1.6,
-  color,
-}: {
-  as: object
-  size: number
-  strokeWidth?: number
-  color: string
-}) {
-  const Comp = as as ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
-  return <Comp size={size} strokeWidth={strokeWidth} color={color} />
-}
-
 export function KindleScreen({ onExit }: GameScreenProps) {
   const { color } = useTokenColors()
   const calm = useCalm()
@@ -396,7 +385,7 @@ export function KindleScreen({ onExit }: GameScreenProps) {
 
   const [paused, setPaused] = useState(false)
   const [milestoneNotice, setMilestoneNotice] = useState(false)
-  const [boardSize, setBoardSize] = useState(320)
+  const [boardSize, setBoardSize] = useState(0)
 
   const milestoneTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const stateRef = useRef(state)
@@ -517,36 +506,26 @@ export function KindleScreen({ onExit }: GameScreenProps) {
   doMoveRef.current = doMove
   const swipedRef = useRef(false)
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8,
+  const [panResponder] = useState(() => {
+    const swipe = (_: unknown, g: PanResponderGestureState) => {
+      const ax = Math.abs(g.dx)
+      const ay = Math.abs(g.dy)
+      if (swipedRef.current || Math.max(ax, ay) <= 22) return
+
+      swipedRef.current = true
+      const dir: Direction = ax > ay ? (g.dx > 0 ? 'right' : 'left') : g.dy > 0 ? 'down' : 'up'
+      doMoveRef.current(dir)
+    }
+
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => !pausedRef.current,
       onPanResponderGrant: () => {
         swipedRef.current = false
       },
-      onPanResponderMove: (_, g) => {
-        if (swipedRef.current) return
-        const ax = Math.abs(g.dx)
-        const ay = Math.abs(g.dy)
-        if (Math.max(ax, ay) >= 28) {
-          swipedRef.current = true
-          const dir: Direction =
-            ax > ay ? (g.dx > 0 ? 'right' : 'left') : g.dy > 0 ? 'down' : 'up'
-          doMoveRef.current(dir)
-        }
-      },
-      onPanResponderRelease: (_, g) => {
-        if (swipedRef.current) return
-        const ax = Math.abs(g.dx)
-        const ay = Math.abs(g.dy)
-        if (Math.max(ax, ay) >= 20) {
-          const dir: Direction =
-            ax > ay ? (g.dx > 0 ? 'right' : 'left') : g.dy > 0 ? 'down' : 'up'
-          doMoveRef.current(dir)
-        }
-      },
-    }),
-  ).current
+      onPanResponderMove: swipe,
+      onPanResponderRelease: swipe,
+    })
+  })
 
   useKeys(
     {
@@ -632,14 +611,12 @@ export function KindleScreen({ onExit }: GameScreenProps) {
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    const next = Math.floor(Math.min(width, height, 392))
-    if (next > 80) setBoardSize(next)
+    setBoardSize(Math.floor(Math.min(width, height)))
   }, [])
 
-  const gap = Math.max(8, Math.min(10, Math.round(boardSize * 0.025)))
-  const cellSize = (boardSize - gap * (GRID_SIZE - 1)) / GRID_SIZE
-
-  const undoCount = state.history.length
+  const trackSize = boardSize - 2 * (BOARD_INSET + 1)
+  const gap = Math.max(6, Math.min(10, Math.round(trackSize * 0.025)))
+  const cellSize = (trackSize - gap * (GRID_SIZE - 1)) / GRID_SIZE
 
   return (
     <GameShell
@@ -655,116 +632,82 @@ export function KindleScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={HOW_TO}
       controls={
-        <View style={styles.controlsWrap}>
-          {state.stuck ? (
-            <View
-              style={[
-                styles.stuckBar,
-                { backgroundColor: color.surface1, borderColor: color.line },
-              ]}
-            >
-              <Text style={[styles.stuckLabel, { color: color.ink3 }]}>No moves left</Text>
-              <View style={styles.stuckActions}>
-                <Button variant="primary" size="sm" onPress={doMakeRoom}>
-                  Make room
-                </Button>
-                <Button
-                  variant="quiet"
-                  size="sm"
-                  onPress={doUndo}
-                  disabled={undoCount === 0}
-                  accessibilityLabel={undoCount > 0 ? `Undo (${undoCount} available)` : 'Undo'}
-                >
-                  <Icon as={Undo2} size={15} color={color.ink} />
-                  <Text style={[styles.actionBtnText, { color: color.ink }]}>Undo</Text>
-                </Button>
-                <Button variant="ghost" size="sm" onPress={doRestart}>
-                  <Icon as={RotateCcw} size={15} color={color.ink2} />
-                  <Text style={[styles.actionBtnText, { color: color.ink2 }]}>New</Text>
-                </Button>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.normalBar}>
-              <View style={styles.undoGroup}>
-                <IconButton
-                  label={undoCount > 0 ? `Undo (${undoCount} available)` : 'Undo'}
-                  onPress={doUndo}
-                  disabled={undoCount === 0}
-                >
-                  <Icon as={Undo2} size={20} strokeWidth={1.5} color={color.ink2} />
-                </IconButton>
-                {undoCount > 0 ? (
-                  <Text style={[styles.undoCount, { color: color.ink3 }]}>{undoCount}</Text>
-                ) : null}
-              </View>
-              <IconButton label="New board" onPress={doRestart}>
-                <Icon as={RotateCcw} size={18} strokeWidth={1.5} color={color.ink2} />
-              </IconButton>
-            </View>
+        <GameControlBar>
+          <GameActionButton
+            icon={<Undo2 size={16} strokeWidth={1.6} color={color.ink2} />}
+            label="Undo"
+            disabled={paused || state.history.length === 0}
+            onPress={doUndo}
+          />
+          {state.stuck && (
+            <GameActionButton label="Make room" active disabled={paused} onPress={doMakeRoom} />
           )}
-        </View>
+          <GameActionButton
+            icon={<RotateCcw size={16} strokeWidth={1.6} color={color.ink2} />}
+            label="New"
+            disabled={paused}
+            onPress={doRestart}
+          />
+        </GameControlBar>
       }
     >
       <View style={styles.stage} onLayout={handleStageLayout}>
-        <View
-          {...panResponder.panHandlers}
-          accessible
-          accessibilityLabel={`Kindle 4 by 4 board, score ${state.score}, highest tile ${state.bestTile}`}
-          style={[
-            styles.board,
-            {
-              width: boardSize,
-              height: boardSize,
-              backgroundColor: color.bg,
-            },
-          ]}
-        >
-          {SLOTS.map((slot) => {
-            const r = Math.floor(slot / GRID_SIZE)
-            const c = slot % GRID_SIZE
-            return (
-              <View
-                key={slot}
-                pointerEvents="none"
-                style={[
-                  styles.slot,
-                  {
-                    width: cellSize,
-                    height: cellSize,
-                    left: c * (cellSize + gap),
-                    top: r * (cellSize + gap),
-                    backgroundColor: color.surface1,
-                    borderColor: color.line,
-                  },
-                ]}
-              />
-            )
-          })}
-
-          {renderTiles.map((tile) => (
-            <KindleTileView
-              key={tile.key}
-              tile={tile}
-              cellSize={cellSize}
-              gap={gap}
-              boardSize={boardSize}
-              reduceMotion={reduceMotion}
-            />
-          ))}
-
-          {milestoneNotice ? (
+        {cellSize > 0 && (
+          <GlassSurface variant="card" radius={radius.lg} style={styles.chassis}>
             <View
-              pointerEvents="none"
-              style={[
-                styles.notice,
-                { backgroundColor: color.surface2, borderColor: color.line },
-              ]}
+              {...panResponder.panHandlers}
+              collapsable={false}
+              accessible
+              accessibilityLabel={`Kindle 4 by 4 board, score ${state.score}, highest tile ${state.bestTile}${state.stuck ? ', no moves left' : ''}`}
+              style={[styles.board, { width: trackSize, height: trackSize }]}
             >
-              <Text style={[styles.noticeText, { color: color.ink }]}>2048 · keep going</Text>
+              {SLOTS.map((slot) => {
+                const r = Math.floor(slot / GRID_SIZE)
+                const c = slot % GRID_SIZE
+                return (
+                  <View
+                    key={slot}
+                    pointerEvents="none"
+                    style={[
+                      styles.slot,
+                      {
+                        width: cellSize,
+                        height: cellSize,
+                        left: c * (cellSize + gap),
+                        top: r * (cellSize + gap),
+                        backgroundColor: color.surface1,
+                        borderColor: color.line,
+                      },
+                    ]}
+                  />
+                )
+              })}
+
+              {renderTiles.map((tile) => (
+                <KindleTileView
+                  key={`${save.plays}-${tile.key}`}
+                  tile={tile}
+                  cellSize={cellSize}
+                  gap={gap}
+                  boardSize={trackSize}
+                  reduceMotion={reduceMotion}
+                />
+              ))}
+
+              {milestoneNotice ? (
+                <View
+                  pointerEvents="none"
+                  style={[
+                    styles.notice,
+                    { backgroundColor: color.surface2, borderColor: color.line },
+                  ]}
+                >
+                  <Text style={[styles.noticeText, { color: color.ink }]}>2048 · keep going</Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
+          </GlassSurface>
+        )}
       </View>
     </GameShell>
   )
@@ -777,12 +720,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  chassis: {
+    padding: BOARD_INSET,
+  },
   board: {
     position: 'relative',
   },
   slot: {
     position: 'absolute',
-    borderRadius: radius.sm,
+    borderRadius: TILE_RADIUS,
+    borderCurve: 'continuous',
     borderWidth: 1,
   },
   tileWrap: {
@@ -792,7 +739,8 @@ const styles = StyleSheet.create({
   },
   tileInner: {
     flex: 1,
-    borderRadius: radius.sm,
+    borderRadius: TILE_RADIUS,
+    borderCurve: 'continuous',
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -825,51 +773,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.2,
-  },
-  controlsWrap: {
-    width: '100%',
-    maxWidth: 392,
-    alignSelf: 'center',
-  },
-  normalBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 44,
-    gap: 16,
-  },
-  undoGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  undoCount: {
-    minWidth: 16,
-    fontSize: 13,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
-  },
-  stuckBar: {
-    padding: 12,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    gap: 10,
-  },
-  stuckLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 0.3,
-  },
-  stuckActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  actionBtnText: {
-    fontSize: 14,
-    fontWeight: '500',
   },
 })

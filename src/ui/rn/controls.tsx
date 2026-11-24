@@ -13,7 +13,9 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { BlurView } from 'expo-blur'
 import { Check, Sun } from 'lucide-react-native'
+import { Platform } from 'react-native'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Layer } from './Layer'
 
@@ -44,9 +46,14 @@ export function Button({
 }) {
   const { color } = useTokenColors()
   const isSm = size === 'sm'
-  const bg = variant === 'primary' ? color.accent : variant === 'quiet' ? color.surface2 : 'transparent'
+  const bg =
+    variant === 'primary'
+      ? color.accent
+      : variant === 'quiet'
+        ? 'rgba(24, 26, 33, 0.72)'
+        : 'transparent'
   const fg = variant === 'primary' ? color.accentInk : variant === 'quiet' ? color.ink : color.ink2
-  const borderColor = variant === 'quiet' ? color.line : 'transparent'
+  const borderColor = variant === 'quiet' ? 'rgba(255, 255, 255, 0.14)' : 'transparent'
 
   return (
     <Pressable
@@ -57,14 +64,15 @@ export function Button({
       style={({ pressed }) => [
         styles.btn,
         {
-          height: isSm ? 40 : 48,
+          height: isSm ? 40 : 50,
           paddingHorizontal: isSm ? 16 : 22,
-          borderRadius: isSm ? 999 : 14,
+          borderRadius: isSm ? 20 : 16,
+          borderCurve: 'continuous',
           backgroundColor: bg,
           borderWidth: variant === 'quiet' ? 1 : 0,
           borderColor,
           width: block ? '100%' : undefined,
-          opacity: disabled ? 0.35 : pressed ? 0.85 : 1,
+          opacity: disabled ? 0.35 : pressed ? 0.86 : 1,
           transform: [{ scale: pressed && !disabled ? 0.97 : 1 }],
         },
         style,
@@ -444,7 +452,6 @@ export function Sheet({
   children: ReactNode
   label: string
 }) {
-  const { color } = useTokenColors()
   const insets = useSafeAreaInsets()
   const translateY = useRef(new Animated.Value(360)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
@@ -498,15 +505,18 @@ export function Sheet({
           style={[
             styles.sheetCard,
             {
-              backgroundColor: color.surface1,
-              borderColor: color.lineStrong,
-              borderTopColor: 'rgba(220, 224, 230, 0.14)',
+              backgroundColor: Platform.OS === 'ios' ? 'rgba(20, 22, 28, 0.72)' : 'rgba(18, 20, 25, 0.97)',
+              borderColor: 'rgba(255, 255, 255, 0.15)',
+              borderCurve: 'continuous',
               paddingBottom: Math.max(insets.bottom, 16) + 12,
               transform: [{ translateY }],
             },
           ]}
         >
-          <View style={[styles.sheetGrab, { backgroundColor: color.ink4 }]} />
+          {Platform.OS === 'ios' && (
+            <BlurView intensity={64} tint="dark" style={StyleSheet.absoluteFill} />
+          )}
+          <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.24)' }]} />
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
             {children}
           </ScrollView>
@@ -655,9 +665,12 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: FRAME_MAX_WIDTH,
     maxHeight: '85%',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    overflow: 'hidden',
     paddingTop: 10,
     paddingHorizontal: 22,
   },

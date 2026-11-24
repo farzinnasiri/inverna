@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Bell, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native'
-import { formatBedtimeShort, formatHHMM, parseHHMM } from '@/core/night'
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native'
+import { formatBedtimeShort } from '@/core/night'
 import { kv } from '@/core/storage'
 import { notifications } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
@@ -10,7 +10,9 @@ import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
+import { BedtimeWheel } from './BedtimeWheel'
 import { Button, HoldButton, IconButton, LightSlider, Sheet, Toggle } from './controls'
+import { GlassSurface } from './Glass'
 
 export function NightSheet() {
   const { color } = useTokenColors()
@@ -37,12 +39,6 @@ export function NightSheet() {
       setEditingBedtime(false)
       setReminderStatus(null)
     }, 240)
-  }
-
-  const nudgeBedtime = (deltaMinutes: number) => {
-    const { h, m } = parseHHMM(schedule.bedtime)
-    const total = (h * 60 + m + deltaMinutes + 1440) % 1440
-    setSchedule({ bedtime: formatHHMM(Math.floor(total / 60), total % 60) })
   }
 
   const handleReminder = async () => {
@@ -95,11 +91,11 @@ export function NightSheet() {
           <Text style={[styles.title, { color: color.ink }]}>Night</Text>
 
           <View style={styles.block}>
-            <Text style={[styles.label, { color: color.ink3 }]}>Light</Text>
+            <Text style={[styles.label, { color: color.ink3 }]}>Night light</Text>
             <LightSlider value={light} onChange={(v) => set({ light: v })} />
           </View>
 
-          <View style={[styles.card, { backgroundColor: color.surface2, borderColor: color.line }]}>
+          <GlassSurface variant="card" radius={20} style={styles.card}>
             <Pressable
               onPress={() => setEditingBedtime((e) => !e)}
               style={styles.row}
@@ -107,28 +103,25 @@ export function NightSheet() {
               accessibilityLabel="Bedtime"
             >
               <Text style={[styles.rowLabel, { color: color.ink }]}>Bedtime</Text>
-              <Text style={[styles.bedValue, { color: color.accent }]}>
-                {formatBedtimeShort(schedule.bedtime)}
-              </Text>
+              <View style={styles.bedRight}>
+                <Text style={[styles.bedValue, { color: color.accent }]}>
+                  {formatBedtimeShort(schedule.bedtime)}
+                </Text>
+                {editingBedtime ? (
+                  <ChevronUp size={16} strokeWidth={1.65} color={color.ink3} />
+                ) : (
+                  <ChevronDown size={16} strokeWidth={1.65} color={color.ink3} />
+                )}
+              </View>
             </Pressable>
 
             {editingBedtime && (
-              <View style={[styles.stepperRow, { borderTopColor: color.line }]}>
-                <Button size="sm" onPress={() => nudgeBedtime(-60)} accessibilityLabel="Minus 1 hour">
-                  −1h
-                </Button>
-                <IconButton label="Minus 15 minutes" onPress={() => nudgeBedtime(-15)}>
-                  <Minus size={18} color={color.ink} />
-                </IconButton>
-                <Text style={[styles.stepperTime, { color: color.ink }]}>
-                  {formatBedtimeShort(schedule.bedtime)}
-                </Text>
-                <IconButton label="Plus 15 minutes" onPress={() => nudgeBedtime(15)}>
-                  <Plus size={18} color={color.ink} />
-                </IconButton>
-                <Button size="sm" onPress={() => nudgeBedtime(60)} accessibilityLabel="Plus 1 hour">
-                  +1h
-                </Button>
+              <View style={[styles.wheelWrap, { borderTopColor: color.line }]}>
+                <BedtimeWheel
+                  compact
+                  value={schedule.bedtime}
+                  onChange={(bedtime) => setSchedule({ bedtime })}
+                />
               </View>
             )}
 
@@ -140,32 +133,28 @@ export function NightSheet() {
                 onChange={(v) => set({ followBedtime: v })}
               />
             </View>
-          </View>
+          </GlassSurface>
 
           <Pressable
             onPress={() => setPage('more')}
-            style={({ pressed }) => [
-              styles.moreRow,
-              {
-                backgroundColor: pressed ? color.surface3 : color.surface2,
-                borderColor: color.line,
-              },
-            ]}
+            style={({ pressed }) => [{ opacity: pressed ? 0.84 : 1 }]}
           >
-            <Text style={[styles.rowLabel, { color: color.ink }]}>More</Text>
-            <ChevronRight size={18} strokeWidth={1.6} color={color.ink3} />
+            <GlassSurface variant="card" radius={18} style={styles.moreRow}>
+              <Text style={[styles.rowLabel, { color: color.ink }]}>More</Text>
+              <ChevronRight size={18} strokeWidth={1.65} color={color.ink3} />
+            </GlassSurface>
           </Pressable>
         </View>
       ) : (
         <View style={styles.body}>
           <View style={styles.moreHead}>
             <IconButton label="Back to Night" onPress={() => setPage('main')} style={{ marginLeft: -10 }}>
-              <ChevronLeft size={20} strokeWidth={1.6} color={color.ink2} />
+              <ChevronLeft size={20} strokeWidth={1.65} color={color.ink2} />
             </IconButton>
             <Text style={[styles.title, { color: color.ink }]}>More</Text>
           </View>
 
-          <View style={[styles.card, { backgroundColor: color.surface2, borderColor: color.line }]}>
+          <GlassSurface variant="card" radius={20} style={styles.card}>
             <View style={styles.row}>
               <Text style={[styles.rowLabel, { color: color.ink }]}>Game sounds</Text>
               <Toggle label="Game sounds" checked={sfx} onChange={(v) => set({ sfx: v })} />
@@ -174,10 +163,10 @@ export function NightSheet() {
               <Text style={[styles.rowLabel, { color: color.ink }]}>Haptics</Text>
               <Toggle label="Haptics" checked={haptics} onChange={(v) => set({ haptics: v })} />
             </View>
-          </View>
+          </GlassSurface>
 
           <Button block onPress={() => void handleReminder()}>
-            <Bell size={16} strokeWidth={1.6} color={color.ink2} />
+            <Bell size={16} strokeWidth={1.65} color={color.ink2} />
             <Text style={[styles.btnInlineText, { color: color.ink }]}>
               {reminderStatus ?? 'Bedtime reminder'}
             </Text>
@@ -205,20 +194,18 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   title: {
-    fontSize: 21,
+    fontSize: 22,
     fontWeight: '600',
-    letterSpacing: -0.3,
+    letterSpacing: -0.35,
   },
   block: {
     gap: 8,
   },
   label: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '500',
   },
   card: {
-    borderRadius: 16,
-    borderWidth: 1,
     overflow: 'hidden',
   },
   row: {
@@ -235,32 +222,26 @@ const styles = StyleSheet.create({
     fontSize: 15.5,
     fontWeight: '500',
   },
+  bedRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   bedValue: {
     fontSize: 16,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  wheelWrap: {
+    padding: 12,
     borderTopWidth: 1,
-  },
-  stepperTime: {
-    fontSize: 17,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
   },
   moreRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1,
+    height: 54,
   },
   moreHead: {
     flexDirection: 'row',

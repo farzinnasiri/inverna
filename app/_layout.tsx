@@ -1,4 +1,4 @@
-import 'expo-sqlite/localStorage/install'
+import '@/platform/boot'
 import { useEffect } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 import { Stack } from 'expo-router'
@@ -7,7 +7,6 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { applyTokens } from '@/design/tokens'
-import { bootPlatform } from '@/platform'
 import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
 import { NightSheet } from '@/ui/rn/NightSheet'
 import { Onboarding } from '@/ui/rn/Onboarding'
@@ -16,8 +15,7 @@ import { WindDownSheet } from '@/ui/rn/WindDownSheet'
 import { useSession } from '@/ui/state/session'
 import { useSound } from '@/ui/state/sound'
 
-// Boot storage & initial design tokens synchronously before first render.
-bootPlatform()
+// Initialize design tokens synchronously before first render.
 applyTokens({ warmth: 0, force: true })
 
 export default function RootLayout() {
@@ -59,7 +57,8 @@ export default function RootLayout() {
               options={{
                 headerShown: false,
                 gestureEnabled: false,
-                animation: 'fade',
+                animation: 'fade_from_bottom',
+                animationDuration: 240,
               }}
             />
           </Stack>

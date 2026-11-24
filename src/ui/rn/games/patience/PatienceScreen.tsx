@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   PanResponder,
+  PixelRatio,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
+  type GestureResponderEvent,
   type LayoutChangeEvent,
 } from 'react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
@@ -37,9 +39,9 @@ import {
 } from '@/core/games/patience/engine'
 import { lerpHexOklab } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { Button, IconButton } from '@/ui/rn/controls'
-import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
+import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
+import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
 
 interface PatienceSave {
   version: 1
@@ -52,8 +54,8 @@ interface DragSession {
   cards: readonly Card[]
   originX: number
   originY: number
-  dx: number
-  dy: number
+  offsets: readonly number[]
+  legalTargets: readonly MoveTarget[]
   hoverTarget: MoveTarget | null
 }
 
@@ -64,13 +66,13 @@ type HintSuggestion =
 const BOARD_MAX_WIDTH = 408
 const TOP_ROW_GAP = 12
 const BOARD_PADDING_TOP = 2
-const DRAG_THRESHOLD_PX = 7
+const DRAG_THRESHOLD = 6
 const AUTO_COMPLETE_MS = 110
 const COMPLETION_DELAY_MS = 520
 const HINT_DURATION_MS = 2400
 
-const OXBLOOD_BASE = '#B85A62'
-const WARM_OXBLOOD_TARGET = '#B8724B'
+const OXBLOOD_BASE = '#D78389'
+const WARM_OXBLOOD_TARGET = '#D19168'
 
 const HOW_TO = [
   'Build the four foundations up by suit from Ace to King.',
@@ -113,12 +115,12 @@ function computeColumnOffsets(
   column: readonly Card[],
   availableHeight: number,
   cardHeight: number,
-): { offsets: number[]; faceUpStep: number } {
+): number[] {
   const idealDown = Math.max(5, Math.round(cardHeight * 0.11))
   const idealUp = Math.max(19, Math.round(cardHeight * 0.34))
 
   if (column.length <= 1) {
-    return { offsets: column.length === 1 ? [0] : [], faceUpStep: idealUp }
+    return column.length === 1 ? [0] : []
   }
 
   let downCount = 0
@@ -128,7 +130,7 @@ function computeColumnOffsets(
     else downCount++
   }
 
-  const maxStackSpan = Math.max(48, availableHeight - cardHeight - 4)
+  const maxStackSpan = Math.max(0, availableHeight - cardHeight)
   const idealSpan = downCount * idealDown + upCount * idealUp
 
   let downStep = idealDown
@@ -143,8 +145,8 @@ function computeColumnOffsets(
     const compressedSpan = downCount * downStep + upCount * upStep
     if (compressedSpan > maxStackSpan && compressedSpan > 0) {
       const fineRatio = maxStackSpan / compressedSpan
-      downStep = Math.max(2, downStep * fineRatio)
-      upStep = Math.max(9, upStep * fineRatio)
+      downStep *= fineRatio
+      upStep *= fineRatio
     }
   }
 
@@ -154,7 +156,7 @@ function computeColumnOffsets(
     y += column[i]!.faceUp ? upStep : downStep
     offsets.push(Math.round(y))
   }
-  return { offsets, faceUpStep: Math.round(upStep) }
+  return offsets
 }
 
 /** Pure hint finder: prioritizes foundations, revealing hidden cards, waste plays, then useful stack moves. */
@@ -297,53 +299,6 @@ function SuitPip({
   }
 }
 
-/** Crisp 1.5px Watchmaker action icons rendered via react-native-svg. */
-function UndoIcon({ size, color }: { size: number; color: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M9 14 4 9l5-5"
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  )
-}
-
-function HintIcon({ size, color }: { size: number; color: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M9 18h6M10 22h4"
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  )
-}
-
 function RecycleIcon({ size, color }: { size: number; color: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -414,14 +369,13 @@ function CardFaceContent({
   courtRingColor: string
 }) {
   const label = rankLabel(card.rank)
-  const isTen = card.rank === 10
   const isAce = card.rank === 1
   const isCourt = card.rank >= 11
   const pipColor = cardColor(card.suit) === 'red' ? redColor : inkColor
   const compact = cardWidth < 50
 
-  const rankFontSize = compact ? (isTen ? 11 : 12) : isTen ? 12 : 13.5
-  const smallPipSize = compact ? 9 : 10.5
+  const rankFontSize = compact ? 13 : 15
+  const smallPipSize = compact ? 12 : 13
   const largePipSize = isAce ? (compact ? 21 : 25) : compact ? 17 : 20
   const courtSize = compact ? 22 : 26
   const courtPipSize = compact ? 12 : 14
@@ -435,9 +389,10 @@ function CardFaceContent({
             {
               color: pipColor,
               fontSize: rankFontSize,
-              letterSpacing: isTen ? -0.9 : -0.4,
+              lineHeight: rankFontSize + 1,
             },
           ]}
+          allowFontScaling={false}
           numberOfLines={1}
         >
           {label}
@@ -524,12 +479,20 @@ function InteractiveCard({
   disabled: boolean
   accessibilityLabel: string
   onTap: (source: MoveSource, card: Card) => void
-  onDragStart: (source: MoveSource, cards: readonly Card[], originX: number, originY: number) => void
+  onDragStart: (
+    source: MoveSource,
+    cards: readonly Card[],
+    originX: number,
+    originY: number,
+    dx: number,
+    dy: number,
+  ) => void
   onDragMove: (dx: number, dy: number) => void
   onDragEnd: (dx: number, dy: number, cancelled: boolean) => void
 }) {
   const shakeX = useRef(new Animated.Value(0)).current
   const draggingRef = useRef(false)
+  const startPoint = useRef<{ x: number; y: number } | null>(null)
   const propsRef = useRef({
     card,
     source,
@@ -560,60 +523,74 @@ function InteractiveCard({
       shakeX.setValue(0)
       return
     }
-    Animated.sequence([
+    const shake = Animated.sequence([
       Animated.timing(shakeX, { toValue: -3.5, duration: 55, useNativeDriver: true }),
       Animated.timing(shakeX, { toValue: 3.5, duration: 75, useNativeDriver: true }),
       Animated.timing(shakeX, { toValue: -2, duration: 60, useNativeDriver: true }),
       Animated.timing(shakeX, { toValue: 0, duration: 55, useNativeDriver: true }),
-    ]).start()
+    ])
+    shake.start()
+    return () => shake.stop()
   }, [shaking, reducedMotion, shakeX])
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !propsRef.current.disabled,
-      onMoveShouldSetPanResponder: (_, g) =>
-        !propsRef.current.disabled && Math.hypot(g.dx, g.dy) > 3,
-      onPanResponderTerminationRequest: () => !draggingRef.current,
-      onPanResponderGrant: () => {
+  const [panResponder] = useState(() => {
+    const point = ({ nativeEvent }: GestureResponderEvent) => {
+      const { pageX, pageY } = nativeEvent.changedTouches[0] ?? nativeEvent
+      return { x: pageX, y: pageY }
+    }
+
+    const cancel = () => {
+      startPoint.current = null
+      if (!draggingRef.current) return
+      draggingRef.current = false
+      propsRef.current.onDragEnd(0, 0, true)
+    }
+
+    // Own the touch from its start so a quick move outside a narrow card still drags it.
+    return PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => !propsRef.current.disabled,
+      onPanResponderGrant: (event) => {
+        startPoint.current = point(event)
         draggingRef.current = false
       },
-      onPanResponderMove: (_, g) => {
-        if (propsRef.current.disabled) return
-        if (!draggingRef.current) {
-          if (Math.hypot(g.dx, g.dy) < DRAG_THRESHOLD_PX) return
-          draggingRef.current = true
-          propsRef.current.onDragStart(
-            propsRef.current.source,
-            propsRef.current.cards,
-            propsRef.current.originX,
-            propsRef.current.originY,
-          )
-        }
-        propsRef.current.onDragMove(g.dx, g.dy)
+      onPanResponderStart: (event) => {
+        if (event.nativeEvent.touches.length > 1) cancel()
       },
-      onPanResponderRelease: (_, g) => {
+      onPanResponderMove: (event) => {
+        const start = startPoint.current
+        if (!start || propsRef.current.disabled) return
+        const { x, y } = point(event)
+        const dx = x - start.x
+        const dy = y - start.y
+        if (draggingRef.current) {
+          propsRef.current.onDragMove(dx, dy)
+        } else if (Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
+          draggingRef.current = true
+          const { source, cards, originX, originY, onDragStart } = propsRef.current
+          onDragStart(source, cards, originX, originY, dx, dy)
+        }
+      },
+      onPanResponderRelease: (event) => {
+        const start = startPoint.current
+        startPoint.current = null
+        if (!start) return
+        const { x, y } = point(event)
+        const dx = x - start.x
+        const dy = y - start.y
         if (draggingRef.current) {
           draggingRef.current = false
-          propsRef.current.onDragEnd(g.dx, g.dy, false)
-        } else if (!propsRef.current.disabled) {
+          propsRef.current.onDragEnd(dx, dy, false)
+        } else if (!propsRef.current.disabled && Math.hypot(dx, dy) < DRAG_THRESHOLD) {
           propsRef.current.onTap(propsRef.current.source, propsRef.current.card)
         }
       },
-      onPanResponderTerminate: (_, g) => {
-        if (draggingRef.current) {
-          draggingRef.current = false
-          propsRef.current.onDragEnd(g.dx, g.dy, true)
-        }
-      },
-    }),
-  ).current
+      onPanResponderTerminate: cancel,
+    })
+  })
 
   return (
     <Animated.View
       {...panResponder.panHandlers}
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
       style={[
         styles.cardBase,
         styles.cardStacked,
@@ -623,20 +600,34 @@ function InteractiveCard({
           borderRadius: radius,
           backgroundColor: bgColor,
           borderColor,
+          borderCurve: 'continuous',
+          top: topOffset,
           zIndex,
           opacity: hidden ? 0 : 1,
-          transform: [{ translateX: shakeX }, { translateY: topOffset }],
+          transform: [{ translateX: shakeX }],
         },
       ]}
-      pointerEvents={hidden ? 'none' : 'auto'}
     >
-      <CardFaceContent
-        card={card}
-        cardWidth={cardWidth}
-        inkColor={inkColor}
-        redColor={redColor}
-        courtRingColor={courtRingColor}
-      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        disabled={disabled || hidden}
+        style={styles.cardPressable}
+        onPress={(event) => {
+          // React Native Web can still dispatch a click after the responder handled the pointer.
+          const { detail } = event.nativeEvent as { detail?: number }
+          if (Platform.OS === 'web' && detail) return
+          onTap(source, card)
+        }}
+      >
+        <CardFaceContent
+          card={card}
+          cardWidth={cardWidth}
+          inkColor={inkColor}
+          redColor={redColor}
+          courtRingColor={courtRingColor}
+        />
+      </Pressable>
     </Animated.View>
   )
 }
@@ -646,7 +637,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
   const reducedMotion = useReducedMotion()
-  const windowDims = useWindowDimensions()
+  const { frameWidth, sideMargin, usableHeight, isCompact } = useResponsiveLayout()
 
   const redSuitColor = useMemo(
     () => lerpHexOklab(OXBLOOD_BASE, WARM_OXBLOOD_TARGET, warmth * 0.2),
@@ -670,15 +661,13 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   const [autoCompleting, setAutoCompleting] = useState(false)
   const [showCompletion, setShowCompletion] = useState(() => initialSave.state.solved)
 
-  const [stageDims, setStageDims] = useState(() => ({
-    width: Math.min(BOARD_MAX_WIDTH, Math.max(300, windowDims.width - 28)),
-    height: Math.max(380, windowDims.height - 210),
-  }))
+  const [stageDims, setStageDims] = useState<{ width: number; height: number } | null>(null)
+  const [dragPosition] = useState(() => new Animated.ValueXY())
 
   const stateRef = useRef(state)
   stateRef.current = state
-  const dragRef = useRef(drag)
-  dragRef.current = drag
+  const dragRef = useRef<DragSession | null>(null)
+  const stageDimsRef = useRef(stageDims)
   const selectedRef = useRef(selected)
   selectedRef.current = selected
 
@@ -694,28 +683,43 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
     }
   }, [])
 
+  const clearDrag = useCallback(() => {
+    dragRef.current = null
+    dragPosition.stopAnimation()
+    setDrag(null)
+  }, [dragPosition])
+
+  const handlePauseChange = useCallback((next: boolean) => {
+    if (next) clearDrag()
+    setPaused(next)
+  }, [clearDrag])
+
   const onStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    if (width > 0 && height > 0) {
-      setStageDims((prev) =>
-        Math.abs(prev.width - width) < 1 && Math.abs(prev.height - height) < 1
-          ? prev
-          : { width, height },
-      )
-    }
-  }, [])
+    const prev = stageDimsRef.current
+    if (prev?.width === width && prev.height === height) return
+    const next = { width, height }
+    stageDimsRef.current = next
+    if (dragRef.current) clearDrag()
+    setStageDims(next)
+  }, [clearDrag])
 
-  const boardWidth = Math.min(BOARD_MAX_WIDTH, stageDims.width)
-  const colGap = boardWidth >= 380 ? 5 : 4
-  const cardRadius = boardWidth >= 380 ? 7 : 6
-  const cardWidth = Math.max(36, Math.floor((boardWidth - colGap * (TABLEAU_COLUMNS - 1)) / TABLEAU_COLUMNS))
+  const boardWidth = Math.min(BOARD_MAX_WIDTH, stageDims?.width ?? frameWidth - sideMargin * 2)
+  const stageHeight = stageDims?.height ?? usableHeight - 166
+  const colGap = isCompact ? 4 : 5
+  const cardRadius = isCompact ? 6 : 7
+  const cardWidth = Math.max(0, Math.floor((boardWidth - colGap * (TABLEAU_COLUMNS - 1)) / TABLEAU_COLUMNS))
   const cardHeight = Math.round((cardWidth * 7) / 5)
   const actualBoardWidth = cardWidth * TABLEAU_COLUMNS + colGap * (TABLEAU_COLUMNS - 1)
   const tableauTopY = BOARD_PADDING_TOP + cardHeight + TOP_ROW_GAP
-  const tableauHeight = Math.max(180, stageDims.height - tableauTopY)
+  const tableauHeight = Math.max(0, stageHeight - tableauTopY)
+  const tableauOffsets = useMemo(
+    () => state.tableau.map((column) => computeColumnOffsets(column, tableauHeight, cardHeight)),
+    [state.tableau, tableauHeight, cardHeight],
+  )
 
-  const layoutRef = useRef({ cardWidth, cardHeight, colGap, tableauTopY, tableauHeight })
-  layoutRef.current = { cardWidth, cardHeight, colGap, tableauTopY, tableauHeight }
+  const layoutRef = useRef({ cardWidth, cardHeight, colGap, tableauTopY, tableauOffsets })
+  layoutRef.current = { cardWidth, cardHeight, colGap, tableauTopY, tableauOffsets }
 
   const clearHint = useCallback(() => {
     if (hintTimerRef.current) {
@@ -817,7 +821,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   /* --- Core actions ------------------------------------------------------- */
 
   const handleDrawStock = useCallback(() => {
-    if (paused || autoCompleting || stateRef.current.solved) return
+    if (paused || autoCompleting || dragRef.current || stateRef.current.solved) return
     const prev = stateRef.current
     const wasRecycling = prev.stock.length === 0 && prev.waste.length > 0
     const next = drawStock(prev)
@@ -832,7 +836,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   }, [paused, autoCompleting, persistState, cue, haptic, clearHint])
 
   const handleUndo = useCallback(() => {
-    if (paused || autoCompleting || stateRef.current.solved) return
+    if (paused || autoCompleting || dragRef.current || stateRef.current.solved) return
     const prev = stateRef.current
     if (prev.history.length === 0) return
     const next = undoPatience(prev)
@@ -846,7 +850,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   }, [paused, autoCompleting, persistState, cue, haptic, clearHint])
 
   const handleHint = useCallback(() => {
-    if (paused || autoCompleting || stateRef.current.solved) return
+    if (paused || autoCompleting || dragRef.current || stateRef.current.solved) return
     const suggestion = findHint(stateRef.current)
     setSelected(null)
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
@@ -869,22 +873,22 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
     setAutoCompleting(false)
     setShowCompletion(false)
     setSelected(null)
-    setDrag(null)
+    clearDrag()
     const next = restartDeal(stateRef.current)
     stateRef.current = next
     setState(next)
     persistState(next)
     cue('undo', 0.7)
     haptic('light')
-  }, [persistState, cue, haptic, clearHint])
+  }, [persistState, cue, haptic, clearHint, clearDrag])
 
   const handleNewDeal = useCallback(() => {
+    if (dragRef.current) return
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
     clearHint()
     setAutoCompleting(false)
     setShowCompletion(false)
     setSelected(null)
-    setDrag(null)
     const nextSeed = ((Date.now() >>> 0) ^ (stateRef.current.seed * 1664525 + 1013904223)) >>> 0
     const next = newDeal(nextSeed, calm)
     stateRef.current = next
@@ -895,10 +899,9 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   }, [calm, persistState, cue, haptic, clearHint])
 
   const handleStartAutoComplete = useCallback(() => {
-    if (paused || autoCompleting || !canAutoComplete(stateRef.current)) return
+    if (paused || autoCompleting || dragRef.current || !canAutoComplete(stateRef.current)) return
     clearHint()
     setSelected(null)
-    setDrag(null)
     setAutoCompleting(true)
     cue('tap', 0.6)
     haptic('light')
@@ -913,6 +916,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
       h: handleHint,
       H: handleHint,
       Escape: () => {
+        clearDrag()
         setSelected(null)
         clearHint()
       },
@@ -924,24 +928,20 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   /* --- Board-local hit-testing for drag-and-drop -------------------------- */
 
   const findDropTargetForDrag = useCallback(
-    (source: MoveSource, originX: number, originY: number, dx: number, dy: number): MoveTarget | null => {
-      const current = stateRef.current
-      const legal = getLegalTargets(current, source)
-      if (legal.length === 0) return null
-
-      const { cardWidth: cw, cardHeight: ch, colGap: gap, tableauTopY: ty, tableauHeight: th } =
+    (session: DragSession, dx: number, dy: number): MoveTarget | null => {
+      const { cardWidth: cw, cardHeight: ch, colGap: gap, tableauTopY: ty, tableauOffsets: offsets } =
         layoutRef.current
-      const cardLeft = originX + dx
-      const cardTop = originY + dy
+      const cardLeft = session.originX + dx
+      const cardTop = session.originY + dy
       const cardRight = cardLeft + cw
       const cardBottom = cardTop + ch
 
-      const padX = 10
-      const padY = 16
+      const padX = gap / 2
+      const padY = 12
       let bestTarget: MoveTarget | null = null
       let bestArea = 0
 
-      for (const target of legal) {
+      for (const target of session.legalTargets) {
         let left: number
         let top: number
         let right: number
@@ -956,7 +956,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
           left = target.col * (cw + gap)
           top = ty
           right = left + cw
-          bottom = top + th
+          bottom = top + (offsets[target.col]?.at(-1) ?? 0) + ch
         }
 
         const overlapW = Math.min(cardRight, right + padX) - Math.max(cardLeft, left - padX)
@@ -979,7 +979,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
 
   const handleCardTap = useCallback(
     (source: MoveSource, tappedCard: Card) => {
-      if (paused || autoCompleting || stateRef.current.solved) return
+      if (paused || autoCompleting || dragRef.current || stateRef.current.solved) return
       const current = stateRef.current
       const prevSelected = selectedRef.current
       clearHint()
@@ -1052,7 +1052,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
 
   const handleEmptySlotTap = useCallback(
     (target: MoveTarget) => {
-      if (paused || autoCompleting || stateRef.current.solved) return
+      if (paused || autoCompleting || dragRef.current || stateRef.current.solved) return
       const prevSelected = selectedRef.current
       if (!prevSelected) return
       const current = stateRef.current
@@ -1068,78 +1068,85 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   )
 
   const handleDragStart = useCallback(
-    (source: MoveSource, cards: readonly Card[], originX: number, originY: number) => {
-      clearHint()
-      setSelected(null)
-      cue('tap', 0.42)
-      haptic('light')
+    (source: MoveSource, cards: readonly Card[], originX: number, originY: number, dx: number, dy: number) => {
+      if (paused || autoCompleting || dragRef.current || stateRef.current.solved) return
+      const offsets = source.pile === 'tableau'
+        ? layoutRef.current.tableauOffsets[source.col]!.slice(source.cardIndex)
+        : [0]
+      const firstOffset = offsets[0] ?? 0
       const session: DragSession = {
         source,
         cards,
         originX,
         originY,
-        dx: 0,
-        dy: 0,
+        offsets: offsets.map((offset) => offset - firstOffset),
+        legalTargets: getLegalTargets(stateRef.current, source),
         hoverTarget: null,
       }
+      session.hoverTarget = findDropTargetForDrag(session, dx, dy)
+      dragPosition.setValue({ x: dx, y: dy })
       dragRef.current = session
       setDrag(session)
+      clearHint()
+      setSelected(null)
+      cue('tap', 0.42)
+      haptic('light')
     },
-    [clearHint, cue, haptic],
+    [paused, autoCompleting, findDropTargetForDrag, dragPosition, clearHint, cue, haptic],
   )
 
   const handleDragMove = useCallback(
     (dx: number, dy: number) => {
       const session = dragRef.current
       if (!session) return
-      const hoverTarget = findDropTargetForDrag(
-        session.source,
-        session.originX,
-        session.originY,
-        dx,
-        dy,
-      )
-      const updated: DragSession = { ...session, dx, dy, hoverTarget }
+      dragPosition.setValue({ x: dx, y: dy })
+      const hoverTarget = findDropTargetForDrag(session, dx, dy)
+      if (hoverTarget === session.hoverTarget) return
+      const updated = { ...session, hoverTarget }
       dragRef.current = updated
       setDrag(updated)
     },
-    [findDropTargetForDrag],
+    [dragPosition, findDropTargetForDrag],
   )
 
   const handleDragEnd = useCallback(
     (dx: number, dy: number, cancelled: boolean) => {
       const session = dragRef.current
-      dragRef.current = null
-      setDrag(null)
-      if (!session || cancelled) return
-
-      const target = findDropTargetForDrag(
-        session.source,
-        session.originX,
-        session.originY,
-        dx,
-        dy,
-      )
+      if (!session) return
+      const target = cancelled ? null : findDropTargetForDrag(session, dx, dy)
       if (target) {
         const current = stateRef.current
         const next = moveCards(current, session.source, target)
+        clearDrag()
         applyMoveResult(current, next, target.pile)
+      } else if (cancelled || reducedMotion) {
+        clearDrag()
+      } else {
+        dragPosition.setValue({ x: dx, y: dy })
+        Animated.spring(dragPosition, {
+          toValue: { x: 0, y: 0 },
+          speed: 28,
+          bounciness: 0,
+          useNativeDriver: false,
+        }).start(({ finished }) => {
+          if (finished && dragRef.current === session) clearDrag()
+        })
       }
     },
-    [findDropTargetForDrag, applyMoveResult],
+    [findDropTargetForDrag, clearDrag, applyMoveResult, reducedMotion, dragPosition],
   )
 
   /* --- Derived visual state ----------------------------------------------- */
 
   const foundationCount = useMemo(() => countFoundationCards(state), [state])
-  const activeSource = drag ? drag.source : selected
-  const legalTargets = useMemo(
-    () => (activeSource ? getLegalTargets(state, activeSource) : []),
-    [state, activeSource],
+  const selectedTargets = useMemo(
+    () => (selected ? getLegalTargets(state, selected) : []),
+    [state, selected],
   )
+  const legalTargets = drag?.legalTargets ?? selectedTargets
 
   const isTargetLegal = (target: MoveTarget) => legalTargets.some((t) => sameTarget(t, target))
-  const isTargetHovered = (target: MoveTarget) => Boolean(drag && sameTarget(drag.hoverTarget, target))
+  const isTargetHovered = (target: MoveTarget) => sameTarget(drag?.hoverTarget ?? null, target)
   const isHintTarget = (target: MoveTarget) =>
     hint?.kind === 'move' && sameTarget(hint.target, target)
   const isHintSource = (source: MoveSource) =>
@@ -1147,7 +1154,18 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
 
   const wasteTop = state.waste.length > 0 ? state.waste[state.waste.length - 1]! : null
   const inputLocked = paused || autoCompleting || state.solved
-  const dragFaceUpStep = Math.max(19, Math.round(cardHeight * 0.34))
+  const controlsLocked = paused || autoCompleting
+  const cardSize = { width: cardWidth, height: cardHeight }
+  // Four pill borders and paddings plus three gaps use 160 points before text.
+  const stackActions = boardWidth < 160 + 226 * PixelRatio.getFontScale()
+  const autoCompleteAction = autoCompletable && !autoCompleting && (
+    <GameActionButton
+      label="Auto-complete"
+      onPress={handleStartAutoComplete}
+      disabled={controlsLocked}
+      active
+    />
+  )
 
   return (
     <GameShell
@@ -1159,59 +1177,30 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
         { label: 'Foundations', value: `${foundationCount}/52` },
       ]}
       paused={paused}
-      onPauseChange={setPaused}
+      onPauseChange={handlePauseChange}
       onRestart={handleRestartDeal}
       onExit={onExit}
       howTo={HOW_TO}
       controls={
         <View style={styles.controls}>
-          <View style={styles.controlsLeft}>
-            <IconButton
+          {stackActions && autoCompleteAction && (
+            <GameControlBar>{autoCompleteAction}</GameControlBar>
+          )}
+          <GameControlBar>
+            <GameActionButton
               label="Undo"
               onPress={handleUndo}
-              disabled={state.history.length === 0 || state.solved || autoCompleting}
-            >
-              <UndoIcon size={20} color={color.ink2} />
-            </IconButton>
-            {state.history.length > 0 && (
-              <Text style={[styles.undoCount, { color: color.ink3 }]}>
-                {state.history.length}
-              </Text>
-            )}
-            <IconButton
+              disabled={inputLocked || state.history.length === 0}
+            />
+            <GameActionButton
               label="Hint"
               onPress={handleHint}
-              disabled={state.solved || autoCompleting}
-              lit={hint !== null}
-            >
-              <HintIcon
-                size={19}
-                color={hint !== null ? color.accent : color.ink2}
-              />
-            </IconButton>
-          </View>
-
-          <View style={styles.controlsRight}>
-            {autoCompletable && !autoCompleting && (
-              <Button
-                variant="primary"
-                size="sm"
-                onPress={handleStartAutoComplete}
-                style={styles.compactBtn}
-              >
-                Auto-complete
-              </Button>
-            )}
-            <Button
-              variant="quiet"
-              size="sm"
-              onPress={handleNewDeal}
-              disabled={autoCompleting}
-              style={styles.compactBtn}
-            >
-              New deal
-            </Button>
-          </View>
+              disabled={inputLocked}
+              active={hint !== null}
+            />
+            {!stackActions && autoCompleteAction}
+            <GameActionButton label="New deal" onPress={handleNewDeal} disabled={controlsLocked} />
+          </GameControlBar>
         </View>
       }
     >
@@ -1239,12 +1228,12 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                 style={({ pressed }) => [
                   styles.cardBase,
                   {
-                    width: cardWidth,
-                    height: cardHeight,
+                    ...cardSize,
                     borderRadius: cardRadius,
                     backgroundColor: color.surface1,
                     borderColor: hint?.kind === 'stock' ? color.accent : color.lineStrong,
-                    transform: [{ scale: pressed ? 0.96 : 1 }],
+                    borderCurve: 'continuous',
+                    transform: [{ scale: pressed && !reducedMotion ? 0.97 : 1 }],
                   },
                 ]}
               >
@@ -1268,37 +1257,26 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                 disabled={state.waste.length === 0 || inputLocked}
                 onPress={handleDrawStock}
                 style={({ pressed }) => [
-                  styles.slot,
-                  {
-                    width: cardWidth,
-                    height: cardHeight,
-                    borderRadius: cardRadius,
-                    backgroundColor: color.surface1,
-                    borderColor: hint?.kind === 'stock' ? color.accent : color.line,
-                    transform: [{ scale: pressed && state.waste.length > 0 ? 0.96 : 1 }],
-                  },
+                  cardSize,
+                  { transform: [{ scale: pressed && !reducedMotion ? 0.97 : 1 }] },
                 ]}
               >
-                <RecycleIcon
-                  size={17}
-                  color={state.waste.length > 0 ? color.ink2 : color.ink4}
-                />
+                <GlassSurface radius={cardRadius} accent={hint?.kind === 'stock'} style={styles.well}>
+                  <RecycleIcon
+                    size={17}
+                    color={state.waste.length > 0 ? color.ink2 : color.ink4}
+                  />
+                </GlassSurface>
               </Pressable>
             )}
 
             {/* Waste pile */}
-            <View
-              style={[
-                styles.slot,
-                {
-                  width: cardWidth,
-                  height: cardHeight,
-                  borderRadius: cardRadius,
-                  backgroundColor: color.surface1,
-                  borderColor: color.line,
-                },
-              ]}
-            >
+            <View style={cardSize}>
+              {(!wasteTop || (drag?.source.pile === 'waste' && state.waste.length === 1)) && (
+                <GlassSurface radius={cardRadius} style={styles.well}>
+                  <View style={[styles.emptyDot, { backgroundColor: color.ink4 }]} />
+                </GlassSurface>
+              )}
               {drag && sameSource(drag.source, { pile: 'waste' }) && state.waste.length > 1 && (
                 <View
                   style={[
@@ -1310,6 +1288,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                       borderRadius: cardRadius,
                       backgroundColor: color.surface2,
                       borderColor: color.lineStrong,
+                      borderCurve: 'continuous',
                     },
                   ]}
                   pointerEvents="none"
@@ -1381,40 +1360,31 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                 isDraggingSource && pile.length > 1 ? pile[pile.length - 2]! : null
               const isRedWatermark = suitHint === 'hearts' || suitHint === 'diamonds'
 
-              const slotBorder =
-                hovered || hintedTarget
-                  ? color.accent
-                  : legal
-                    ? color.accentDim
-                    : color.line
-              const slotBg = hovered ? color.accentWash : color.surface1
-
               return (
-                <Pressable
-                  key={suitHint}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Foundation ${index + 1}, ${suitHint}`}
-                  onPress={() => handleEmptySlotTap(target)}
-                  style={[
-                    styles.slot,
-                    {
-                      width: cardWidth,
-                      height: cardHeight,
-                      borderRadius: cardRadius,
-                      backgroundColor: slotBg,
-                      borderColor: slotBorder,
-                    },
-                  ]}
-                >
-                  <View pointerEvents="none">
-                    <SuitPip
-                      suit={suitHint}
-                      size={Math.max(16, Math.round(cardWidth * 0.4))}
-                      color={isRedWatermark ? redSuitColor : color.ink4}
-                      outline
-                      opacity={isRedWatermark ? 0.5 : 0.72}
-                    />
-                  </View>
+                <View key={suitHint} style={cardSize}>
+                  {(!topCard || (isDraggingSource && !underlyingCard)) && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Foundation ${index + 1}, ${suitHint}`}
+                      onPress={() => handleEmptySlotTap(target)}
+                      disabled={inputLocked}
+                      style={styles.wellTarget}
+                    >
+                      <GlassSurface
+                        radius={cardRadius}
+                        accent={hovered || hintedTarget || legal}
+                        style={[styles.well, hovered && { backgroundColor: color.accentWash }]}
+                      >
+                        <SuitPip
+                          suit={suitHint}
+                          size={Math.max(16, Math.round(cardWidth * 0.4))}
+                          color={isRedWatermark ? redSuitColor : color.ink4}
+                          outline
+                          opacity={isRedWatermark ? 0.5 : 0.72}
+                        />
+                      </GlassSurface>
+                    </Pressable>
+                  )}
 
                   {underlyingCard && (
                     <View
@@ -1427,6 +1397,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                           borderRadius: cardRadius,
                           backgroundColor: color.surface2,
                           borderColor: color.lineStrong,
+                          borderCurve: 'continuous',
                         },
                       ]}
                       pointerEvents="none"
@@ -1475,7 +1446,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                       onDragEnd={handleDragEnd}
                     />
                   )}
-                </Pressable>
+                </View>
               )
             })}
           </View>
@@ -1487,44 +1458,34 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
               const legal = isTargetLegal(target)
               const hovered = isTargetHovered(target)
               const hintedTarget = isHintTarget(target)
-              const { offsets } = computeColumnOffsets(column, tableauHeight, cardHeight)
+              const offsets = tableauOffsets[colIndex]!
               const colX = colIndex * (cardWidth + colGap)
 
-              const emptyBorder =
-                column.length === 0 && (hovered || hintedTarget)
-                  ? color.accent
-                  : column.length === 0 && legal
-                    ? color.accentDim
-                    : color.line
-              const emptyBg =
-                column.length === 0 && hovered ? color.accentWash : color.surface1
+              const showWell =
+                column.length === 0 || isCardInSource(drag?.source ?? null, colIndex, 0)
 
               return (
                 <View
                   key={colIndex}
                   style={[styles.tableauCol, { width: cardWidth, height: tableauHeight }]}
                 >
-                  {/* Empty column well */}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Column ${colIndex + 1} empty slot`}
-                    onPress={() => handleEmptySlotTap(target)}
-                    style={[
-                      styles.slot,
-                      {
-                        width: cardWidth,
-                        height: cardHeight,
-                        borderRadius: cardRadius,
-                        backgroundColor: emptyBg,
-                        borderColor: emptyBorder,
-                      },
-                    ]}
-                  >
-                    <View
-                      style={[styles.emptyDot, { backgroundColor: color.ink4 }]}
-                      pointerEvents="none"
-                    />
-                  </Pressable>
+                  {showWell && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Column ${colIndex + 1} empty slot`}
+                      onPress={() => handleEmptySlotTap(target)}
+                      disabled={inputLocked}
+                      style={cardSize}
+                    >
+                      <GlassSurface
+                        radius={cardRadius}
+                        accent={hovered || hintedTarget || legal}
+                        style={[styles.well, hovered && { backgroundColor: color.accentWash }]}
+                      >
+                        <View style={[styles.emptyDot, { backgroundColor: color.ink4 }]} />
+                      </GlassSurface>
+                    </Pressable>
+                  )}
 
                   {column.map((card, cardIndex) => {
                     const y = offsets[cardIndex] ?? 0
@@ -1551,8 +1512,9 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                               borderRadius: cardRadius,
                               backgroundColor: color.surface1,
                               borderColor: color.lineStrong,
+                              borderCurve: 'continuous',
                               zIndex: cardIndex + 1,
-                              transform: [{ translateY: y }],
+                              top: y,
                             },
                           ]}
                         >
@@ -1616,17 +1578,15 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
 
           {/* Floating drag stack overlay */}
           {drag && (
-            <View
+            <Animated.View
               pointerEvents="none"
               style={[
                 styles.dragLayer,
                 {
                   width: cardWidth,
-                  transform: [
-                    { translateX: drag.originX + drag.dx },
-                    { translateY: drag.originY + drag.dy },
-                    { scale: 1.03 },
-                  ],
+                  left: drag.originX,
+                  top: drag.originY,
+                  transform: dragPosition.getTranslateTransform(),
                 },
               ]}
             >
@@ -1643,7 +1603,8 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                       backgroundColor: color.surface3,
                       borderColor: color.accent,
                       zIndex: i + 1,
-                      transform: [{ translateY: i * dragFaceUpStep }],
+                      top: drag.offsets[i],
+                      borderCurve: 'continuous',
                     },
                   ]}
                 >
@@ -1656,7 +1617,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                   />
                 </View>
               ))}
-            </View>
+            </Animated.View>
           )}
         </View>
       </View>
@@ -1674,6 +1635,9 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
 }
 
 const styles = StyleSheet.create({
+  controls: {
+    gap: 8,
+  },
   stage: {
     flex: 1,
     width: '100%',
@@ -1696,9 +1660,11 @@ const styles = StyleSheet.create({
   tableauCol: {
     position: 'relative',
   },
-  slot: {
-    position: 'relative',
-    borderWidth: 1,
+  wellTarget: {
+    flex: 1,
+  },
+  well: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1725,20 +1691,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 2.5,
-    paddingTop: 3,
+    gap: 2,
+    paddingTop: 2,
     paddingHorizontal: 4,
-    minHeight: 17,
   },
   cardHeadCompact: {
-    gap: 1.5,
-    paddingTop: 2.5,
     paddingHorizontal: 3,
-    minHeight: 15,
   },
   cardRank: {
-    fontWeight: '600',
-    lineHeight: 14,
+    fontWeight: '700',
+    includeFontPadding: false,
     fontVariant: ['tabular-nums'],
   },
   cardBody: {
@@ -1769,36 +1731,8 @@ const styles = StyleSheet.create({
     top: 0,
     zIndex: 120,
   },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    width: '100%',
-    maxWidth: BOARD_MAX_WIDTH,
-    alignSelf: 'center',
-    minHeight: 44,
-  },
-  controlsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  undoCount: {
-    fontSize: 12,
-    fontWeight: '500',
-    minWidth: 18,
-    marginLeft: -4,
-    fontVariant: ['tabular-nums'],
-  },
-  controlsRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  compactBtn: {
-    paddingHorizontal: 14,
-    height: 38,
+  cardPressable: {
+    flex: 1,
+    ...Platform.select({ web: { touchAction: 'none', userSelect: 'none' } }),
   },
 })

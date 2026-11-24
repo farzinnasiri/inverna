@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   PanResponder,
+  PixelRatio,
   StyleSheet,
   Text,
   View,
@@ -29,8 +30,8 @@ import {
 } from '@/core/games/hue/engine'
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { Button, IconButton } from '@/ui/rn/controls'
+import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
 
 interface HueSave {
@@ -41,8 +42,6 @@ interface HueSave {
 
 interface DragRender {
   fromIdx: number
-  dx: number
-  dy: number
   hoverIdx: number | null
 }
 
@@ -50,8 +49,6 @@ interface DragSession {
   fromIdx: number
   startX: number
   startY: number
-  dx: number
-  dy: number
   dragging: boolean
   hoverIdx: number | null
 }
@@ -61,7 +58,7 @@ const HINT_DURATION_MS = 2250
 const TILE_GAP = 2
 const BEZEL_PADDING = 4
 const BEZEL_BORDER = 1
-const MAX_BOARD_WIDTH = 388
+const BEZEL_INSET = BEZEL_PADDING + BEZEL_BORDER
 
 const HOW_TO = [
   'Tap two tiles — or drag one onto another — to swap them until the gradient flows smoothly.',
@@ -104,20 +101,34 @@ export function HueScreen({ onExit }: GameScreenProps) {
   const [hintIndices, setHintIndices] = useState<[number, number] | null>(null)
   const [showCompletion, setShowCompletion] = useState(state.solved)
   const [dragRender, setDragRender] = useState<DragRender | null>(null)
-  const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 340, h: 440 })
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
+  const stageSizeRef = useRef(stageSize)
 
   const hintPulse = useRef(new Animated.Value(0)).current
+  const dragOffset = useRef(new Animated.ValueXY()).current
   const hintAnimRef = useRef<Animated.CompositeAnimation | null>(null)
   const dragRef = useRef<DragSession | null>(null)
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const stateRef = useRef(state)
-  stateRef.current = state
   const pausedRef = useRef(paused)
-  pausedRef.current = paused
   const selectedRef = useRef(selectedIndex)
-  selectedRef.current = selectedIndex
+  const selectTile = useCallback((index: number | null) => {
+    selectedRef.current = index
+    setSelectedIndex(index)
+  }, [])
+
+  const cancelDrag = useCallback(() => {
+    dragRef.current = null
+    setDragRender(null)
+  }, [])
+
+  const handlePauseChange = useCallback((nextPaused: boolean) => {
+    pausedRef.current = nextPaused
+    if (nextPaused) cancelDrag()
+    setPaused(nextPaused)
+  }, [cancelDrag])
 
   useEffect(() => {
     return () => {
@@ -140,17 +151,17 @@ export function HueScreen({ onExit }: GameScreenProps) {
 
   // Compute responsive square cell sizing that fits inside the stage without overflow.
   const metrics = useMemo(() => {
-    const inset = (BEZEL_PADDING + BEZEL_BORDER) * 2
-    const availW = Math.max(120, Math.min(stageSize.w, MAX_BOARD_WIDTH) - inset)
-    const availH = Math.max(120, stageSize.h - inset)
+    const availW = stageSize.width - BEZEL_INSET * 2
+    const availH = stageSize.height - BEZEL_INSET * 2
     const cellFromW = (availW - TILE_GAP * (state.cols - 1)) / state.cols
     const cellFromH = (availH - TILE_GAP * (state.rows - 1)) / state.rows
-    const cellSize = Math.max(24, Math.floor(Math.min(cellFromW, cellFromH)))
+    const scale = PixelRatio.get()
+    const cellSize = Math.max(0, Math.floor(Math.min(cellFromW, cellFromH) * scale) / scale)
     const pitch = cellSize + TILE_GAP
     const gridW = cellSize * state.cols + TILE_GAP * (state.cols - 1)
     const gridH = cellSize * state.rows + TILE_GAP * (state.rows - 1)
     return { cellSize, pitch, gridW, gridH }
-  }, [stageSize.w, stageSize.h, state.cols, state.rows])
+  }, [stageSize, state.cols, state.rows])
 
   const metricsRef = useRef(metrics)
   metricsRef.current = metrics
@@ -169,13 +180,14 @@ export function HueScreen({ onExit }: GameScreenProps) {
       const cur = stateRef.current
       const tileA = cur.tiles[indexA]
       const tileB = cur.tiles[indexB]
-      if (!tileA || !tileB || tileA.pinned || tileB.pinned || indexA === indexB) return
+      if (pausedRef.current || !tileA || !tileB || tileA.pinned || tileB.pinned || indexA === indexB) return
 
       const next = swapTiles(cur, indexA, indexB)
       if (next === cur) return
 
       clearHint()
-      setSelectedIndex(null)
+      selectTile(null)
+      stateRef.current = next
 
       setSave((prev) => ({
         version: 1,
@@ -196,7 +208,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
         haptic('light')
       }
     },
-    [clearHint, setSave, cue, haptic, reducedMotion],
+    [clearHint, selectTile, setSave, cue, haptic, reducedMotion],
   )
 
   const handleTileSelect = useCallback(
@@ -208,17 +220,17 @@ export function HueScreen({ onExit }: GameScreenProps) {
 
       const prevSel = selectedRef.current
       if (prevSel === null) {
-        setSelectedIndex(index)
+        selectTile(index)
         cue('tap', 0.65)
         haptic('light')
       } else if (prevSel === index) {
-        setSelectedIndex(null)
+        selectTile(null)
         cue('tap', 0.4)
       } else {
         performSwap(prevSel, index)
       }
     },
-    [performSwap, cue, haptic],
+    [performSwap, cue, haptic, selectTile],
   )
 
   const performSwapRef = useRef(performSwap)
@@ -273,16 +285,19 @@ export function HueScreen({ onExit }: GameScreenProps) {
       completionTimerRef.current = null
     }
     clearHint()
-    setSelectedIndex(null)
+    cancelDrag()
+    selectTile(null)
     setShowCompletion(false)
+    const next = restartPuzzle(stateRef.current)
+    stateRef.current = next
     setSave((prev) => ({
       version: 1,
-      state: restartPuzzle(isValidSave(prev) ? prev.state : stateRef.current),
+      state: next,
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('undo', 0.7)
     haptic('light')
-  }, [clearHint, setSave, cue, haptic])
+  }, [cancelDrag, clearHint, selectTile, setSave, cue, haptic])
 
   const handleNextPalette = useCallback(() => {
     if (completionTimerRef.current) {
@@ -290,33 +305,42 @@ export function HueScreen({ onExit }: GameScreenProps) {
       completionTimerRef.current = null
     }
     clearHint()
-    setSelectedIndex(null)
+    cancelDrag()
+    selectTile(null)
     setFocusedIndex(null)
     setShowCompletion(false)
+    const next = nextPuzzle(stateRef.current, calm)
+    stateRef.current = next
     setSave((prev) => ({
       version: 1,
-      state: nextPuzzle(isValidSave(prev) ? prev.state : stateRef.current, calm),
+      state: next,
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('tap', 0.6)
     haptic('light')
-  }, [clearHint, setSave, calm, cue, haptic])
+  }, [cancelDrag, clearHint, selectTile, setSave, calm, cue, haptic])
 
   /* --- Touch hit-testing & drag-to-swap via PanResponder ------------------ */
 
   const slotFromLocal = (x: number, y: number): number | null => {
-    const { gridW, gridH, pitch } = metricsRef.current
-    const { cols, rows } = stateRef.current
-    if (x < 0 || x > gridW || y < 0 || y > gridH) return null
-    const col = Math.min(cols - 1, Math.max(0, Math.floor(x / pitch)))
-    const row = Math.min(rows - 1, Math.max(0, Math.floor(y / pitch)))
-    return row * cols + col
+    const { gridW, gridH, pitch, cellSize } = metricsRef.current
+    if (x < 0 || x >= gridW || y < 0 || y >= gridH) return null
+    const col = Math.floor(x / pitch)
+    const row = Math.floor(y / pitch)
+    if (x - col * pitch >= cellSize || y - row * pitch >= cellSize) return null
+    return row * stateRef.current.cols + col
   }
 
-  const panResponder = useRef(
+  const dropTarget = (session: DragSession, dx: number, dy: number): number | null => {
+    const over = slotFromLocal(session.startX + dx, session.startY + dy)
+    return over !== null && over !== session.fromIdx && !stateRef.current.tiles[over]?.pinned
+      ? over
+      : null
+  }
+
+  const [panResponder] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
-      onMoveShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
       onPanResponderGrant: (e) => {
         if (pausedRef.current || stateRef.current.solved) return
         const startX = e.nativeEvent.locationX
@@ -337,58 +361,46 @@ export function HueScreen({ onExit }: GameScreenProps) {
           fromIdx: idx,
           startX,
           startY,
-          dx: 0,
-          dy: 0,
           dragging: false,
           hoverIdx: null,
         }
       },
-      onPanResponderMove: (_, g) => {
+      onPanResponderStart: (_, g) => {
+        if (g.numberActiveTouches > 1) cancelDrag()
+      },
+      onPanResponderMove: (_, { dx, dy }) => {
         const session = dragRef.current
-        if (!session) return
+        if (!session || pausedRef.current) return
+        if (!session.dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
 
-        const dx = g.dx
-        const dy = g.dy
-        session.dx = dx
-        session.dy = dy
-
-        if (!session.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+        dragOffset.setValue({ x: dx, y: dy })
+        const hoverIdx = dropTarget(session, dx, dy)
+        if (!session.dragging) {
           session.dragging = true
-          setSelectedIndex(null)
+          selectTile(null)
           cueRef.current('tap', 0.6)
           hapticRef.current('light')
+          setDragRender({ fromIdx: session.fromIdx, hoverIdx })
+        } else if (session.hoverIdx !== hoverIdx) {
+          setDragRender({ fromIdx: session.fromIdx, hoverIdx })
         }
-
-        if (session.dragging) {
-          const over = slotFromLocal(session.startX + dx, session.startY + dy)
-          const hoverIdx =
-            over !== null && over !== session.fromIdx && !stateRef.current.tiles[over]?.pinned
-              ? over
-              : null
-          session.hoverIdx = hoverIdx
-          setDragRender({ fromIdx: session.fromIdx, dx, dy, hoverIdx })
-        }
+        session.hoverIdx = hoverIdx
       },
-      onPanResponderRelease: () => {
+      onPanResponderRelease: (_, { dx, dy }) => {
         const session = dragRef.current
         if (!session) return
-        dragRef.current = null
-        setDragRender(null)
+        cancelDrag()
 
         if (session.dragging) {
-          if (session.hoverIdx !== null && session.hoverIdx !== session.fromIdx) {
-            performSwapRef.current(session.fromIdx, session.hoverIdx)
-          }
+          const target = dropTarget(session, dx, dy)
+          if (target !== null) performSwapRef.current(session.fromIdx, target)
         } else {
           handleTileSelectRef.current(session.fromIdx)
         }
       },
-      onPanResponderTerminate: () => {
-        dragRef.current = null
-        setDragRender(null)
-      },
+      onPanResponderTerminate: cancelDrag,
     }),
-  ).current
+  )
 
   /* --- Desktop Web keyboard navigation ------------------------------------ */
 
@@ -415,7 +427,10 @@ export function HueScreen({ onExit }: GameScreenProps) {
       ArrowDown: () => moveFocus(0, 1),
       Enter: () => focusedIndex !== null && handleTileSelect(focusedIndex),
       ' ': () => focusedIndex !== null && handleTileSelect(focusedIndex),
-      Escape: () => setSelectedIndex(null),
+      Escape: () => {
+        cancelDrag()
+        selectTile(null)
+      },
       h: handleHint,
       H: handleHint,
     },
@@ -430,16 +445,15 @@ export function HueScreen({ onExit }: GameScreenProps) {
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    if (width > 0 && height > 0) {
-      setStageSize((prev) =>
-        Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1
-          ? prev
-          : { w: width, h: height },
-      )
-    }
-  }, [])
+    const prev = stageSizeRef.current
+    if (width === prev.width && height === prev.height) return
+    stageSizeRef.current = { width, height }
+    cancelDrag()
+    setStageSize(stageSizeRef.current)
+  }, [cancelDrag])
 
-  const outerCornerRadius = radius.lg - BEZEL_PADDING - BEZEL_BORDER
+  const outerCornerRadius = radius.lg - BEZEL_INSET
+  const liftedTile = dragRender ? state.tiles[dragRender.fromIdx] : null
 
   return (
     <GameShell
@@ -451,7 +465,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
         { label: 'Moves', value: state.moves },
       ]}
       paused={paused}
-      onPauseChange={setPaused}
+      onPauseChange={handlePauseChange}
       onRestart={handleRestart}
       onExit={onExit}
       howTo={HOW_TO}
@@ -460,148 +474,143 @@ export function HueScreen({ onExit }: GameScreenProps) {
           <Text style={[styles.barTitle, { color: color.ink }]} numberOfLines={1}>
             {state.paletteTitle}
           </Text>
-          <View style={styles.barActions}>
-            <Button
-              variant="quiet"
-              size="sm"
+          <GameControlBar>
+            <GameActionButton
+              label="Hint"
+              icon={<Sparkles size={16} strokeWidth={1.5} color={hintIndices ? color.accent : color.ink2} />}
+              active={hintIndices !== null}
               onPress={handleHint}
               disabled={state.solved}
-              accessibilityLabel="Hint"
-            >
-              <Sparkles size={15} strokeWidth={1.5} color={color.ink} />
-              <Text style={[styles.hintLabel, { color: color.ink }]}>Hint</Text>
-            </Button>
-            <IconButton
-              label="Reset palette"
+            />
+            <GameActionButton
+              label="Reset"
+              icon={<RotateCcw size={16} strokeWidth={1.5} color={color.ink2} />}
               onPress={handleRestart}
-              disabled={state.moves === 0 && !state.solved}
-            >
-              <RotateCcw size={18} strokeWidth={1.5} color={color.ink2} />
-            </IconButton>
-            <IconButton label="New palette" onPress={handleNextPalette}>
-              <Shuffle size={18} strokeWidth={1.5} color={color.ink2} />
-            </IconButton>
-          </View>
+              disabled={state.moves === 0 && !state.solved && selectedIndex === null && hintIndices === null}
+            />
+            <GameActionButton
+              label="New"
+              icon={<Shuffle size={16} strokeWidth={1.5} color={color.ink2} />}
+              onPress={handleNextPalette}
+            />
+          </GameControlBar>
         </View>
       }
     >
       <View style={styles.stage} onLayout={handleStageLayout}>
-        <View
-          style={[
-            styles.board,
-            {
-              backgroundColor: color.bg,
-              borderColor: color.line,
-            },
-          ]}
-        >
-          <View
-            {...panResponder.panHandlers}
-            accessibilityLabel={`${state.paletteTitle} colour gradient`}
-            style={[
-              styles.grid,
-              {
-                width: metrics.gridW,
-                height: metrics.gridH,
-                backgroundColor: color.bg,
-              },
-            ]}
-          >
-            {state.tiles.map((tile, idx) => {
-              const col = idx % state.cols
-              const row = Math.floor(idx / state.cols)
-              const isDragging = dragRender?.fromIdx === idx
-              const isDropTarget = dragRender?.hoverIdx === idx
-              const isSelected = selectedIndex === idx
-              const isFocused = focusedIndex === idx
-              const isHinted = hintSet?.has(idx) ?? false
+        {metrics.cellSize > 0 && (
+          <View>
+            <GlassSurface variant="card" radius={radius.lg} style={styles.board}>
+              <View
+                style={{
+                  width: metrics.gridW,
+                  height: metrics.gridH,
+                  borderRadius: outerCornerRadius,
+                  backgroundColor: color.bg,
+                  overflow: 'hidden',
+                }}
+              >
+                {state.tiles.map((tile, idx) => {
+                  const col = idx % state.cols
+                  const row = Math.floor(idx / state.cols)
+                  const isDragging = dragRender?.fromIdx === idx
+                  const isDropTarget = dragRender?.hoverIdx === idx
+                  const isSelected = selectedIndex === idx
+                  const isFocused = focusedIndex === idx
+                  const isHinted = hintSet?.has(idx) ?? false
 
-              const topLeftR = row === 0 && col === 0 ? outerCornerRadius : 3
-              const topRightR = row === 0 && col === state.cols - 1 ? outerCornerRadius : 3
-              const bottomLeftR = row === state.rows - 1 && col === 0 ? outerCornerRadius : 3
-              const bottomRightR =
-                row === state.rows - 1 && col === state.cols - 1 ? outerCornerRadius : 3
+                  const topLeftR = row === 0 && col === 0 ? outerCornerRadius : 3
+                  const topRightR = row === 0 && col === state.cols - 1 ? outerCornerRadius : 3
+                  const bottomLeftR = row === state.rows - 1 && col === 0 ? outerCornerRadius : 3
+                  const bottomRightR =
+                    row === state.rows - 1 && col === state.cols - 1 ? outerCornerRadius : 3
 
-              const transform = isDragging && dragRender
-                ? [
-                    { translateX: dragRender.dx },
-                    { translateY: dragRender.dy },
-                    { scale: reducedMotion ? 1 : 1.05 },
-                  ]
-                : isSelected && !reducedMotion
-                  ? [{ scale: 1.04 }]
-                  : isDropTarget && !reducedMotion
-                    ? [{ scale: 0.94 }]
-                    : undefined
+                  const showRing = isSelected || isDropTarget || isFocused
+                  const ringColor = isSelected || isDropTarget ? color.accent : color.ink2
 
-              const zIndex = isDragging
-                ? 12
-                : isSelected
-                  ? 6
-                  : isFocused
-                    ? 4
-                    : isDropTarget
-                      ? 3
-                      : 1
-
-              const showRing = isDragging || isSelected || isDropTarget || isFocused
-              const ringColor = isDragging || isSelected ? color.ink : color.ink2
-
-              return (
-                <View
-                  key={tile.id}
-                  pointerEvents="none"
-                  style={[
-                    styles.tile,
-                    {
-                      left: col * metrics.pitch,
-                      top: row * metrics.pitch,
-                      width: metrics.cellSize,
-                      height: metrics.cellSize,
-                      backgroundColor: tile.color,
-                      borderTopLeftRadius: topLeftR,
-                      borderTopRightRadius: topRightR,
-                      borderBottomLeftRadius: bottomLeftR,
-                      borderBottomRightRadius: bottomRightR,
-                      borderWidth: showRing ? 2 : 0,
-                      borderColor: showRing ? ringColor : 'transparent',
-                      zIndex,
-                      transform,
-                    },
-                  ]}
-                >
-                  {tile.pinned && (
+                  return (
                     <View
+                      key={tile.id}
+                      pointerEvents="none"
                       style={[
-                        styles.anchorDot,
+                        styles.tile,
                         {
-                          backgroundColor: darkTileIds.has(tile.id)
-                            ? color.ink
-                            : color.accentInk,
+                          left: col * metrics.pitch,
+                          top: row * metrics.pitch,
+                          width: metrics.cellSize,
+                          height: metrics.cellSize,
+                          backgroundColor: tile.color,
+                          borderTopLeftRadius: topLeftR,
+                          borderTopRightRadius: topRightR,
+                          borderBottomLeftRadius: bottomLeftR,
+                          borderBottomRightRadius: bottomRightR,
+                          borderWidth: showRing ? 2 : 0,
+                          borderColor: showRing ? ringColor : 'transparent',
+                          opacity: isDragging ? 0.26 : 1,
                         },
                       ]}
-                    />
-                  )}
-                  {isHinted && (
-                    <Animated.View
-                      style={[
-                        styles.hintRing,
-                        {
-                          borderColor: color.ink,
-                          borderTopLeftRadius: Math.max(2, topLeftR - 3),
-                          borderTopRightRadius: Math.max(2, topRightR - 3),
-                          borderBottomLeftRadius: Math.max(2, bottomLeftR - 3),
-                          borderBottomRightRadius: Math.max(2, bottomRightR - 3),
-                          opacity: hintPulse,
-                        },
-                      ]}
-                    />
-                  )}
-                </View>
-              )
-            })}
+                    >
+                      {tile.pinned && (
+                        <View
+                          style={[
+                            styles.anchorDot,
+                            {
+                              backgroundColor: darkTileIds.has(tile.id)
+                                ? color.ink
+                                : color.accentInk,
+                            },
+                          ]}
+                        />
+                      )}
+                      {isHinted && (
+                        <Animated.View
+                          style={[
+                            styles.hintRing,
+                            {
+                              borderColor: color.ink,
+                              borderTopLeftRadius: Math.max(2, topLeftR - 3),
+                              borderTopRightRadius: Math.max(2, topRightR - 3),
+                              borderBottomLeftRadius: Math.max(2, bottomLeftR - 3),
+                              borderBottomRightRadius: Math.max(2, bottomRightR - 3),
+                              opacity: hintPulse,
+                            },
+                          ]}
+                        />
+                      )}
+                    </View>
+                  )
+                })}
+                <View
+                  {...panResponder.panHandlers}
+                  collapsable={false}
+                  accessibilityLabel={`${state.paletteTitle} colour gradient`}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+            </GlassSurface>
+            {dragRender && liftedTile && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.liftedTile,
+                  {
+                    left: BEZEL_INSET + (dragRender.fromIdx % state.cols) * metrics.pitch,
+                    top: BEZEL_INSET + Math.floor(dragRender.fromIdx / state.cols) * metrics.pitch,
+                    width: metrics.cellSize,
+                    height: metrics.cellSize,
+                    backgroundColor: liftedTile.color,
+                    borderColor: color.accent,
+                    transform: [
+                      { translateX: dragOffset.x },
+                      { translateY: dragOffset.y },
+                      { scale: reducedMotion ? 1 : 1.07 },
+                    ],
+                  },
+                ]}
+              />
+            )}
           </View>
-        </View>
+        )}
       </View>
 
       <Completion
@@ -627,16 +636,17 @@ const styles = StyleSheet.create({
   },
   board: {
     padding: BEZEL_PADDING,
-    borderRadius: radius.lg,
-    borderWidth: BEZEL_BORDER,
-  },
-  grid: {
-    position: 'relative',
   },
   tile: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  liftedTile: {
+    position: 'absolute',
+    zIndex: 1,
+    borderRadius: radius.xs,
+    borderWidth: 2,
   },
   anchorDot: {
     width: 4,
@@ -653,28 +663,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   bar: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    width: '100%',
-    maxWidth: MAX_BOARD_WIDTH,
-    alignSelf: 'center',
+    gap: 6,
   },
   barTitle: {
-    flex: 1,
+    maxWidth: '100%',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.2,
-  },
-  barActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  hintLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    letterSpacing: -0.1,
   },
 })

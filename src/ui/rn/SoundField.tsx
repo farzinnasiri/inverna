@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { PanResponder, Pressable, StyleSheet, Text, View } from 'react-native'
+import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import Svg, { Circle, Line, Path } from 'react-native-svg'
 import type { Mix } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { GlassSurface } from './Glass'
 import { useReducedMotion } from './hooks'
 
 export function SoundField({
@@ -46,8 +47,10 @@ export function SoundField({
     }),
   ).current
 
-  const size = 248
-  const c = size / 2
+  const { width, height } = useWindowDimensions()
+  const size = Math.min(260, Math.max(196, Math.round(Math.min(width - 96, height * 0.34))))
+  const vb = 248
+  const c = vb / 2
   const l = mix.layers
   const activeEnergy =
     (l.rain ?? 0) +
@@ -101,56 +104,55 @@ export function SoundField({
         accessibilityRole="button"
         accessibilityLabel={playing ? `Stop ${label}` : `Play ${label}`}
         style={({ pressed }) => [
-          styles.orb,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: color.surface1,
-            borderColor: playing ? color.accentDim : color.lineStrong,
-            transform: [{ scale: pressed ? 0.985 : 1 }],
-          },
+          { transform: [{ scale: pressed ? 0.98 : 1 }] },
         ]}
       >
-        <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          {bezelTicks.map((tk, i) => (
-            <Line
-              key={i}
-              x1={tk.x1}
-              y1={tk.y1}
-              x2={tk.x2}
-              y2={tk.y2}
-              stroke={playing && tk.major ? color.accentDim : color.ink4}
-              strokeWidth={tk.major ? 1.2 : 0.8}
-              strokeOpacity={playing ? 0.85 : 0.45}
+        <GlassSurface
+          variant="elevated"
+          radius={size / 2}
+          accent={playing}
+          style={[styles.orb, { width: size, height: size }]}
+        >
+          <Svg width={size} height={size} viewBox={`0 0 ${vb} ${vb}`}>
+            {bezelTicks.map((tk, i) => (
+              <Line
+                key={i}
+                x1={tk.x1}
+                y1={tk.y1}
+                x2={tk.x2}
+                y2={tk.y2}
+                stroke={playing && tk.major ? color.accentDim : color.ink4}
+                strokeWidth={tk.major ? 1.2 : 0.8}
+                strokeOpacity={playing ? 0.85 : 0.45}
+              />
+            ))}
+
+            {rings.map((d, i) => (
+              <Path
+                key={i}
+                d={d}
+                fill="none"
+                stroke={i === 1 ? color.accent : color.ink2}
+                strokeWidth={i === 1 ? 1.4 : 1}
+                strokeOpacity={playing ? 0.65 - i * 0.14 : 0.25 - i * 0.05}
+              />
+            ))}
+
+            <Circle
+              cx={c}
+              cy={c}
+              r={playing ? 12 + Math.sin(phase * 1.4) * 1.8 : 9}
+              fill={playing ? color.accent : color.surface3}
+              fillOpacity={playing ? 0.9 : 1}
             />
-          ))}
+          </Svg>
 
-          {rings.map((d, i) => (
-            <Path
-              key={i}
-              d={d}
-              fill="none"
-              stroke={i === 1 ? color.accent : color.ink2}
-              strokeWidth={i === 1 ? 1.4 : 1}
-              strokeOpacity={playing ? 0.65 - i * 0.14 : 0.25 - i * 0.05}
-            />
-          ))}
-
-          <Circle
-            cx={c}
-            cy={c}
-            r={playing ? 12 + Math.sin(phase * 1.4) * 1.8 : 9}
-            fill={playing ? color.accent : color.surface3}
-            fillOpacity={playing ? 0.9 : 1}
-          />
-        </Svg>
-
-        <View pointerEvents="none" style={styles.caption}>
-          <Text style={[styles.stateText, { color: playing ? color.accent : color.ink3 }]}>
-            {playing ? 'Playing' : 'Tap to play'}
-          </Text>
-        </View>
+          <View pointerEvents="none" style={styles.caption}>
+            <Text style={[styles.stateText, { color: playing ? color.accent : color.ink3 }]}>
+              {playing ? 'Playing' : 'Tap to play'}
+            </Text>
+          </View>
+        </GlassSurface>
       </Pressable>
     </View>
   )

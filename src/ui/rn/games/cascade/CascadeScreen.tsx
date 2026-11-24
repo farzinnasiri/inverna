@@ -1,11 +1,7 @@
 import { useCallback, useRef, useState, type ComponentType } from 'react'
-import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { PanResponder, Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
 import Svg, { Circle, ClipPath, Defs, G, Path, Rect } from 'react-native-svg'
 import { RefreshCw as _RefreshCw, Undo2 as _Undo2 } from 'lucide-react-native'
-
-type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
-const RefreshCw = _RefreshCw as unknown as LucideSvgIcon
-const Undo2 = _Undo2 as unknown as LucideSvgIcon
 import {
   WOBBLE_DURATION_MS,
   createCascade,
@@ -21,9 +17,13 @@ import {
   type CellCoord,
 } from '@/core/games/cascade/engine'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { IconButton } from '@/ui/rn/controls'
-import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
+import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
+import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
+
+type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
+const RefreshCw = _RefreshCw as unknown as LucideSvgIcon
+const Undo2 = _Undo2 as unknown as LucideSvgIcon
 
 interface CascadeSave {
   version: 1
@@ -39,7 +39,6 @@ interface BoardLayout {
   boardW: number
   boardH: number
   cellSize: number
-  bezelPad: number
 }
 
 interface UiMeta {
@@ -64,7 +63,6 @@ const HOW_TO = [
 ] as const
 
 const CANVAS_BOTTOM_OVERFLOW = 96
-const BEZEL_PAD = 6
 const BEZEL_RADIUS = 16
 const TILE_GAP = 1.5
 const TILE_RADIUS = 3
@@ -103,15 +101,15 @@ function extractMeta(state: CascadeState): UiMeta {
   }
 }
 
-function computeBoardLayout(stageW: number, stageH: number, rows: number, cols: number): BoardLayout {
-  const innerW = Math.max(40, stageW - BEZEL_PAD * 2 - 4)
-  const innerH = Math.max(40, stageH - BEZEL_PAD * 2 - 4)
-  const cellSize = Math.max(12, Math.floor(Math.min(innerW / cols, innerH / rows)))
+function computeBoardLayout(stageW: number, stageH: number, rows: number, cols: number, bezelPad: number): BoardLayout {
+  const innerW = stageW - bezelPad * 2
+  const innerH = stageH - bezelPad * 2
+  const cellSize = Math.max(0, Math.floor(Math.min(innerW / cols, innerH / rows)))
   const boardW = cellSize * cols
   const boardH = cellSize * rows
   const boardX = Math.round((stageW - boardW) * 0.5)
   const boardY = Math.round((stageH - boardH) * 0.5)
-  return { boardX, boardY, boardW, boardH, cellSize, bezelPad: BEZEL_PAD }
+  return { boardX, boardY, boardW, boardH, cellSize }
 }
 
 function buildPerimeterPath(
@@ -153,6 +151,8 @@ function buildPerimeterPath(
 }
 
 export function CascadeScreen({ onExit }: GameScreenProps) {
+  const { isCompact } = useResponsiveLayout()
+  const bezelPad = isCompact ? 6 : 8
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
   const reduceMotion = useReducedMotion()
@@ -170,9 +170,10 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   const stateRef = useRef<CascadeState>(initialStateRef.current)
   const [uiMeta, setUiMeta] = useState<UiMeta>(() => extractMeta(initialStateRef.current!))
   const [paused, setPaused] = useState(false)
-  const [stageSize, setStageSize] = useState({ w: 320, h: 420 })
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
   const [, setTick] = useState(0)
 
+  const boardSizeRef = useRef({ w: 0, h: 0 })
   const previewKeysRef = useRef<Set<number>>(new Set())
   const pressedRef = useRef<{
     origin: CellCoord
@@ -189,9 +190,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   reducedMotionRef.current = reduceMotion
 
   const cur = stateRef.current
-  const layout = computeBoardLayout(stageSize.w, stageSize.h, cur.rows, cur.cols)
-  const layoutRef = useRef<BoardLayout>(layout)
-  layoutRef.current = layout
+  const layout = computeBoardLayout(stageSize.w, stageSize.h, cur.rows, cur.cols, bezelPad)
 
   const redraw = useCallback(() => {
     setTick((n) => (n + 1) % 1_000_000)
@@ -245,13 +244,10 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   )
 
   const cellFromLocalPoint = useCallback((x: number, y: number): CellCoord | null => {
-    const { boardX, boardY, boardW, boardH, cellSize } = layoutRef.current
-    if (x < boardX || x >= boardX + boardW || y < boardY || y >= boardY + boardH) return null
-    const st = stateRef.current
-    const col = Math.floor((x - boardX) / cellSize)
-    const row = Math.floor((y - boardY) / cellSize)
-    if (row < 0 || row >= st.rows || col < 0 || col >= st.cols) return null
-    return { row, col }
+    const { w, h } = boardSizeRef.current
+    if (!(x >= 0 && x < w && y >= 0 && y < h)) return null
+    const { cols, rows } = stateRef.current
+    return { row: Math.floor(y / h * rows), col: Math.floor(x / w * cols) }
   }, [])
 
   const clusterKeySet = useCallback((cell: CellCoord | null): Set<number> => {
@@ -316,11 +312,9 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.boardComplete,
-      onMoveShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.boardComplete,
       onPanResponderGrant: (e) => {
         if (pausedRef.current || stateRef.current.boardComplete) return
-        const lx = e.nativeEvent.locationX
-        const ly = e.nativeEvent.locationY
+        const { locationX: lx, locationY: ly } = e.nativeEvent
         const cell = interactionRef.current.cellFromLocalPoint(lx, ly)
         if (!cell) return
         if (!stateRef.current.board[cell.row]?.[cell.col]) return
@@ -467,16 +461,20 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    if (width > 0 && height > 0) {
-      setStageSize((prev) =>
-        Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1
-          ? prev
-          : { w: Math.round(width), h: Math.round(height) },
-      )
-    }
+    setStageSize((prev) => prev.w === width && prev.h === height ? prev : { w: width, h: height })
   }, [])
 
-  const { boardX, boardY, boardW, boardH, cellSize, bezelPad } = layout
+  const handleBoardLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout
+    boardSizeRef.current = { w: width, h: height }
+    if (pressedRef.current) {
+      pressedRef.current = null
+      previewKeysRef.current = new Set()
+      redraw()
+    }
+  }, [redraw])
+
+  const { boardX, boardY, boardW, boardH, cellSize } = layout
   const bezelX = boardX - bezelPad
   const bezelY = boardY - bezelPad
   const bezelW = boardW + bezelPad * 2
@@ -503,192 +501,189 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
       onExit={handleExit}
       howTo={HOW_TO}
       controls={
-        <View style={styles.controlsRow}>
-          <View style={styles.undoWrap}>
-            <IconButton label="Undo" onPress={handleUndo} disabled={paused || uiMeta.undoCount === 0}>
-              <Undo2 size={19} strokeWidth={1.5} color={color.ink2} />
-            </IconButton>
-            <Text style={[styles.undoCount, { color: color.ink3 }]}>
-              {uiMeta.undoCount > 0 ? uiMeta.undoCount : ''}
-            </Text>
-          </View>
-
-          <IconButton label="New board" onPress={handleNextBoard} disabled={paused}>
-            <RefreshCw size={18} strokeWidth={1.5} color={color.ink2} />
-          </IconButton>
-        </View>
+        <GameControlBar>
+          <GameActionButton
+            label="Undo"
+            icon={<Undo2 size={18} strokeWidth={1.5} color={color.ink2} />}
+            onPress={handleUndo}
+            disabled={paused || uiMeta.undoCount === 0}
+          />
+          <GameActionButton
+            label="New board"
+            icon={<RefreshCw size={18} strokeWidth={1.5} color={color.ink2} />}
+            onPress={handleNextBoard}
+            disabled={paused}
+          />
+        </GameControlBar>
       }
     >
-      <View
-        {...panResponder.panHandlers}
-        style={styles.stage}
-        onLayout={handleStageLayout}
-      >
-        <View pointerEvents="none" style={styles.svg}>
-          <Svg
-            width={stageSize.w}
-            height={svgH}
-            viewBox={`0 0 ${stageSize.w} ${svgH}`}
-          >
-          <Defs>
-            <ClipPath id="cascade-board-clip">
-              <Rect
-                x={boardX - 1}
-                y={boardY - 1}
-                width={boardW + 2}
-                height={boardH + 2}
-                rx={Math.max(4, BEZEL_RADIUS - bezelPad)}
-              />
-            </ClipPath>
-          </Defs>
+      <View style={styles.stage} onLayout={handleStageLayout}>
+        {cellSize > 0 && (
+          <>
+            <View pointerEvents="none" style={[styles.bezel, { left: bezelX, top: bezelY, width: bezelW, height: bezelH }]}>
+              <GlassSurface variant="card" radius={BEZEL_RADIUS} style={styles.bezelSurface}>
+                <View style={[styles.boardGround, { backgroundColor: color.bg }]} />
+              </GlassSurface>
+            </View>
 
-          {/* Layer 1: Pure #000000 void inside crisp hairline bezel */}
-          <Rect
-            x={bezelX}
-            y={bezelY}
-            width={bezelW}
-            height={bezelH}
-            rx={BEZEL_RADIUS}
-            fill={color.bg}
-            stroke={color.line}
-            strokeWidth={1}
-          />
-
-          {/* Layer 2: Carved-out grid dots + standing Watchmaker mosaic */}
-          <G clipPath="url(#cascade-board-clip)">
-            {cur.board.map((row, r) =>
-              row.map((cell, c) => {
-                if (cell !== null) return null
-                return (
-                  <Circle
-                    key={`dot-${r}-${c}`}
-                    cx={boardX + (c + 0.5) * cellSize}
-                    cy={boardY + (r + 0.5) * cellSize}
-                    r={0.9}
-                    fill={color.ink4}
-                    fillOpacity={0.16}
-                  />
-                )
-              }),
-            )}
-
-            {cur.board.map((row, r) =>
-              row.map((tile, c) => {
-                if (!tile) return null
-                let wobbleOffsetX = 0
-                if (cur.wobble && cur.wobble.id === tile.id) {
-                  const progress = Math.min(1, cur.wobble.ageMs / WOBBLE_DURATION_MS)
-                  const amp = reduceMotion ? 1.4 : 3.2
-                  wobbleOffsetX = Math.sin(progress * Math.PI * 5) * (1 - progress) * amp
-                }
-                const tx = boardX + tile.x * cellSize + inset + wobbleOffsetX
-                const ty = boardY + tile.y * cellSize + inset
-                const key = r * cur.cols + c
-                const inPreview = previewKeys.has(key)
-
-                return (
-                  <G key={tile.id}>
+            <View pointerEvents="none" style={styles.svg}>
+              <Svg width={stageSize.w} height={svgH} viewBox={`0 0 ${stageSize.w} ${svgH}`}>
+                <Defs>
+                  <ClipPath id="cascade-board-clip">
                     <Rect
-                      x={tx}
-                      y={ty}
-                      width={tileSize}
-                      height={tileSize}
-                      rx={TILE_RADIUS}
-                      fill={pieces[tile.color]}
+                      x={boardX - 1}
+                      y={boardY - 1}
+                      width={boardW + 2}
+                      height={boardH + 2}
+                      rx={Math.max(4, BEZEL_RADIUS - bezelPad)}
                     />
-                    {inPreview ? (
-                      <Rect
-                        x={tx}
-                        y={ty}
-                        width={tileSize}
-                        height={tileSize}
-                        rx={TILE_RADIUS}
-                        fill="#FFFFFF"
-                        fillOpacity={0.085}
+                  </ClipPath>
+                </Defs>
+
+                  {/* Layer 2: Carved-out grid dots + standing Watchmaker mosaic */}
+                  <G clipPath="url(#cascade-board-clip)">
+                    {cur.board.map((row, r) =>
+                      row.map((cell, c) => {
+                        if (cell !== null) return null
+                        return (
+                          <Circle
+                            key={`dot-${r}-${c}`}
+                            cx={boardX + (c + 0.5) * cellSize}
+                            cy={boardY + (r + 0.5) * cellSize}
+                            r={0.9}
+                            fill={color.ink4}
+                            fillOpacity={0.16}
+                          />
+                        )
+                      }),
+                    )}
+
+                    {cur.board.map((row, r) =>
+                      row.map((tile, c) => {
+                        if (!tile) return null
+                        let wobbleOffsetX = 0
+                        if (cur.wobble && cur.wobble.id === tile.id) {
+                          const progress = Math.min(1, cur.wobble.ageMs / WOBBLE_DURATION_MS)
+                          const amp = reduceMotion ? 1.4 : 3.2
+                          wobbleOffsetX = Math.sin(progress * Math.PI * 5) * (1 - progress) * amp
+                        }
+                        const tx = boardX + tile.x * cellSize + inset + wobbleOffsetX
+                        const ty = boardY + tile.y * cellSize + inset
+                        const key = r * cur.cols + c
+                        const inPreview = previewKeys.has(key)
+
+                        return (
+                          <G key={tile.id}>
+                            <Rect
+                              x={tx}
+                              y={ty}
+                              width={tileSize}
+                              height={tileSize}
+                              rx={TILE_RADIUS}
+                              fill={pieces[tile.color]}
+                            />
+                            {inPreview ? (
+                              <Rect
+                                x={tx}
+                                y={ty}
+                                width={tileSize}
+                                height={tileSize}
+                                rx={TILE_RADIUS}
+                                fill="#FFFFFF"
+                                fillOpacity={0.085}
+                              />
+                            ) : null}
+                            <Rect
+                              x={tx + 0.5}
+                              y={ty + 0.5}
+                              width={Math.max(1, tileSize - 1)}
+                              height={Math.max(1, tileSize - 1)}
+                              rx={Math.max(1, TILE_RADIUS - 0.5)}
+                              fill="none"
+                              stroke="#FFFFFF"
+                              strokeOpacity={0.08}
+                              strokeWidth={1}
+                            />
+                          </G>
+                        )
+                      }),
+                    )}
+
+                    {/* Exterior perimeter contour around pressed cluster (>= 2 tiles) */}
+                    {perimeterPath.length > 0 ? (
+                      <Path
+                        d={perimeterPath}
+                        fill="none"
+                        stroke={color.ink}
+                        strokeOpacity={0.58}
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
                       />
                     ) : null}
-                    <Rect
-                      x={tx + 0.5}
-                      y={ty + 0.5}
-                      width={Math.max(1, tileSize - 1)}
-                      height={Math.max(1, tileSize - 1)}
-                      rx={Math.max(1, TILE_RADIUS - 0.5)}
-                      fill="none"
-                      stroke="#FFFFFF"
-                      strokeOpacity={0.08}
-                      strokeWidth={1}
-                    />
                   </G>
-                )
-              }),
-            )}
 
-            {/* Exterior perimeter contour around pressed cluster (>= 2 tiles) */}
-            {perimeterPath.length > 0 ? (
-              <Path
-                d={perimeterPath}
-                fill="none"
-                stroke={color.ink}
-                strokeOpacity={0.58}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-              />
-            ) : null}
-          </G>
+                  {/* Layer 3: Tumbling 2D rigid-body detached tiles (unclipped past bottom bezel) */}
+                  {cur.falling.map((f) => {
+                    if (f.alpha <= 0.005) return null
+                    const cx = boardX + (f.x + 0.5) * cellSize
+                    const cy = boardY + (f.y + 0.5) * cellSize
+                    const drawAngleRad = reduceMotion ? f.angle * 0.2 : f.angle
+                    const drawDeg = drawAngleRad * (180 / Math.PI)
+                    const drawScale = reduceMotion ? 1 : f.scale
+                    const drawAlpha = reduceMotion
+                      ? Math.max(0, f.alpha - Math.max(0, (f.y - cur.rows * 0.2) * 0.06))
+                      : f.alpha
+                    if (drawAlpha <= 0.005) return null
 
-          {/* Layer 3: Tumbling 2D rigid-body detached tiles (unclipped past bottom bezel) */}
-          {cur.falling.map((f) => {
-            if (f.alpha <= 0.005) return null
-            const cx = boardX + (f.x + 0.5) * cellSize
-            const cy = boardY + (f.y + 0.5) * cellSize
-            const drawAngleRad = reduceMotion ? f.angle * 0.2 : f.angle
-            const drawDeg = drawAngleRad * (180 / Math.PI)
-            const drawScale = reduceMotion ? 1 : f.scale
-            const drawAlpha = reduceMotion
-              ? Math.max(0, f.alpha - Math.max(0, (f.y - cur.rows * 0.2) * 0.06))
-              : f.alpha
-            if (drawAlpha <= 0.005) return null
+                    return (
+                      <G
+                        key={`fall-${f.id}`}
+                        transform={`translate(${cx.toFixed(2)}, ${cy.toFixed(2)}) rotate(${drawDeg.toFixed(2)}) scale(${drawScale.toFixed(3)})`}
+                        opacity={drawAlpha}
+                      >
+                        <Rect
+                          x={-half}
+                          y={-half}
+                          width={tileSize}
+                          height={tileSize}
+                          rx={TILE_RADIUS}
+                          fill={pieces[f.color]}
+                        />
+                        <Rect
+                          x={-half + 0.5}
+                          y={-half + 0.5}
+                          width={Math.max(1, tileSize - 1)}
+                          height={Math.max(1, tileSize - 1)}
+                          rx={Math.max(1, TILE_RADIUS - 0.5)}
+                          fill="none"
+                          stroke="#FFFFFF"
+                          strokeOpacity={0.08}
+                          strokeWidth={1}
+                        />
+                        <Rect
+                          x={-half - 0.5}
+                          y={-half - 0.5}
+                          width={tileSize + 1}
+                          height={tileSize + 1}
+                          rx={TILE_RADIUS + 0.5}
+                          fill="none"
+                          stroke="#000000"
+                          strokeWidth={1.15}
+                        />
+                      </G>
+                    )
+                  })}
+              </Svg>
+            </View>
 
-            return (
-              <G
-                key={`fall-${f.id}`}
-                transform={`translate(${cx.toFixed(2)}, ${cy.toFixed(2)}) rotate(${drawDeg.toFixed(2)}) scale(${drawScale.toFixed(3)})`}
-                opacity={drawAlpha}
-              >
-                <Rect
-                  x={-half}
-                  y={-half}
-                  width={tileSize}
-                  height={tileSize}
-                  rx={TILE_RADIUS}
-                  fill={pieces[f.color]}
-                />
-                <Rect
-                  x={-half + 0.5}
-                  y={-half + 0.5}
-                  width={Math.max(1, tileSize - 1)}
-                  height={Math.max(1, tileSize - 1)}
-                  rx={Math.max(1, TILE_RADIUS - 0.5)}
-                  fill="none"
-                  stroke="#FFFFFF"
-                  strokeOpacity={0.08}
-                  strokeWidth={1}
-                />
-                <Rect
-                  x={-half - 0.5}
-                  y={-half - 0.5}
-                  width={tileSize + 1}
-                  height={tileSize + 1}
-                  rx={TILE_RADIUS + 0.5}
-                  fill="none"
-                  stroke="#000000"
-                  strokeWidth={1.15}
-                />
-              </G>
-            )
-          })}
-          </Svg>
-        </View>
+            <View
+              {...panResponder.panHandlers}
+              collapsable={false}
+              onLayout={handleBoardLayout}
+              style={[styles.hitSurface, { left: boardX, top: boardY, width: boardW, height: boardH }]}
+            />
+          </>
+        )}
       </View>
 
       <Completion
@@ -714,21 +709,19 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
   },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 18,
+  bezel: {
+    position: 'absolute',
   },
-  undoWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
+  bezelSurface: {
+    flex: 1,
   },
-  undoCount: {
-    minWidth: 16,
-    fontSize: 12,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
+  boardGround: {
+    ...StyleSheet.absoluteFill,
+    margin: 3,
+    borderRadius: BEZEL_RADIUS - 4,
+  },
+  hitSurface: {
+    position: 'absolute',
+    ...Platform.select({ web: { touchAction: 'none' } }),
   },
 })

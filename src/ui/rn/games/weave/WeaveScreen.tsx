@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PanResponder, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { RotateCcw, Sparkles, Undo2 } from 'lucide-react-native'
 import {
@@ -19,9 +19,9 @@ import {
 } from '@/core/games/weave/engine'
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { IconButton, Segmented } from '@/ui/rn/controls'
-import { useCalm, useFeedback, useGameSave, useKeys } from '@/ui/rn/hooks'
+import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
+import { useCalm, useFeedback, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
 
 interface WeaveSave {
   version: 1
@@ -40,15 +40,17 @@ interface DragStroke {
 
 const TOOL_OPTIONS = [
   { value: 'fill' as const, label: 'Fill' },
-  { value: 'mark' as const, label: 'Mark ×' },
+  { value: 'mark' as const, label: 'Mark' },
 ]
 
 const HOW_TO = [
   'Each number shows a consecutive run of filled cells in that row or column.',
-  'Drag across cells to weave smoothly. Switch to Mark × to rule out empty cells.',
+  'Drag across cells to weave smoothly. Switch to Mark to rule out empty cells.',
 ] as const
 
+const BOARD_INSET = 6
 const CLUE_GUTTER = 6
+const CLUE_GAP = 3
 
 function isValidSave(value: unknown): value is WeaveSave {
   if (!value || typeof value !== 'object') return false
@@ -102,23 +104,9 @@ function walkCells(
   return out
 }
 
-function Icon({
-  as,
-  size,
-  strokeWidth = 1.6,
-  color,
-}: {
-  as: object
-  size: number
-  strokeWidth?: number
-  color: string
-}) {
-  const Comp = as as ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
-  return <Comp size={size} strokeWidth={strokeWidth} color={color} />
-}
-
 export function WeaveScreen({ onExit }: GameScreenProps) {
   const { color, pieces } = useTokenColors()
+  const { isCompact, contentWidth } = useResponsiveLayout()
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
 
@@ -136,7 +124,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
   const [cursor, setCursor] = useState<{ row: number; col: number } | null>(null)
   const [hintCell, setHintCell] = useState<{ row: number; col: number } | null>(null)
   const [showCompletion, setShowCompletion] = useState(state.solved)
-  const [stageDims, setStageDims] = useState({ width: 340, height: 360 })
+  const [stageDims, setStageDims] = useState({ width: 0, height: 0 })
 
   const dragRef = useRef<DragStroke | null>(null)
   const stateRef = useRef<WeaveState>(state)
@@ -349,19 +337,18 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    if (width > 80 && height > 80) {
-      setStageDims({ width, height })
-    }
+    setStageDims((prev) => prev.width === width && prev.height === height ? prev : { width, height })
   }, [])
 
-  const clueW = Math.min(72, Math.max(44, maxRowClueLen * 15 + 14))
-  const clueH = Math.min(72, Math.max(42, maxColClueLen * 16 + 12))
-  const availW = Math.min(stageDims.width, 388) - clueW - CLUE_GUTTER
-  const availH = Math.min(stageDims.height, 388) - clueH - CLUE_GUTTER
-  const cellSize = Math.max(
-    22,
-    Math.floor((Math.min(availW, availH) - 2) / Math.max(state.rows, state.cols)),
-  )
+  const clueFontSize = isCompact ? 13 : 15
+  const clueLineHeight = clueFontSize + 3
+  const clueDigitWidth = isCompact ? 10 : 12
+  const clueW = Math.max(34, maxRowClueLen * (clueDigitWidth + CLUE_GAP) - CLUE_GAP)
+  const clueH = Math.max(28, maxColClueLen * (clueLineHeight + CLUE_GAP) - CLUE_GAP)
+  const boardChrome = 2 * (BOARD_INSET + 1) + CLUE_GUTTER + 2
+  const availW = Math.min(stageDims.width, contentWidth) - clueW - boardChrome
+  const availH = stageDims.height - clueH - boardChrome
+  const cellSize = Math.floor(Math.min(availW / state.cols, availH / state.rows))
   const gridInnerW = cellSize * state.cols
   const gridInnerH = cellSize * state.rows
   const gridOuterW = gridInnerW + 2
@@ -393,11 +380,11 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
     paintCellRef.current(row, col, stroke.strokeValue, false)
   }
 
-  const panResponder = useRef(
+  const [panResponder] = useState(() =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
       onPanResponderGrant: (e) => {
+        dragRef.current = null
         if (pausedRef.current || stateRef.current.solved) return
         const lx = e.nativeEvent.locationX
         const ly = e.nativeEvent.locationY
@@ -423,11 +410,12 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
       onPanResponderMove: (_, g) => {
         const stroke = dragRef.current
         if (!stroke) return
-        if (stateRef.current.solved) {
+        if (pausedRef.current || stateRef.current.solved || g.numberActiveTouches > 1) {
           dragRef.current = null
           return
         }
 
+        // The touch target can change as its cell is painted. Keep the original grid origin.
         const hit = cellFromLocal(stroke.startX + g.dx, stroke.startY + g.dy)
         if (!hit) return
         if (hit.row === stroke.lastRow && hit.col === stroke.lastCol) return
@@ -450,7 +438,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
         dragRef.current = null
       },
     }),
-  ).current
+  )
 
   const moveCursor = useCallback((dRow: number, dCol: number) => {
     const curr = stateRef.current
@@ -509,179 +497,211 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
       howTo={HOW_TO}
       controls={
         <View style={styles.controlsBar}>
-          <View style={styles.controlsSeg}>
-            <Segmented
-              label="Tool"
-              options={TOOL_OPTIONS}
-              value={tool}
-              onChange={(nextTool) => {
-                setTool(nextTool)
-                cue('tap', 0.45)
-                haptic('light')
-              }}
-            />
-          </View>
-          <View style={styles.controlsIcons}>
-            <IconButton
+          <GlassSurface variant="pill" radius={16} style={styles.toolSegment}>
+            <View accessibilityRole="radiogroup" accessibilityLabel="Tool" style={styles.toolRow}>
+              {TOOL_OPTIONS.map(({ value, label }) => {
+                const active = tool === value
+                return (
+                  <Pressable
+                    key={value}
+                    accessibilityRole="radio"
+                    aria-checked={active}
+                    disabled={paused || state.solved}
+                    onPress={() => {
+                      if (active) return
+                      setTool(value)
+                      cue('tap', 0.45)
+                      haptic('light')
+                    }}
+                    style={({ pressed }) => [
+                      styles.toolOption,
+                      active && { backgroundColor: color.accentWash, borderColor: color.accentDim },
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={[styles.toolLabel, { color: active ? color.accent : color.ink2 }]}>
+                      {label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+            </View>
+          </GlassSurface>
+          <GameControlBar>
+            <GameActionButton
+              icon={<Undo2 size={16} strokeWidth={1.6} color={color.ink2} />}
               label="Undo"
               onPress={handleUndo}
-              disabled={state.solved || state.undoStack.length === 0}
-            >
-              <Icon as={Undo2} size={18} color={color.ink2} />
-            </IconButton>
-            <IconButton
+              disabled={paused || state.solved || state.undoStack.length === 0}
+            />
+            <GameActionButton
+              icon={<Sparkles size={16} strokeWidth={1.6} color={color.ink2} />}
               label="Hint"
               onPress={handleHint}
-              disabled={state.solved}
-            >
-              <Icon as={Sparkles} size={17} color={color.ink2} />
-            </IconButton>
-            <IconButton
+              disabled={paused || state.solved}
+            />
+            <GameActionButton
+              icon={<RotateCcw size={16} strokeWidth={1.6} color={color.ink2} />}
               label="Reset"
               onPress={handleClear}
-              disabled={state.solved || !hasAnyMarkOrFill}
-            >
-              <Icon as={RotateCcw} size={17} color={color.ink2} />
-            </IconButton>
-          </View>
+              disabled={paused || state.solved || !hasAnyMarkOrFill}
+            />
+          </GameControlBar>
         </View>
       }
     >
       <View style={styles.stage} onLayout={handleStageLayout}>
-        <View style={styles.frame}>
-          {/* Top row: corner badge + column clues */}
-          <View style={[styles.topRow, { gap: CLUE_GUTTER }]}>
-            <View style={[styles.corner, { width: clueW, height: clueH }]}>
-              <Text style={[styles.cornerText, { color: color.ink4 }]}>
-                {state.rows}×{state.cols}
-              </Text>
+        {cellSize > 0 && (
+          <GlassSurface variant="card" radius={radius.lg} style={styles.frame}>
+            {/* Column clues align with the grid below. */}
+            <View style={[styles.topRow, { gap: CLUE_GUTTER }]}>
+              <View style={{ width: clueW, height: clueH }} />
+
+              <View
+                style={[
+                  styles.colClues,
+                  { width: gridOuterW, height: clueH, paddingHorizontal: 1 },
+                ]}
+              >
+                {state.colClues.map((clue, c) => {
+                  const satisfied = colSatisfied[c]
+                  const active = cursor?.col === c
+                  const clueColor = satisfied ? color.ink4 : active ? color.ink : color.ink2
+                  return (
+                    <View key={c} style={[styles.colClue, { width: cellSize }]}>
+                      {clue.map((n, i) => (
+                        <Text
+                          key={i}
+                          allowFontScaling={false}
+                          style={[
+                            styles.clueNum,
+                            { color: clueColor, fontSize: clueFontSize, lineHeight: clueLineHeight },
+                          ]}
+                        >
+                          {n}
+                        </Text>
+                      ))}
+                    </View>
+                  )
+                })}
+              </View>
             </View>
 
-            <View
-              style={[
-                styles.colClues,
-                { width: gridOuterW, height: clueH, paddingHorizontal: 1 },
-              ]}
-            >
-              {state.colClues.map((clue, c) => {
-                const satisfied = colSatisfied[c]
-                const active = cursor?.col === c
-                const clueColor = satisfied ? color.ink4 : active ? color.ink : color.ink2
-                return (
-                  <View key={c} style={[styles.colClue, { width: cellSize }]}>
-                    {clue.map((n, i) => (
-                      <Text key={i} style={[styles.clueNum, { color: clueColor }]}>
-                        {n}
-                      </Text>
-                    ))}
-                  </View>
-                )
-              })}
-            </View>
-          </View>
+            {/* Bottom row: row clues + interactive grid */}
+            <View style={[styles.bottomRow, { gap: CLUE_GUTTER }]}>
+              <View
+                style={[
+                  styles.rowClues,
+                  { width: clueW, height: gridOuterH, paddingVertical: 1 },
+                ]}
+              >
+                {state.rowClues.map((clue, r) => {
+                  const satisfied = rowSatisfied[r]
+                  const active = cursor?.row === r
+                  const clueColor = satisfied ? color.ink4 : active ? color.ink : color.ink2
+                  return (
+                    <View key={r} style={[styles.rowClue, { height: cellSize }]}>
+                      {clue.map((n, i) => (
+                        <Text
+                          key={i}
+                          allowFontScaling={false}
+                          style={[
+                            styles.clueNum,
+                            { color: clueColor, fontSize: clueFontSize, lineHeight: clueLineHeight, width: clueDigitWidth },
+                          ]}
+                        >
+                          {n}
+                        </Text>
+                      ))}
+                    </View>
+                  )
+                })}
+              </View>
 
-          {/* Bottom row: row clues + interactive grid */}
-          <View style={[styles.bottomRow, { gap: CLUE_GUTTER }]}>
-            <View
-              style={[
-                styles.rowClues,
-                { width: clueW, height: gridOuterH, paddingVertical: 1 },
-              ]}
-            >
-              {state.rowClues.map((clue, r) => {
-                const satisfied = rowSatisfied[r]
-                const active = cursor?.row === r
-                const clueColor = satisfied ? color.ink4 : active ? color.ink : color.ink2
-                return (
-                  <View key={r} style={[styles.rowClue, { height: cellSize }]}>
-                    {clue.map((n, i) => (
-                      <Text key={i} style={[styles.clueNum, { color: clueColor }]}>
-                        {n}
-                      </Text>
-                    ))}
-                  </View>
-                )
-              })}
-            </View>
+              <View
+                {...panResponder.panHandlers}
+                collapsable={false}
+                accessible
+                accessibilityLabel={`Weave ${state.rows} by ${state.cols} nonogram`}
+                style={[
+                  styles.grid,
+                  {
+                    width: gridOuterW,
+                    height: gridOuterH,
+                    backgroundColor: color.surface1,
+                    borderColor: state.solved ? color.accentDim : color.lineStrong,
+                  },
+                ]}
+              >
+                {state.grid.map((rowArr, r) => (
+                  <View key={r} pointerEvents="none" style={styles.gridRow}>
+                    {rowArr.map((cell, c) => {
+                      const isCursor = cursor?.row === r && cursor?.col === c
+                      const isHinted = hintCell?.row === r && hintCell?.col === c
+                      const isGuideRight = c === guideColIndex
+                      const isGuideBottom = r === guideRowIndex
 
-            <View
-              {...panResponder.panHandlers}
-              accessible
-              accessibilityLabel={`Weave ${state.rows} by ${state.cols} nonogram`}
-              style={[
-                styles.grid,
-                {
-                  width: gridOuterW,
-                  height: gridOuterH,
-                  backgroundColor: color.surface1,
-                  borderColor: state.solved ? color.accentDim : color.lineStrong,
-                },
-              ]}
-            >
-              {state.grid.map((rowArr, r) => (
-                <View key={r} pointerEvents="none" style={styles.gridRow}>
-                  {rowArr.map((cell, c) => {
-                    const isCursor = cursor?.row === r && cursor?.col === c
-                    const isHinted = hintCell?.row === r && hintCell?.col === c
-                    const isGuideRight = c === guideColIndex
-                    const isGuideBottom = r === guideRowIndex
-
-                    return (
-                      <View
-                        key={`${r}-${c}`}
-                        pointerEvents="none"
-                        style={[
-                          styles.cell,
-                          {
-                            width: cellSize,
-                            height: cellSize,
-                            backgroundColor: color.surface1,
-                            borderRightWidth:
-                              c === state.cols - 1 ? 0 : isGuideRight ? 1.5 : 1,
-                            borderBottomWidth:
-                              r === state.rows - 1 ? 0 : isGuideBottom ? 1.5 : 1,
-                            borderRightColor: isGuideRight ? color.lineStrong : color.line,
-                            borderBottomColor: isGuideBottom ? color.lineStrong : color.line,
-                          },
-                        ]}
-                      >
-                        {cell === 1 ? (
-                          <View
-                            style={[
-                              styles.cellFill,
-                              {
-                                backgroundColor: state.solved ? pieces.ochre : pieces.straw,
-                              },
-                            ]}
-                          />
-                        ) : null}
-
-                        {cell === 2 && !state.solved ? (
-                          <Svg width={markSize} height={markSize} viewBox="0 0 16 16">
-                            <Path
-                              d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
-                              stroke={color.ink4}
-                              strokeWidth={1.6}
-                              strokeLinecap="round"
-                              fill="none"
+                      return (
+                        <View
+                          key={`${r}-${c}`}
+                          pointerEvents="none"
+                          style={[
+                            styles.cell,
+                            {
+                              width: cellSize,
+                              height: cellSize,
+                              backgroundColor: 'rgba(16, 18, 24, 0.90)',
+                              borderRightWidth:
+                                c === state.cols - 1 ? 0 : isGuideRight ? 1.5 : 1,
+                              borderBottomWidth:
+                                r === state.rows - 1 ? 0 : isGuideBottom ? 1.5 : 1,
+                              borderRightColor: isGuideRight
+                                ? 'rgba(194, 161, 95, 0.36)'
+                                : 'rgba(255, 255, 255, 0.11)',
+                              borderBottomColor: isGuideBottom
+                                ? 'rgba(194, 161, 95, 0.36)'
+                                : 'rgba(255, 255, 255, 0.11)',
+                            },
+                          ]}
+                        >
+                          {cell === 1 ? (
+                            <View
+                              style={[
+                                styles.cellFill,
+                                {
+                                  backgroundColor: state.solved ? pieces.ochre : pieces.straw,
+                                },
+                              ]}
                             />
-                          </Svg>
-                        ) : null}
+                          ) : null}
 
-                        {isCursor || isHinted ? (
-                          <View
-                            pointerEvents="none"
-                            style={[styles.cursorRing, { borderColor: color.accent }]}
-                          />
-                        ) : null}
-                      </View>
-                    )
-                  })}
-                </View>
-              ))}
+                          {cell === 2 && !state.solved ? (
+                            <Svg width={markSize} height={markSize} viewBox="0 0 16 16">
+                              <Path
+                                d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5"
+                                stroke={color.ink4}
+                                strokeWidth={1.6}
+                                strokeLinecap="round"
+                                fill="none"
+                              />
+                            </Svg>
+                          ) : null}
+
+                          {isCursor || isHinted ? (
+                            <View
+                              pointerEvents="none"
+                              style={[styles.cursorRing, { borderColor: color.accent }]}
+                            />
+                          ) : null}
+                        </View>
+                      )
+                    })}
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
-        </View>
+          </GlassSurface>
+        )}
       </View>
 
       <Completion
@@ -704,6 +724,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   frame: {
+    padding: BOARD_INSET,
     gap: CLUE_GUTTER,
   },
   topRow: {
@@ -714,17 +735,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
-  corner: {
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-    paddingRight: 6,
-    paddingBottom: 5,
-  },
-  cornerText: {
-    fontSize: 11,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
-  },
   colClues: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -732,8 +742,7 @@ const styles = StyleSheet.create({
   colClue: {
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 2,
-    paddingBottom: 4,
+    gap: CLUE_GAP,
   },
   rowClues: {
     justifyContent: 'flex-start',
@@ -742,13 +751,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 5,
-    paddingRight: 6,
+    gap: CLUE_GAP,
   },
   clueNum: {
-    fontSize: 12,
-    fontWeight: '500',
-    lineHeight: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+    includeFontPadding: false,
     fontVariant: ['tabular-nums'],
   },
   grid: {
@@ -779,20 +787,28 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   controlsBar: {
-    width: '100%',
-    maxWidth: 388,
-    alignSelf: 'center',
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  controlsSeg: {
-    flex: 1,
-    minWidth: 0,
+  toolSegment: {
+    padding: 2,
   },
-  controlsIcons: {
+  toolRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 2,
+  },
+  toolOption: {
+    minWidth: 82,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  toolLabel: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 })

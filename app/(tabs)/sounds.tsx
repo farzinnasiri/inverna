@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SlidersHorizontal, Timer } from 'lucide-react-native'
 import { PRESETS, presetById, SILENT_MIX } from '@/core/sound/catalog'
+import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { FRAME_MAX_WIDTH, PopoverMenu } from '@/ui/rn/controls'
+import { GlassSurface } from '@/ui/rn/Glass'
+import { useResponsiveLayout } from '@/ui/rn/hooks'
 import { MixSheet } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
 import { useNav } from '@/ui/state/nav'
@@ -21,7 +23,7 @@ const TIMER_OPTIONS = [
 ] as const
 
 export default function SoundsScreen() {
-  const insets = useSafeAreaInsets()
+  const { insets, isCompact, sideMargin } = useResponsiveLayout()
   const { color } = useTokenColors()
 
   const playing = useSound((s) => s.playing)
@@ -36,6 +38,7 @@ export default function SoundsScreen() {
   const customMix = useSettings((s) => s.mix)
   const hasCustomMix = useSettings((s) => s.hasCustomMix)
   const sleepTimer = useSettings((s) => s.sleepTimer)
+  const hapticsOn = useSettings((s) => s.haptics)
   const setSettings = useSettings((s) => s.set)
 
   const mixOpen = useNav((s) => s.mixOpen)
@@ -54,6 +57,7 @@ export default function SoundsScreen() {
   const displayMix = playing && activeMix ? activeMix : currentItem.mix
 
   const selectItem = (id: string, autoPlay = playing) => {
+    if (hapticsOn) haptics.play('light')
     setSelectedId(id)
     if (autoPlay) {
       if (id === 'custom') {
@@ -65,6 +69,7 @@ export default function SoundsScreen() {
   }
 
   const togglePlayback = () => {
+    if (hapticsOn) haptics.play('medium')
     if (playing) {
       stopSound(1.2)
     } else if (currentItem.id === 'custom') {
@@ -87,14 +92,16 @@ export default function SoundsScreen() {
       style={[
         styles.root,
         {
-          paddingTop: insets.top + 16,
-          paddingBottom: Math.max(insets.bottom, 16) + 86,
+          paddingTop: insets.top + (isCompact ? 12 : 20),
+          paddingBottom: Math.max(insets.bottom, 16) + 92,
         },
       ]}
     >
       <AmbientBackdrop />
-      <View style={styles.frame}>
-        <Text style={[styles.heading, { color: color.ink }]}>{currentItem.name}</Text>
+      <View style={[styles.frame, { paddingHorizontal: sideMargin }]}>
+        <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 26 : 32 }]}>
+          {currentItem.name}
+        </Text>
 
         <View style={styles.center}>
           <SoundField
@@ -116,25 +123,26 @@ export default function SoundsScreen() {
             {items.map((item) => {
               const selected = item.id === currentItem.id
               return (
-                <Pressable
-                  key={item.id}
-                  onPress={() => selectItem(item.id, true)}
-                  style={[
-                    styles.modeChip,
-                    {
-                      backgroundColor: selected ? color.surface2 : 'transparent',
-                      borderColor: selected ? color.lineStrong : 'transparent',
-                    },
-                  ]}
-                >
-                  <Text
+                <Pressable key={item.id} onPress={() => selectItem(item.id, true)}>
+                  <GlassSurface
+                    variant="pill"
+                    radius={18}
+                    accent={selected}
+                    interactive
                     style={[
-                      styles.modeText,
-                      { color: selected ? color.ink : color.ink3 },
+                      styles.modeChip,
+                      !selected ? { backgroundColor: 'transparent', borderColor: 'transparent' } : null,
                     ]}
                   >
-                    {item.name}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.modeText,
+                        { color: selected ? color.ink : color.ink3 },
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
+                  </GlassSurface>
                 </Pressable>
               )
             })}
@@ -142,33 +150,29 @@ export default function SoundsScreen() {
 
           <View style={styles.pillRow}>
             <Pressable
-              onPress={() => setTimerOpen(true)}
-              style={[
-                styles.pillBtn,
-                {
-                  backgroundColor: color.surface1,
-                  borderColor: color.line,
-                  borderTopColor: 'rgba(220, 224, 230, 0.12)',
-                },
-              ]}
+              onPress={() => {
+                if (hapticsOn) haptics.play('light')
+                setTimerOpen(true)
+              }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
             >
-              <Timer size={15} strokeWidth={1.6} color={color.accent} />
-              <Text style={[styles.pillText, { color: color.ink }]}>{timerLabel}</Text>
+              <GlassSurface variant="pill" radius={21} interactive style={styles.pillBtn}>
+                <Timer size={15} strokeWidth={1.65} color={color.accent} />
+                <Text style={[styles.pillText, { color: color.ink }]}>{timerLabel}</Text>
+              </GlassSurface>
             </Pressable>
 
             <Pressable
-              onPress={() => setMixOpen(true)}
-              style={[
-                styles.pillBtn,
-                {
-                  backgroundColor: color.surface1,
-                  borderColor: color.line,
-                  borderTopColor: 'rgba(220, 224, 230, 0.12)',
-                },
-              ]}
+              onPress={() => {
+                if (hapticsOn) haptics.play('light')
+                setMixOpen(true)
+              }}
+              style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
             >
-              <SlidersHorizontal size={15} strokeWidth={1.6} color={color.ink2} />
-              <Text style={[styles.pillText, { color: color.ink }]}>Mix</Text>
+              <GlassSurface variant="pill" radius={21} interactive style={styles.pillBtn}>
+                <SlidersHorizontal size={15} strokeWidth={1.65} color={color.ink2} />
+                <Text style={[styles.pillText, { color: color.ink }]}>Mix</Text>
+              </GlassSurface>
             </Pressable>
           </View>
         </View>
@@ -220,15 +224,13 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: FRAME_MAX_WIDTH,
-    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   heading: {
-    fontSize: 30,
     fontWeight: '300',
     letterSpacing: -0.9,
-    marginTop: 8,
+    marginTop: 6,
   },
   center: {
     flex: 1,
@@ -252,9 +254,7 @@ const styles = StyleSheet.create({
   },
   modeChip: {
     paddingHorizontal: 14,
-    height: 34,
-    borderRadius: 999,
-    borderWidth: 1,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -270,13 +270,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    height: 38,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    borderWidth: 1,
+    height: 42,
+    paddingHorizontal: 18,
   },
   pillText: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '500',
   },
 })

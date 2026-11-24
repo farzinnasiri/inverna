@@ -25,8 +25,10 @@ import {
   getEndpointAt,
   getPathOwnerAt,
   isAllPairsConnected,
+  isOrthogonallyAdjacent,
   isPairConnected,
   nextPuzzle,
+  sameCell,
   startPath,
   undo,
   type Cell,
@@ -35,8 +37,8 @@ import {
 } from '@/core/games/thread/engine'
 import { legacyPieceMap, radius, type ResolvedTokens } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { IconButton } from '@/ui/rn/controls'
+import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
 
 interface ThreadSave {
@@ -45,10 +47,22 @@ interface ThreadSave {
   completed: number
 }
 
+interface Point {
+  x: number
+  y: number
+}
+
+interface Stroke {
+  origin: Point
+  previous: Point
+  previousCell: Cell | null
+  pending: ThreadState | null
+}
+
 const COMPLETION_DELAY_MS = 680
 const BEZEL_PADDING = 4
 const BEZEL_BORDER = 1
-const MAX_BOARD_SIZE = 396
+const BEZEL_INSET = BEZEL_PADDING + BEZEL_BORDER
 
 const HOW_TO = [
   'Drag from any shape to connect it to its matching pair.',
@@ -191,37 +205,71 @@ function EndpointShape({
   }
 }
 
-/**
- * Step a fast diagonal touch drag smoothly around a 90° corner via two
- * orthogonal `extendPath` calls so finger turns feel effortless on mobile.
- */
-function extendWithCornerAssist(state: ThreadState, target: Cell): ThreadState {
-  const direct = extendPath(state, target)
-  if (direct !== state || !state.activeColor) return direct
+function cellFromPoint({ x, y }: Point, side: number, size: number): Cell | null {
+  if (side <= 0 || x < 0 || x >= side || y < 0 || y >= side) return null
+  return { col: Math.floor((x / side) * size), row: Math.floor((y / side) * size) }
+}
 
-  const activePath = state.paths[state.activeColor]
-  if (!activePath || activePath.length === 0) return state
-  const tip = activePath[activePath.length - 1]!
-  const dr = target.row - tip.row
-  const dc = target.col - tip.col
+function extendAtCell(state: ThreadState, from: Cell | null, target: Cell): ThreadState {
+  const active = state.activeColor
+  if (!active) return state
+  const path = state.paths[active]
+  const tip = path?.[path.length - 1]
+  if (!tip) return state
+  if (isOrthogonallyAdjacent(tip, target)) return extendPath(state, target)
 
-  if (Math.abs(dr) !== 1 || Math.abs(dc) !== 1) return state
-
-  const candA: Cell = { row: tip.row, col: target.col }
-  const candB: Cell = { row: target.row, col: tip.col }
-
-  const isFree = (c: Cell) => !getEndpointAt(state, c) && !getPathOwnerAt(state, c)
-  const ordered = isFree(candA) && !isFree(candB) ? [candA, candB] : [candB, candA]
-
-  for (const mid of ordered) {
-    const step1 = extendPath(state, mid)
-    if (step1 === state) continue
-    if (step1.solved || !step1.activeColor) return step1
-    const step2 = extendPath(step1, target)
-    if (step2 !== step1) return step2
+  // At an exact grid corner, bridge diagonally with an orthogonal step.
+  // Never trim another thread in a cell the finger did not enter.
+  if (!from || !sameCell(from, tip)) return state
+  if (Math.abs(tip.row - target.row) !== 1 || Math.abs(tip.col - target.col) !== 1) return state
+  const bridges: Cell[] = [
+    { row: tip.row, col: target.col },
+    { row: target.row, col: tip.col },
+  ]
+  for (const bridge of bridges) {
+    const owner = getPathOwnerAt(state, bridge)
+    if (owner ? owner.color !== active : getEndpointAt(state, bridge)) continue
+    const stepped = extendPath(state, bridge)
+    if (stepped === state) continue
+    const reached = extendPath(stepped, target)
+    if (reached !== stepped) return reached
   }
-
   return state
+}
+
+/** Visit every cell crossed between samples, with no clamping to the board edges. */
+function extendAlongSegment(state: ThreadState, stroke: Stroke, to: Point, side: number): ThreadState {
+  const from = stroke.previous
+  stroke.previous = to
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  if (dx === 0 && dy === 0) return state
+
+  const crossings = [0, 1]
+  for (let i = 0; i <= state.size; i++) {
+    const edge = (i / state.size) * side
+    const tx = (edge - from.x) / dx
+    const ty = (edge - from.y) / dy
+    if (tx > 0 && tx < 1) crossings.push(tx)
+    if (ty > 0 && ty < 1) crossings.push(ty)
+  }
+  crossings.sort((a, b) => a - b)
+
+  let next = state
+  for (let i = 1; i < crossings.length && !next.solved; i++) {
+    const start = crossings[i - 1]!
+    const end = crossings[i]!
+    // Coincident row and column crossings have no intervening cell.
+    if (end - start < 1e-8) continue
+    const t = (start + end) / 2
+    const cell = cellFromPoint({ x: from.x + t * dx, y: from.y + t * dy }, side, state.size)
+    const previousCell = stroke.previousCell
+    if (cell && (!previousCell || !sameCell(previousCell, cell))) {
+      next = extendAtCell(next, previousCell, cell)
+    }
+    stroke.previousCell = cell
+  }
+  return next
 }
 
 export function ThreadScreen({ onExit }: GameScreenProps) {
@@ -242,21 +290,15 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
   const [state, setState] = useState<ThreadState>(() => sanitizeLoadedState(initialSave.state))
   const [paused, setPaused] = useState(false)
   const [showCompletion, setShowCompletion] = useState(() => initialSave.state.solved)
-  const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 340, h: 420 })
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 })
+  const stageSizeRef = useRef(stageSize)
 
   const stateRef = useRef<ThreadState>(state)
-  stateRef.current = state
   const pausedRef = useRef(paused)
-  pausedRef.current = paused
-  const touchOriginRef = useRef<{ x: number; y: number } | null>(null)
+  const strokeRef = useRef<Stroke | null>(null)
   const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const gridSize = useMemo(() => {
-    const inset = (BEZEL_PADDING + BEZEL_BORDER) * 2
-    const avail = Math.min(stageSize.w, Math.max(180, stageSize.h - 32), MAX_BOARD_SIZE)
-    return Math.max(180, Math.floor(avail - inset))
-  }, [stageSize.w, stageSize.h])
-
+  const gridSize = Math.max(0, Math.min(stageSize.width, stageSize.height) - BEZEL_INSET * 2)
   const gridSizeRef = useRef(gridSize)
   gridSizeRef.current = gridSize
 
@@ -296,75 +338,73 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
 
   /* --- Cell hit-testing & PanResponder drawing ---------------------------- */
 
-  const cellFromLocal = (x: number, y: number, clampToBoard: boolean): Cell | null => {
-    const side = gridSizeRef.current
-    if (side <= 0) return null
-    if (!clampToBoard && (x < 0 || x > side || y < 0 || y > side)) return null
-    const size = stateRef.current.size
-    const col = Math.min(size - 1, Math.max(0, Math.floor((x / side) * size)))
-    const row = Math.min(size - 1, Math.max(0, Math.floor((y / side) * size)))
-    return { row, col }
-  }
+  const cancelStroke = useCallback(() => {
+    strokeRef.current = null
+    const prev = stateRef.current
+    if (!prev.activeColor) return
+    const next = cancelActivePath(prev)
+    stateRef.current = next
+    setState(next)
+  }, [])
 
-  const panResponder = useRef(
+  const handlePauseChange = useCallback((nextPaused: boolean) => {
+    pausedRef.current = nextPaused
+    if (nextPaused) cancelStroke()
+    setPaused(nextPaused)
+  }, [cancelStroke])
+
+  const [panResponder] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
-      onMoveShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
-      onPanResponderGrant: (e) => {
-        if (pausedRef.current || stateRef.current.solved) return
-        const x = e.nativeEvent.locationX
-        const y = e.nativeEvent.locationY
-        const cell = cellFromLocal(x, y, false)
+      onPanResponderGrant: (event) => {
+        const prev = stateRef.current
+        if (pausedRef.current || prev.solved) return
+        const origin = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
+        const cell = cellFromPoint(origin, gridSizeRef.current, prev.size)
         if (!cell) return
 
-        const prev = stateRef.current
-        const next = startPath(prev, cell)
-        if (next === prev || !next.activeColor) return
+        const pending = startPath(prev, cell)
+        if (!pending.activeColor) return
 
-        touchOriginRef.current = { x, y }
-        stateRef.current = next
-        setState(next)
-        cueRef.current('tap', 0.55)
-        hapticRef.current('light')
+        // Touching an existing thread alone should never trim it.
+        strokeRef.current = { origin, previous: origin, previousCell: cell, pending }
+      },
+      onPanResponderStart: (_, g) => {
+        if (g.numberActiveTouches > 1) cancelStroke()
       },
       onPanResponderMove: (_, g) => {
-        const origin = touchOriginRef.current
-        const prev = stateRef.current
-        if (!origin || !prev.activeColor || prev.solved) return
+        const stroke = strokeRef.current
+        if (!stroke || pausedRef.current) return
+        const prev = stroke.pending ?? stateRef.current
+        const active = prev.activeColor
+        if (!active || prev.solved) return
 
-        const cell = cellFromLocal(origin.x + g.dx, origin.y + g.dy, true)
-        if (!cell) return
-
-        const next = extendWithCornerAssist(prev, cell)
+        const point = { x: stroke.origin.x + g.dx, y: stroke.origin.y + g.dy }
+        const next = extendAlongSegment(prev, stroke, point, gridSizeRef.current)
         if (next === prev) return
 
-        const prevColor = prev.activeColor
-        const prevLen = prev.paths[prevColor]?.length ?? 0
-        const nextLen = next.paths[prevColor]?.length ?? 0
-        const pair = prev.pairs.find((p) => p.color === prevColor)
-        const wasConnected = pair ? isPairConnected(pair, prev.paths[prevColor]) : false
-        const nowConnected = pair ? isPairConnected(pair, next.paths[prevColor]) : false
-
+        stroke.pending = null
         stateRef.current = next
         setState(next)
 
+        const pair = prev.pairs.find((p) => p.color === active)
         if (next.solved) {
-          touchOriginRef.current = null
+          strokeRef.current = null
           persistRef.current(next, true)
           cueRef.current('chime', 0.9)
           hapticRef.current('success')
           scheduleCompletionRef.current()
-        } else if (!wasConnected && nowConnected) {
+        } else if (pair && !isPairConnected(pair, prev.paths[active]) && isPairConnected(pair, next.paths[active])) {
           cueRef.current('place', 0.85)
           hapticRef.current('medium')
-        } else if (nextLen !== prevLen) {
+        } else {
           cueRef.current('tap', 0.42)
-          hapticRef.current('light')
+          hapticRef.current('selection')
         }
       },
       onPanResponderRelease: () => {
-        if (!touchOriginRef.current) return
-        touchOriginRef.current = null
+        if (!strokeRef.current) return
+        strokeRef.current = null
 
         const prev = stateRef.current
         if (!prev.activeColor) return
@@ -381,16 +421,9 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
           scheduleCompletionRef.current()
         }
       },
-      onPanResponderTerminate: () => {
-        touchOriginRef.current = null
-        const prev = stateRef.current
-        if (!prev.activeColor) return
-        const next = cancelActivePath(prev)
-        stateRef.current = next
-        setState(next)
-      },
+      onPanResponderTerminate: cancelStroke,
     }),
-  ).current
+  )
 
   /* --- Board actions ------------------------------------------------------ */
 
@@ -398,7 +431,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
     if (paused || stateRef.current.solved) return
     const prev = stateRef.current
     if (prev.history.length === 0) return
-    touchOriginRef.current = null
+    strokeRef.current = null
     const next = undo(prev)
     stateRef.current = next
     setState(next)
@@ -415,7 +448,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
       clearTimeout(completionTimerRef.current)
       completionTimerRef.current = null
     }
-    touchOriginRef.current = null
+    strokeRef.current = null
     setShowCompletion(false)
     stateRef.current = next
     setState(next)
@@ -425,21 +458,17 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
   }, [persistState, cue, haptic])
 
   const handleCancelActive = useCallback(() => {
-    const prev = stateRef.current
-    if (!prev.activeColor) return
-    touchOriginRef.current = null
-    const next = cancelActivePath(prev)
-    stateRef.current = next
-    setState(next)
+    if (!strokeRef.current) return
+    cancelStroke()
     cue('tap', 0.4)
-  }, [cue])
+  }, [cancelStroke, cue])
 
   const handleNextPuzzle = useCallback(() => {
     if (completionTimerRef.current) {
       clearTimeout(completionTimerRef.current)
       completionTimerRef.current = null
     }
-    touchOriginRef.current = null
+    strokeRef.current = null
     setShowCompletion(false)
     const next = nextPuzzle(stateRef.current, calm)
     stateRef.current = next
@@ -512,18 +541,16 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
 
   const viewBoxSize = state.size * 100
   const hasDrawnPaths = filledCells > 0 || state.activeColor !== null
-  const innerRadius = radius.lg - BEZEL_PADDING - BEZEL_BORDER
+  const innerRadius = radius.lg - BEZEL_INSET
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    if (width > 0 && height > 0) {
-      setStageSize((prev) =>
-        Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1
-          ? prev
-          : { w: width, h: height },
-      )
-    }
-  }, [])
+    const prev = stageSizeRef.current
+    if (width === prev.width && height === prev.height) return
+    stageSizeRef.current = { width, height }
+    cancelStroke()
+    setStageSize(stageSizeRef.current)
+  }, [cancelStroke])
 
   return (
     <GameShell
@@ -534,182 +561,170 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
         { label: 'Board', value: `${fillPercent}%` },
       ]}
       paused={paused}
-      onPauseChange={setPaused}
+      onPauseChange={handlePauseChange}
       onRestart={handleClear}
       onExit={onExit}
       howTo={HOW_TO}
       controls={
         <View style={styles.bar}>
-          <Text style={[styles.barTitle, { color: color.ink }]}>
+          <Text style={[styles.barTitle, { color: color.ink }]} numberOfLines={1}>
             Puzzle {state.puzzleNumber}
           </Text>
-          <View style={styles.barActions}>
-            <IconButton
+          <GameControlBar>
+            <GameActionButton
               label="Undo"
+              icon={<Undo2 size={16} strokeWidth={1.5} color={color.ink2} />}
               onPress={handleUndo}
               disabled={state.history.length === 0 || state.solved}
-            >
-              <Undo2 size={20} strokeWidth={1.5} color={color.ink2} />
-            </IconButton>
-            <IconButton
-              label="Reset board"
+            />
+            <GameActionButton
+              label="Reset"
+              icon={<RotateCcw size={16} strokeWidth={1.5} color={color.ink2} />}
               onPress={handleClear}
               disabled={!hasDrawnPaths || state.solved}
-            >
-              <RotateCcw size={20} strokeWidth={1.5} color={color.ink2} />
-            </IconButton>
-          </View>
+            />
+          </GameControlBar>
         </View>
       }
     >
-      <View style={styles.stage} onLayout={handleStageLayout}>
-        <View style={styles.frame}>
-          <View
-            style={[
-              styles.board,
-              {
-                backgroundColor: color.bg,
-                borderColor: color.line,
-              },
-            ]}
-          >
-            <View
-              {...panResponder.panHandlers}
-              accessibilityLabel={`Thread ${state.size} by ${state.size} board, ${connectedCount} of ${state.pairs.length} pairs connected, ${fillPercent} percent filled`}
-              style={[
-                styles.grid,
-                {
-                  width: gridSize,
-                  height: gridSize,
-                  borderRadius: innerRadius,
-                  backgroundColor: color.surface1,
-                },
-              ]}
-            >
-              <Svg
-                pointerEvents="none"
-                width={gridSize}
-                height={gridSize}
-                viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+      <View style={styles.stage}>
+        <View style={styles.boardSpace} onLayout={handleStageLayout}>
+          {gridSize > 0 && (
+            <GlassSurface variant="card" radius={radius.lg} style={styles.board}>
+              <View
+                style={[
+                  styles.grid,
+                  {
+                    width: gridSize,
+                    height: gridSize,
+                    borderRadius: innerRadius,
+                    backgroundColor: color.surface1,
+                  },
+                ]}
               >
-                {/* Layer 1: Subtle empty cell dots & missed-cell hints */}
-                <G>
-                  {cellOccupied.map((occupied, idx) => {
-                    const row = Math.floor(idx / state.size)
-                    const col = idx % state.size
-                    const cx = col * 100 + 50
-                    const cy = row * 100 + 50
-                    const hasDot = !occupied && !endpointCells.has(idx)
-                    const isMissed = allPairsConnected && !state.solved && !occupied
+                <Svg
+                  pointerEvents="none"
+                  width={gridSize}
+                  height={gridSize}
+                  viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+                >
+                  {/* Layer 1: Subtle empty cell dots & missed-cell hints */}
+                  <G>
+                    {cellOccupied.map((occupied, idx) => {
+                      const row = Math.floor(idx / state.size)
+                      const col = idx % state.size
+                      const cx = col * 100 + 50
+                      const cy = row * 100 + 50
+                      const hasDot = !occupied && !endpointCells.has(idx)
+                      const isMissed = allPairsConnected && !state.solved && !occupied
 
-                    if (!hasDot && !isMissed) return null
-                    return (
-                      <G key={idx}>
-                        {hasDot && <Circle cx={cx} cy={cy} r={3.5} fill={color.ink4} />}
-                        {isMissed && (
-                          <Rect
-                            x={col * 100 + 14}
-                            y={row * 100 + 14}
-                            width={72}
-                            height={72}
-                            rx={12}
-                            fill="none"
-                            stroke={color.ink3}
-                            strokeWidth={2.5}
-                            strokeOpacity={0.7}
-                          />
-                        )}
-                      </G>
-                    )
-                  })}
-                </G>
-
-                {/* Layer 2: Smooth round-cap conduits */}
-                <G>
-                  {state.pairs.map((pair) => {
-                    const path = state.paths[pair.color]
-                    if (!path || path.length < 2) return null
-                    const d = buildSvgPathD(path)
-                    const connected = connectedColors.has(pair.color)
-                    const active = state.activeColor === pair.color
-                    const strokeOpacity = connected ? 0.72 : active ? 0.68 : 0.55
-                    const stroke = tokens.pieces[legacyPieceMap[pair.color]]
-                    return (
-                      <Path
-                        key={pair.color}
-                        d={d}
-                        fill="none"
-                        stroke={stroke}
-                        strokeWidth={40}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeOpacity={strokeOpacity}
-                      />
-                    )
-                  })}
-                </G>
-
-                {/* Subtle active drag tip ring */}
-                {activeTip && state.activeColor && (
-                  <Circle
-                    cx={activeTip.col * 100 + 50}
-                    cy={activeTip.row * 100 + 50}
-                    r={24}
-                    fill="none"
-                    stroke={tokens.pieces[legacyPieceMap[state.activeColor]]}
-                    strokeWidth={3}
-                    strokeOpacity={0.55}
-                  />
-                )}
-
-                {/* Layer 3: 7 distinct geometric endpoint shapes */}
-                <G>
-                  {state.pairs.map((pair) => {
-                    const connected = connectedColors.has(pair.color)
-                    const active = state.activeColor === pair.color
-                    const scale = active && !reducedMotion ? 1.06 : 1
-                    return [pair.a, pair.b].map((cell, endIdx) => {
-                      const cx = cell.col * 100 + 50
-                      const cy = cell.row * 100 + 50
+                      if (!hasDot && !isMissed) return null
                       return (
-                        <G
-                          key={`${pair.color}-${endIdx}`}
-                          transform={
-                            scale === 1
-                              ? undefined
-                              : `translate(${cx}, ${cy}) scale(${scale}) translate(${-cx}, ${-cy})`
-                          }
-                        >
-                          <EndpointShape
-                            piece={pair.color}
-                            cx={cx}
-                            cy={cy}
-                            connected={connected}
-                            tokens={tokens}
-                          />
+                        <G key={idx}>
+                          {hasDot && <Circle cx={cx} cy={cy} r={3.5} fill={color.ink4} />}
+                          {isMissed && (
+                            <Rect
+                              x={col * 100 + 14}
+                              y={row * 100 + 14}
+                              width={72}
+                              height={72}
+                              rx={12}
+                              fill="none"
+                              stroke={color.ink3}
+                              strokeWidth={2.5}
+                              strokeOpacity={0.7}
+                            />
+                          )}
                         </G>
                       )
-                    })
-                  })}
-                </G>
-              </Svg>
-            </View>
-          </View>
+                    })}
+                  </G>
 
-          <Text
-            style={[
-              styles.note,
-              {
-                color: color.ink2,
-                opacity: allPairsConnected && !state.solved ? 1 : 0,
-              },
-            ]}
-          >
-            {allPairsConnected && !state.solved
-              ? `Fill the remaining ${remainingCells} ${remainingCells === 1 ? 'cell' : 'cells'}`
-              : ' '}
-          </Text>
+                  {/* Layer 2: Smooth round-cap conduits */}
+                  <G>
+                    {state.pairs.map((pair) => {
+                      const path = state.paths[pair.color]
+                      if (!path || path.length < 2) return null
+                      const d = buildSvgPathD(path)
+                      const connected = connectedColors.has(pair.color)
+                      const active = state.activeColor === pair.color
+                      const strokeOpacity = connected ? 0.72 : active ? 0.68 : 0.55
+                      const stroke = tokens.pieces[legacyPieceMap[pair.color]]
+                      return (
+                        <Path
+                          key={pair.color}
+                          d={d}
+                          fill="none"
+                          stroke={stroke}
+                          strokeWidth={40}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeOpacity={strokeOpacity}
+                        />
+                      )
+                    })}
+                  </G>
+
+                  {/* Subtle active drag tip ring */}
+                  {activeTip && state.activeColor && (
+                    <Circle
+                      cx={activeTip.col * 100 + 50}
+                      cy={activeTip.row * 100 + 50}
+                      r={24}
+                      fill="none"
+                      stroke={tokens.pieces[legacyPieceMap[state.activeColor]]}
+                      strokeWidth={3}
+                      strokeOpacity={0.55}
+                    />
+                  )}
+
+                  {/* Layer 3: 7 distinct geometric endpoint shapes */}
+                  <G>
+                    {state.pairs.map((pair) => {
+                      const connected = connectedColors.has(pair.color)
+                      const active = state.activeColor === pair.color
+                      const scale = active && !reducedMotion ? 1.06 : 1
+                      return [pair.a, pair.b].map((cell, endIdx) => {
+                        const cx = cell.col * 100 + 50
+                        const cy = cell.row * 100 + 50
+                        return (
+                          <G
+                            key={`${pair.color}-${endIdx}`}
+                            transform={
+                              scale === 1
+                                ? undefined
+                                : `translate(${cx}, ${cy}) scale(${scale}) translate(${-cx}, ${-cy})`
+                            }
+                          >
+                            <EndpointShape
+                              piece={pair.color}
+                              cx={cx}
+                              cy={cy}
+                              connected={connected}
+                              tokens={tokens}
+                            />
+                          </G>
+                        )
+                      })
+                    })}
+                  </G>
+                </Svg>
+                <View
+                  {...panResponder.panHandlers}
+                  collapsable={false}
+                  accessibilityLabel={`Thread ${state.size} by ${state.size} board, ${connectedCount} of ${state.pairs.length} pairs connected, ${fillPercent} percent filled`}
+                  style={StyleSheet.absoluteFill}
+                />
+              </View>
+            </GlassSurface>
+          )}
         </View>
+
+        <Text style={[styles.note, { color: color.ink2 }]}>
+          {allPairsConnected && !state.solved
+            ? `Fill the remaining ${remainingCells} ${remainingCells === 1 ? 'cell' : 'cells'}`
+            : ' '}
+        </Text>
       </View>
 
       <Completion
@@ -730,24 +745,20 @@ const styles = StyleSheet.create({
   stage: {
     flex: 1,
     width: '100%',
+    gap: 8,
+  },
+  boardSpace: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  frame: {
-    alignItems: 'center',
-    gap: 10,
-  },
   board: {
     padding: BEZEL_PADDING,
-    borderRadius: radius.lg,
-    borderWidth: BEZEL_BORDER,
   },
   grid: {
     overflow: 'hidden',
   },
   note: {
-    height: 18,
-    lineHeight: 18,
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
@@ -756,19 +767,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    width: '100%',
-    maxWidth: MAX_BOARD_SIZE,
-    alignSelf: 'center',
+    gap: 8,
   },
   barTitle: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: -0.2,
-  },
-  barActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
   },
 })

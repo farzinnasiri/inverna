@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import { Eraser, Pencil, Sparkles, Undo2 } from 'lucide-react-native'
 import {
@@ -24,7 +24,8 @@ import {
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { useCalm, useFeedback, useGameSave, useKeys } from '@/ui/rn/hooks'
+import { GlassSurface } from '@/ui/rn/Glass'
+import { useCalm, useFeedback, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
 
 interface NineSave {
   version: 1
@@ -32,7 +33,7 @@ interface NineSave {
   completed: number
 }
 
-const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
+const KEYPAD_ROWS = [[1, 2, 3, 4, 5], [6, 7, 8, 9]] as const
 const ROWS = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const
 const COLS = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const
 const NOTE_ROWS = [
@@ -64,23 +65,54 @@ function isValidSave(value: unknown): value is NineSave {
   )
 }
 
-function Icon({
-  as,
-  size,
-  strokeWidth = 1.6,
-  color,
+function KeypadButton({
+  label,
+  minHeight,
+  active,
+  disabled,
+  dimmed,
+  onPress,
+  children,
 }: {
-  as: object
-  size: number
-  strokeWidth?: number
-  color: string
+  label: string
+  minHeight: number
+  active?: boolean
+  disabled?: boolean
+  dimmed?: boolean
+  onPress: () => void
+  children: ReactNode
 }) {
-  const Comp = as as ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
-  return <Comp size={size} strokeWidth={strokeWidth} color={color} />
+  const { color } = useTokenColors()
+  return (
+    <Pressable
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      aria-selected={active}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.key,
+        {
+          opacity: disabled ? 0.36 : dimmed ? 0.5 : pressed ? 0.88 : 1,
+          transform: [{ scale: pressed && !disabled ? 0.965 : 1 }],
+        },
+      ]}
+    >
+      <GlassSurface
+        variant="pill"
+        radius={radius.sm}
+        accent={active}
+        style={[styles.keySurface, { minHeight }, active && { backgroundColor: color.accentWash }]}
+      >
+        {children}
+      </GlassSurface>
+    </Pressable>
+  )
 }
 
 export function NineScreen({ onExit }: GameScreenProps) {
   const { color, pieces } = useTokenColors()
+  const { isCompact, contentWidth } = useResponsiveLayout()
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
 
@@ -95,7 +127,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
 
   const [paused, setPaused] = useState(false)
   const [showCompletion, setShowCompletion] = useState(state.solved)
-  const [cellSize, setCellSize] = useState(36)
+  const [stageSize, setStageSize] = useState(0)
 
   const stateRef = useRef<NineState>(state)
   stateRef.current = state
@@ -288,14 +320,14 @@ export function NineScreen({ onExit }: GameScreenProps) {
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    const avail = Math.min(width, height, 388)
-    const nextCell = Math.floor((avail - 2) / BOARD_SIZE)
-    if (nextCell >= 24) setCellSize(nextCell)
+    setStageSize(Math.min(width, height))
   }, [])
 
+  const cellSize = Math.floor((Math.min(stageSize, contentWidth) - 2) / BOARD_SIZE)
   const innerSize = cellSize * BOARD_SIZE
-  const digitFontSize = Math.max(15, Math.min(21, Math.round(cellSize * 0.52)))
-  const noteFontSize = Math.max(8, Math.min(10, Math.round(cellSize * 0.24)))
+  const digitFontSize = Math.min(24, Math.round(cellSize * 0.54))
+  const noteFontSize = Math.min(11, Math.round(cellSize * 0.25))
+  const keyHeight = isCompact ? 42 : 48
 
   const canErase =
     state.selected !== null &&
@@ -316,265 +348,204 @@ export function NineScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={HOW_TO}
       controls={
-        <View style={styles.controlsWrap}>
-          <View style={styles.digitsRow}>
-            {DIGITS.map((d) => {
-              const done = digitCounts[d]! >= 9
-              const disabled = state.solved
-              return (
-                <Pressable
-                  key={d}
-                  disabled={disabled}
-                  onPress={() => handleDigit(d)}
-                  accessibilityRole="button"
-                  accessibilityLabel={state.notesMode ? `Note ${d}` : `Place ${d}`}
-                  style={({ pressed }) => [
-                    styles.digitBtn,
-                    {
-                      backgroundColor: done
-                        ? color.surface1
-                        : pressed
-                          ? color.surface3
-                          : color.surface2,
-                      borderColor: color.line,
-                      opacity: disabled ? 0.35 : done ? 0.55 : 1,
-                      transform: [{ scale: pressed && !disabled ? 0.94 : 1 }],
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.digitBtnText,
-                      {
-                        fontSize: state.notesMode ? 14 : 18,
-                        color: done ? color.ink4 : state.notesMode ? color.ink2 : color.ink,
-                      },
-                    ]}
-                  >
-                    {d}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-
-          <View style={styles.actionsRow}>
-            <Pressable
-              disabled={state.solved || state.undoStack.length === 0}
+        <View style={[styles.controlsWrap, { gap: isCompact ? 4 : 6, maxWidth: contentWidth }]}>
+          <View style={styles.keyRow}>
+            <KeypadButton
+              label="Undo"
+              minHeight={keyHeight}
+              disabled={paused || state.solved || state.undoStack.length === 0}
               onPress={handleUndo}
-              accessibilityRole="button"
-              accessibilityLabel="Undo"
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  backgroundColor: pressed ? color.surface3 : color.surface2,
-                  borderColor: color.line,
-                  opacity: state.solved || state.undoStack.length === 0 ? 0.32 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
-                },
-              ]}
             >
-              <Icon as={Undo2} size={15} color={color.ink2} />
+              <Undo2 size={15} strokeWidth={1.6} color={color.ink2} />
               <Text style={[styles.actionBtnText, { color: color.ink2 }]}>Undo</Text>
-            </Pressable>
-
-            <Pressable
-              disabled={state.solved || !canErase}
+            </KeypadButton>
+            <KeypadButton
+              label="Erase"
+              minHeight={keyHeight}
+              disabled={paused || state.solved || !canErase}
               onPress={handleErase}
-              accessibilityRole="button"
-              accessibilityLabel="Erase"
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  backgroundColor: pressed ? color.surface3 : color.surface2,
-                  borderColor: color.line,
-                  opacity: state.solved || !canErase ? 0.32 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
-                },
-              ]}
             >
-              <Icon as={Eraser} size={15} color={color.ink2} />
+              <Eraser size={15} strokeWidth={1.6} color={color.ink2} />
               <Text style={[styles.actionBtnText, { color: color.ink2 }]}>Erase</Text>
-            </Pressable>
-
-            <Pressable
-              disabled={state.solved}
+            </KeypadButton>
+            <KeypadButton
+              label="Notes"
+              minHeight={keyHeight}
+              active={state.notesMode}
+              disabled={paused || state.solved}
               onPress={handleToggleNotes}
-              accessibilityRole="button"
-              accessibilityLabel="Notes"
-              accessibilityState={{ selected: state.notesMode }}
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  backgroundColor: state.notesMode
-                    ? color.accentWash
-                    : pressed
-                      ? color.surface3
-                      : color.surface2,
-                  borderColor: state.notesMode ? color.accent : color.line,
-                  opacity: state.solved ? 0.32 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
-                },
-              ]}
             >
-              <Icon
-                as={Pencil}
-                size={15}
-                color={state.notesMode ? color.accent : color.ink2}
-              />
-              <Text
-                style={[
-                  styles.actionBtnText,
-                  { color: state.notesMode ? color.accent : color.ink2 },
-                ]}
-              >
+              <Pencil size={15} strokeWidth={1.6} color={state.notesMode ? color.accent : color.ink2} />
+              <Text style={[styles.actionBtnText, { color: state.notesMode ? color.accent : color.ink2 }]}>
                 Notes
               </Text>
-            </Pressable>
-
-            <Pressable
-              disabled={state.solved}
+            </KeypadButton>
+            <KeypadButton
+              label="Hint"
+              minHeight={keyHeight}
+              disabled={paused || state.solved}
               onPress={handleHint}
-              accessibilityRole="button"
-              accessibilityLabel="Hint"
-              style={({ pressed }) => [
-                styles.actionBtn,
-                {
-                  backgroundColor: pressed ? color.surface3 : color.surface2,
-                  borderColor: color.line,
-                  opacity: state.solved ? 0.32 : 1,
-                  transform: [{ scale: pressed ? 0.96 : 1 }],
-                },
-              ]}
             >
-              <Icon as={Sparkles} size={15} color={color.ink2} />
+              <Sparkles size={15} strokeWidth={1.6} color={color.ink2} />
               <Text style={[styles.actionBtnText, { color: color.ink2 }]}>Hint</Text>
-            </Pressable>
+            </KeypadButton>
           </View>
-        </View>
-      }
-    >
-      <View style={styles.stage} onLayout={handleStageLayout}>
-        <View
-          style={[
-            styles.board,
-            {
-              width: innerSize + 2,
-              height: innerSize + 2,
-              backgroundColor: color.bg,
-              borderColor: state.solved ? color.accentDim : color.lineStrong,
-            },
-          ]}
-        >
-          {ROWS.map((row) => (
-            <View key={row} style={styles.gridRow}>
-              {COLS.map((col) => {
-                const idx = row * BOARD_SIZE + col
-                const val = state.values[idx]!
-                const isGiven = state.givens[idx]!
-                const isSelected = state.selected === idx
-                const isPeerCell = state.selected !== null && isPeer(state.selected, idx)
-                const isMatchingDigit =
-                  !isSelected && selectedValue !== 0 && val === selectedValue
-                const hasConflict = conflicts.has(idx)
-                const cellNotes = state.notes[idx]!
 
-                const isBoxRight = col === 2 || col === 5
-                const isBoxBottom = row === 2 || row === 5
-
-                const cellBg = isSelected
-                  ? color.surface3
-                  : isMatchingDigit
-                    ? color.accentWash
-                    : isPeerCell
-                      ? color.surface1
-                      : color.bg
-
+          {KEYPAD_ROWS.map((digits) => (
+            <View key={digits[0]} style={styles.keyRow}>
+              {digits.map((digit) => {
+                const done = digitCounts[digit]! >= 9
                 return (
-                  <Pressable
-                    key={idx}
-                    onPress={() => handleSelect(idx)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Row ${row + 1}, column ${col + 1}${
-                      val ? `, ${val}${isGiven ? ' given' : ''}` : ', empty'
-                    }${hasConflict ? ', conflict' : ''}`}
-                    accessibilityState={{ selected: isSelected }}
-                    style={[
-                      styles.cell,
-                      {
-                        width: cellSize,
-                        height: cellSize,
-                        backgroundColor: cellBg,
-                        borderRightWidth: col === 8 ? 0 : isBoxRight ? 1.5 : 1,
-                        borderBottomWidth: row === 8 ? 0 : isBoxBottom ? 1.5 : 1,
-                        borderRightColor: isBoxRight ? color.lineStrong : color.line,
-                        borderBottomColor: isBoxBottom ? color.lineStrong : color.line,
-                      },
-                    ]}
+                  <KeypadButton
+                    key={digit}
+                    label={`${state.notesMode ? 'Note' : 'Place'} ${digit}${done ? ', all nine placed' : ''}`}
+                    minHeight={keyHeight}
+                    dimmed={done}
+                    disabled={paused || state.solved}
+                    onPress={() => handleDigit(digit)}
                   >
-                    {val !== 0 ? (
-                      <Text
-                        style={[
-                          styles.cellDigit,
-                          {
-                            fontSize: digitFontSize,
-                            fontWeight: isGiven ? '600' : '400',
-                            color: isGiven ? color.ink : color.accent,
-                          },
-                        ]}
-                      >
-                        {val}
-                      </Text>
-                    ) : cellNotes.length > 0 ? (
-                      <View pointerEvents="none" style={styles.notesGrid}>
-                        {NOTE_ROWS.map((noteRow, nr) => (
-                          <View key={nr} style={styles.notesRow}>
-                            {noteRow.map((n) => {
-                              const present = cellNotes.includes(n)
-                              const match = present && selectedValue === n
-                              return (
-                                <View key={n} style={styles.noteSlot}>
-                                  {present ? (
-                                    <Text
-                                      style={[
-                                        styles.noteText,
-                                        {
-                                          fontSize: noteFontSize,
-                                          color: match ? color.accent : color.ink3,
-                                          fontWeight: match ? '600' : '500',
-                                        },
-                                      ]}
-                                    >
-                                      {n}
-                                    </Text>
-                                  ) : null}
-                                </View>
-                              )
-                            })}
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    {hasConflict ? (
-                      <View
-                        pointerEvents="none"
-                        style={[styles.conflictDot, { backgroundColor: pieces.sage }]}
-                      />
-                    ) : null}
-
-                    {isSelected ? (
-                      <View
-                        pointerEvents="none"
-                        style={[styles.selectedRing, { borderColor: color.accent }]}
-                      />
-                    ) : null}
-                  </Pressable>
+                    <Text
+                      allowFontScaling={false}
+                      style={[
+                        styles.digitBtnText,
+                        { fontSize: state.notesMode ? 16 : 20, color: state.notesMode ? color.ink2 : color.ink },
+                      ]}
+                    >
+                      {digit}
+                    </Text>
+                  </KeypadButton>
                 )
               })}
             </View>
           ))}
         </View>
+      }
+    >
+      <View style={styles.stage} onLayout={handleStageLayout}>
+        {cellSize > 0 && (
+          <GlassSurface
+            variant="card"
+            radius={radius.md}
+            accent={state.solved}
+            style={{ width: innerSize + 2, height: innerSize + 2 }}
+          >
+            {ROWS.map((row) => (
+              <View key={row} style={styles.gridRow}>
+                {COLS.map((col) => {
+                  const idx = row * BOARD_SIZE + col
+                  const val = state.values[idx]!
+                  const isGiven = state.givens[idx]!
+                  const isSelected = state.selected === idx
+                  const isPeerCell = state.selected !== null && isPeer(state.selected, idx)
+                  const isMatchingDigit =
+                    !isSelected && selectedValue !== 0 && val === selectedValue
+                  const hasConflict = conflicts.has(idx)
+                  const cellNotes = state.notes[idx]!
+
+                  const isBoxRight = col === 2 || col === 5
+                  const isBoxBottom = row === 2 || row === 5
+
+                  const cellBg = isSelected
+                    ? color.surface3
+                    : isMatchingDigit
+                      ? color.accentWash
+                      : isPeerCell
+                        ? color.surface2
+                        : 'rgba(12, 14, 18, 0.92)'
+
+                  return (
+                    <Pressable
+                      key={idx}
+                      onPress={() => handleSelect(idx)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Row ${row + 1}, column ${col + 1}${
+                        val ? `, ${val}${isGiven ? ' given' : ''}` : ', empty'
+                      }${hasConflict ? ', conflict' : ''}`}
+                      accessibilityState={{ selected: isSelected }}
+                      style={[
+                        styles.cell,
+                        {
+                          width: cellSize,
+                          height: cellSize,
+                          backgroundColor: cellBg,
+                          borderRightWidth: col === 8 ? 0 : isBoxRight ? 1.5 : 1,
+                          borderBottomWidth: row === 8 ? 0 : isBoxBottom ? 1.5 : 1,
+                          borderRightColor: isBoxRight
+                            ? 'rgba(255, 255, 255, 0.28)'
+                            : 'rgba(255, 255, 255, 0.09)',
+                          borderBottomColor: isBoxBottom
+                            ? 'rgba(255, 255, 255, 0.28)'
+                            : 'rgba(255, 255, 255, 0.09)',
+                        },
+                      ]}
+                    >
+                      {val !== 0 ? (
+                        <Text
+                          allowFontScaling={false}
+                          style={[
+                            styles.cellDigit,
+                            {
+                              fontSize: digitFontSize,
+                              fontWeight: isGiven ? '600' : '400',
+                              color: isGiven ? color.ink : color.accent,
+                            },
+                          ]}
+                        >
+                          {val}
+                        </Text>
+                      ) : cellNotes.length > 0 ? (
+                        <View pointerEvents="none" style={styles.notesGrid}>
+                          {NOTE_ROWS.map((noteRow, nr) => (
+                            <View key={nr} style={styles.notesRow}>
+                              {noteRow.map((n) => {
+                                const present = cellNotes.includes(n)
+                                const match = present && selectedValue === n
+                                return (
+                                  <View key={n} style={styles.noteSlot}>
+                                    {present ? (
+                                      <Text
+                                        allowFontScaling={false}
+                                        style={[
+                                          styles.noteText,
+                                          {
+                                            fontSize: noteFontSize,
+                                            lineHeight: noteFontSize + 1,
+                                            color: match ? color.accent : color.ink3,
+                                            fontWeight: match ? '600' : '500',
+                                          },
+                                        ]}
+                                      >
+                                        {n}
+                                      </Text>
+                                    ) : null}
+                                  </View>
+                                )
+                              })}
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      {hasConflict ? (
+                        <View
+                          pointerEvents="none"
+                          style={[styles.conflictDot, { backgroundColor: pieces.sage }]}
+                        />
+                      ) : null}
+
+                      {isSelected ? (
+                        <View
+                          pointerEvents="none"
+                          style={[styles.selectedRing, { borderColor: color.accent }]}
+                        />
+                      ) : null}
+                    </Pressable>
+                  )
+                })}
+              </View>
+            ))}
+          </GlassSurface>
+        )}
       </View>
 
       <Completion
@@ -595,11 +566,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  board: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    overflow: 'hidden',
   },
   gridRow: {
     flexDirection: 'row',
@@ -628,7 +594,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   noteText: {
-    lineHeight: 11,
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,
   },
@@ -650,42 +615,31 @@ const styles = StyleSheet.create({
   },
   controlsWrap: {
     width: '100%',
-    maxWidth: 388,
     alignSelf: 'center',
-    gap: 8,
   },
-  digitsRow: {
+  keyRow: {
     flexDirection: 'row',
     gap: 5,
   },
-  digitBtn: {
+  key: {
     flex: 1,
-    height: 44,
-    borderRadius: radius.sm,
-    borderWidth: 1,
+    minWidth: 0,
+  },
+  keySurface: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
   },
   digitBtnText: {
-    fontWeight: '500',
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  actionBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
+    includeFontPadding: false,
   },
   actionBtnText: {
     fontSize: 13,
     fontWeight: '500',
+    flexShrink: 1,
   },
 })

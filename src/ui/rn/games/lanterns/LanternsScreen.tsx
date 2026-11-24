@@ -2,11 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Animated,
   Easing,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
   View,
-  useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native'
 import Svg, { Circle, Ellipse, Path, Polygon } from 'react-native-svg'
@@ -21,9 +21,8 @@ import {
   type SigilId,
 } from '@/core/games/lanterns/engine'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { Button } from '@/ui/rn/controls'
-import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
+import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
 
 interface LanternsSave {
   version: 1
@@ -266,28 +265,27 @@ function LanternTile({
   const flipAnim = useRef(new Animated.Value(isFlipped ? 1 : 0)).current
 
   useEffect(() => {
-    Animated.timing(flipAnim, {
+    const animation = Animated.timing(flipAnim, {
       toValue: isFlipped ? 1 : 0,
-      duration: reducedMotion ? 160 : 280,
-      easing: Easing.bezier(0.23, 1, 0.32, 1),
-      useNativeDriver: true,
-    }).start()
+      duration: reducedMotion ? 140 : 240,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: Platform.OS !== 'web',
+    })
+    animation.start()
+    return () => animation.stop()
   }, [isFlipped, reducedMotion, flipAnim])
 
-  const backRotateY = flipAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
+  // Keep both faces upright. The opaque back stays behind the front through the handoff.
+  const scaleX = flipAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 0.1, 1],
   })
-  const frontRotateY = flipAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['180deg', '360deg'],
-  })
-  const backOpacity = reducedMotion
-    ? flipAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] })
-    : flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [1, 1, 0, 0] })
   const frontOpacity = reducedMotion
-    ? flipAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] })
-    : flipAnim.interpolate({ inputRange: [0, 0.49, 0.5, 1], outputRange: [0, 0, 1, 1] })
+    ? flipAnim
+    : flipAnim.interpolate({
+        inputRange: [0, 0.4, 0.6, 1],
+        outputRange: [0, 0, 1, 1],
+      })
 
   const backMarkSize = Math.round(size * 0.48)
   const sigilSize = Math.round(size * 0.58)
@@ -305,48 +303,48 @@ function LanternTile({
           width: size,
           height: size,
           borderColor: isFocused ? color.ink2 : 'transparent',
-          transform: [{ scale: pressed && !card.matched && !isFlipped ? 0.96 : 1 }],
+          transform: [{ scale: pressed && !reducedMotion && !isFlipped ? 0.97 : 1 }],
         },
       ]}
     >
-      {/* Face-down machined guilloché back */}
       <Animated.View
         pointerEvents="none"
-        style={[
-          styles.face,
-          {
-            backgroundColor: color.surface2,
-            borderColor: color.line,
-            opacity: backOpacity,
-            transform: reducedMotion ? [] : [{ perspective: 800 }, { rotateY: backRotateY }],
-          },
-        ]}
+        style={[StyleSheet.absoluteFill, !reducedMotion && { transform: [{ scaleX }] }]}
       >
-        <CardBackMark size={backMarkSize} ringColor={color.ink4} brassColor={color.accentDim} />
-      </Animated.View>
+        <View
+          style={[
+            styles.face,
+            {
+              backgroundColor: color.surface2,
+              borderColor: color.lineStrong,
+              borderCurve: 'continuous',
+            },
+          ]}
+        >
+          <CardBackMark size={backMarkSize} ringColor={color.ink4} brassColor={color.accentDim} />
+        </View>
 
-      {/* Face-up astronomical sigil front */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.face,
-          {
-            backgroundColor: card.matched ? color.surface1 : color.surface3,
-            borderColor: card.matched ? color.line : color.lineStrong,
-            opacity: frontOpacity,
-            transform: reducedMotion ? [] : [{ perspective: 800 }, { rotateY: frontRotateY }],
-          },
-        ]}
-      >
-        {card.matched && (
-          <View style={[styles.matchedTick, { borderColor: color.accentDim }]} />
-        )}
-        <SigilMark
-          id={card.sigil}
-          size={sigilSize}
-          color={sigilColor}
-          opacity={card.matched ? 0.42 : 1}
-        />
+        <Animated.View
+          style={[
+            styles.face,
+            {
+              backgroundColor: card.matched ? color.surface1 : color.surface3,
+              borderColor: card.matched ? color.accentDim : color.lineStrong,
+              borderCurve: 'continuous',
+              opacity: frontOpacity,
+            },
+          ]}
+        >
+          {card.matched && (
+            <View style={[styles.matchedTick, { borderColor: color.accentDim }]} />
+          )}
+          <SigilMark
+            id={card.sigil}
+            size={sigilSize}
+            color={sigilColor}
+            opacity={card.matched ? 0.42 : 1}
+          />
+        </Animated.View>
       </Animated.View>
     </Pressable>
   )
@@ -357,7 +355,7 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
   const reducedMotion = useReducedMotion()
-  const windowDims = useWindowDimensions()
+  const { frameWidth, sideMargin, usableHeight, isCompact } = useResponsiveLayout()
 
   const [fallback] = useState<LanternsSave>(() => ({
     version: 1,
@@ -371,10 +369,7 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
   const [paused, setPaused] = useState(false)
   const [showCompletion, setShowCompletion] = useState(state.solved)
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
-  const [stageDims, setStageDims] = useState(() => ({
-    width: Math.min(BOARD_MAX_WIDTH, Math.max(280, windowDims.width - 28)),
-    height: Math.max(300, windowDims.height - 230),
-  }))
+  const [stageDims, setStageDims] = useState<{ width: number; height: number } | null>(null)
 
   const stateRef = useRef(state)
   stateRef.current = state
@@ -553,17 +548,19 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
     const { width, height } = e.nativeEvent.layout
     if (width > 0 && height > 0) {
       setStageDims((prev) =>
-        Math.abs(prev.width - width) < 1 && Math.abs(prev.height - height) < 1
+        prev && Math.abs(prev.width - width) < 1 && Math.abs(prev.height - height) < 1
           ? prev
           : { width, height },
       )
     }
   }, [])
 
-  const aspect = state.cols / state.rows
-  const boardWidth = Math.min(stageDims.width, stageDims.height * aspect, BOARD_MAX_WIDTH)
-  const gap = boardWidth >= 340 ? 10 : 8
-  const tileSize = Math.max(48, Math.floor((boardWidth - gap * (state.cols - 1)) / state.cols))
+  const gap = isCompact ? 8 : 10
+  const stageWidth = stageDims?.width ?? frameWidth - sideMargin * 2
+  const stageHeight = stageDims?.height ?? usableHeight - 166
+  const tileWidth = (Math.min(stageWidth, BOARD_MAX_WIDTH) - gap * (state.cols - 1)) / state.cols
+  const tileHeight = (stageHeight - gap * (state.rows - 1)) / state.rows
+  const tileSize = Math.max(0, Math.floor(Math.min(tileWidth, tileHeight)))
 
   const rows: LanternCard[][] = []
   for (let r = 0; r < state.rows; r++) {
@@ -585,9 +582,13 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={HOW_TO}
       controls={
-        <View style={styles.controls}>
+        <GameControlBar>
           <View style={styles.progressWrap}>
-            <View style={styles.pipsRow} accessibilityElementsHidden>
+            <View
+              style={styles.pipsRow}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
               {Array.from({ length: state.totalPairs }, (_, i) => {
                 const filled = i < state.matchedPairs
                 return (
@@ -609,14 +610,13 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
             </Text>
           </View>
 
-          <Button variant="quiet" size="sm" onPress={handleNext}>
-            New board
-          </Button>
-        </View>
+          <GameActionButton label="New board" onPress={handleNext} />
+        </GameControlBar>
       }
     >
       <View style={styles.stage} onLayout={onStageLayout}>
         <View
+          key={`${state.puzzleNumber}-${state.rngState}`}
           accessibilityLabel={`Lanterns ${state.cols} by ${state.rows} memory board, ${state.matchedPairs} of ${state.totalPairs} pairs found`}
           style={[styles.board, { gap }]}
         >
@@ -696,7 +696,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backfaceVisibility: 'hidden',
   },
   matchedTick: {
     position: 'absolute',
@@ -707,18 +706,9 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderRightWidth: 1,
   },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    width: '100%',
-    maxWidth: BOARD_MAX_WIDTH,
-    alignSelf: 'center',
-    minHeight: 44,
-  },
   progressWrap: {
     gap: 5,
+    marginRight: 12,
     justifyContent: 'center',
   },
   pipsRow: {

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Easing,
   PanResponder,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -10,7 +11,6 @@ import {
 } from 'react-native'
 import { Shuffle, Undo2 } from 'lucide-react-native'
 import {
-  canSlideTile,
   createDrift,
   inPlaceCount,
   isSolved,
@@ -23,8 +23,8 @@ import {
 } from '@/core/games/drift/engine'
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
-import { Button } from '@/ui/rn/controls'
+import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
 
 interface DriftUndoEntry {
@@ -41,13 +41,13 @@ interface DriftSave {
 
 interface PositionedTile {
   value: number
-  index: number
   row: number
   col: number
   home: boolean
-  movable: boolean
 }
 
+const BOARD_INSET = 8
+const TILE_RADIUS = radius.lg - BOARD_INSET - 1
 const COMPLETION_DELAY_MS = 460
 const MAX_UNDO = 24
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
@@ -150,6 +150,7 @@ function DriftPlateView({
           {
             backgroundColor: color.surface2,
             borderColor: tile.home ? color.accentDim : color.line,
+            borderCurve: 'continuous',
           },
         ]}
       >
@@ -160,21 +161,6 @@ function DriftPlateView({
       </View>
     </Animated.View>
   )
-}
-
-function Icon({
-  as,
-  size,
-  strokeWidth = 1.6,
-  color,
-}: {
-  as: object
-  size: number
-  strokeWidth?: number
-  color: string
-}) {
-  const Comp = as as ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
-  return <Comp size={size} strokeWidth={strokeWidth} color={color} />
 }
 
 export function DriftScreen({ onExit }: GameScreenProps) {
@@ -196,7 +182,7 @@ export function DriftScreen({ onExit }: GameScreenProps) {
 
   const [paused, setPaused] = useState(false)
   const [showCompletion, setShowCompletion] = useState(state.solved)
-  const [boardSize, setBoardSize] = useState(320)
+  const [boardSize, setBoardSize] = useState(0)
 
   const stateRef = useRef(state)
   stateRef.current = state
@@ -366,65 +352,31 @@ export function DriftScreen({ onExit }: GameScreenProps) {
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    const next = Math.floor(Math.min(width, height, 392))
-    if (next > 80) setBoardSize(next)
+    setBoardSize(Math.floor(Math.min(width, height)))
   }, [])
 
-  const pad = Math.max(8, Math.min(10, Math.round(boardSize * 0.025)))
-  const gap = Math.max(6, Math.min(8, Math.round(boardSize * 0.02)))
-  const trackSize = Math.max(60, boardSize - pad * 2 - 2)
+  const trackSize = boardSize - 2 * (BOARD_INSET + 1)
+  const gap = Math.max(6, Math.min(8, Math.round(trackSize * 0.02)))
   const cellSize = (trackSize - gap * (state.size - 1)) / state.size
 
-  const trackSizeRef = useRef(trackSize)
-  trackSizeRef.current = trackSize
-  const doSlideIndexRef = useRef(doSlideIndex)
-  doSlideIndexRef.current = doSlideIndex
   const doMoveDirRef = useRef(doMoveDir)
   doMoveDirRef.current = doMoveDir
 
-  const gestureStartRef = useRef({ x: 0, y: 0, swiped: false })
+  const [panResponder] = useState(() => {
+    let direction: Direction
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => {
+        const ax = Math.abs(g.dx)
+        const ay = Math.abs(g.dy)
+        if (pausedRef.current || stateRef.current.solved || Math.max(ax, ay) <= 14) return false
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        gestureStartRef.current = {
-          x: e.nativeEvent.locationX,
-          y: e.nativeEvent.locationY,
-          swiped: false,
-        }
+        // PanResponder zeroes dx/dy when it takes over from the tile press.
+        direction = ax > ay ? (g.dx > 0 ? 'right' : 'left') : g.dy > 0 ? 'down' : 'up'
+        return true
       },
-      onPanResponderMove: (_, g) => {
-        if (gestureStartRef.current.swiped) return
-        const ax = Math.abs(g.dx)
-        const ay = Math.abs(g.dy)
-        if (Math.max(ax, ay) >= 26) {
-          gestureStartRef.current.swiped = true
-          const dir: Direction =
-            ax > ay ? (g.dx > 0 ? 'right' : 'left') : g.dy > 0 ? 'down' : 'up'
-          doMoveDirRef.current(dir)
-        }
-      },
-      onPanResponderRelease: (_, g) => {
-        if (gestureStartRef.current.swiped) return
-        const ax = Math.abs(g.dx)
-        const ay = Math.abs(g.dy)
-        if (Math.max(ax, ay) >= 18) {
-          const dir: Direction =
-            ax > ay ? (g.dx > 0 ? 'right' : 'left') : g.dy > 0 ? 'down' : 'up'
-          doMoveDirRef.current(dir)
-          return
-        }
-        const ts = trackSizeRef.current
-        if (ts <= 0) return
-        const size = stateRef.current.size
-        const col = Math.min(size - 1, Math.max(0, Math.floor((gestureStartRef.current.x / ts) * size)))
-        const row = Math.min(size - 1, Math.max(0, Math.floor((gestureStartRef.current.y / ts) * size)))
-        doSlideIndexRef.current(row * size + col)
-      },
-    }),
-  ).current
+      onPanResponderGrant: () => doMoveDirRef.current(direction),
+    })
+  })
 
   useKeys(
     {
@@ -475,11 +427,9 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       if (value === 0) continue
       out.push({
         value,
-        index,
         row: Math.floor(index / state.size),
         col: index % state.size,
         home: value === index + 1,
-        movable: canSlideTile(state, index),
       })
     }
     out.sort((a, b) => a.value - b.value)
@@ -510,93 +460,85 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={howTo}
       controls={
-        <View style={styles.controlsRow}>
-          <Button
-            variant="quiet"
-            size="sm"
+        <GameControlBar>
+          <GameActionButton
+            icon={<Undo2 size={16} strokeWidth={1.6} color={color.ink2} />}
+            label="Undo"
+            disabled={paused || state.solved || undoStack.length === 0}
             onPress={doUndo}
-            disabled={undoStack.length === 0 || state.solved}
-            accessibilityLabel="Undo"
-          >
-            <Icon as={Undo2} size={15} color={color.ink} />
-            <Text style={[styles.ctrlLabel, { color: color.ink }]}>Undo</Text>
-          </Button>
-          <Button
-            variant="quiet"
-            size="sm"
+          />
+          <GameActionButton
+            icon={<Shuffle size={16} strokeWidth={1.6} color={color.ink2} />}
+            label="Shuffle"
+            disabled={paused || state.solved}
             onPress={doShuffle}
-            accessibilityLabel="Shuffle"
-          >
-            <Icon as={Shuffle} size={15} color={color.ink} />
-            <Text style={[styles.ctrlLabel, { color: color.ink }]}>Shuffle</Text>
-          </Button>
-        </View>
+          />
+        </GameControlBar>
       }
     >
       <View style={styles.stage} onLayout={handleStageLayout}>
-        <View
-          style={[
-            styles.board,
-            {
-              width: boardSize,
-              height: boardSize,
-              padding: pad,
-              backgroundColor: color.surface1,
-              borderColor: state.solved ? color.accentDim : color.line,
-            },
-          ]}
-        >
-          <View
-            {...panResponder.panHandlers}
-            accessible
-            accessibilityLabel={`Drift ${state.size} by ${state.size} sliding puzzle, ${placed} of ${totalTiles} tiles in place, ${state.moves} moves`}
-            style={[styles.track, { width: trackSize, height: trackSize }]}
-          >
-            {slots.map((slot) => {
-              const r = Math.floor(slot / state.size)
-              const c = slot % state.size
-              const isTerminal = slot === slots.length - 1
-              return (
-                <View
-                  key={slot}
-                  pointerEvents="none"
-                  style={[
-                    styles.slot,
-                    {
-                      width: cellSize,
-                      height: cellSize,
-                      left: c * (cellSize + gap),
-                      top: r * (cellSize + gap),
-                      backgroundColor: color.bg,
-                      borderColor: color.line,
-                    },
-                  ]}
-                >
-                  <View
+        {cellSize > 0 && (
+          <GlassSurface variant="card" radius={radius.lg} accent={state.solved} style={styles.chassis}>
+            <View
+              {...panResponder.panHandlers}
+              collapsable={false}
+              accessibilityLabel={`Drift ${state.size} by ${state.size} sliding puzzle, ${placed} of ${totalTiles} tiles in place, ${state.moves} moves`}
+              style={[styles.track, { width: trackSize, height: trackSize }]}
+            >
+              {slots.map((slot) => {
+                const r = Math.floor(slot / state.size)
+                const c = slot % state.size
+                const value = state.tiles[slot]!
+                const isTerminal = slot === slots.length - 1
+                return (
+                  <Pressable
+                    key={slot}
+                    accessible={value !== 0}
+                    aria-hidden={value === 0}
+                    focusable={value !== 0}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Slide tile ${value}`}
+                    disabled={paused || state.solved}
+                    onPress={() => doSlideIndex(slot)}
                     style={[
-                      styles.slotPin,
+                      styles.slot,
                       {
-                        backgroundColor: state.solved && isTerminal ? color.accent : color.ink4,
-                        opacity: state.solved && isTerminal ? 1 : 0.55,
+                        width: cellSize,
+                        height: cellSize,
+                        left: c * (cellSize + gap),
+                        top: r * (cellSize + gap),
+                        backgroundColor: color.bg,
+                        borderColor: color.line,
                       },
                     ]}
-                  />
-                </View>
-              )
-            })}
+                  >
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        styles.slotPin,
+                        {
+                          backgroundColor: state.solved && isTerminal ? color.accent : color.ink4,
+                          opacity: state.solved && isTerminal ? 1 : 0.55,
+                        },
+                      ]}
+                    />
+                  </Pressable>
+                )
+              })}
 
-            {positionedTiles.map((tile) => (
-              <DriftPlateView
-                key={`${state.size}-${tile.value}`}
-                tile={tile}
-                size={state.size}
-                cellSize={cellSize}
-                gap={gap}
-                reduceMotion={reduceMotion}
-              />
-            ))}
-          </View>
-        </View>
+              {positionedTiles.map((tile) => (
+                <DriftPlateView
+                  key={`${state.size}-${tile.value}`}
+                  tile={tile}
+                  size={state.size}
+                  cellSize={cellSize}
+                  gap={gap}
+                  reduceMotion={reduceMotion}
+                />
+              ))}
+            </View>
+          </GlassSurface>
+        )}
       </View>
 
       <Completion
@@ -618,18 +560,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  board: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  chassis: {
+    padding: BOARD_INSET,
   },
   track: {
     position: 'relative',
   },
   slot: {
     position: 'absolute',
-    borderRadius: radius.sm,
+    borderRadius: TILE_RADIUS,
+    borderCurve: 'continuous',
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -647,7 +587,8 @@ const styles = StyleSheet.create({
   },
   plate: {
     flex: 1,
-    borderRadius: radius.sm,
+    borderRadius: TILE_RADIUS,
+    borderCurve: 'continuous',
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -665,16 +606,5 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
     fontVariant: ['tabular-nums'],
     includeFontPadding: false,
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    minHeight: 44,
-  },
-  ctrlLabel: {
-    fontSize: 14,
-    fontWeight: '500',
   },
 })

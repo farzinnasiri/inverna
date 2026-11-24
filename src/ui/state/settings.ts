@@ -4,6 +4,10 @@ import type { GameId } from '@/core/games/catalog'
 import { kv, NAMESPACE } from '@/core/storage'
 import { DEFAULT_SCHEDULE, type Schedule } from '@/core/night'
 import { normalizeBand, SILENT_MIX, type Mix } from '@/core/sound/catalog'
+import { bootPlatform } from '@/platform'
+
+// Ensure platform localStorage is installed before any persist store hydrates.
+bootPlatform()
 
 /** zustand persistence routed through the platform key-value store. */
 export const kvStorage = createJSONStorage(() => ({

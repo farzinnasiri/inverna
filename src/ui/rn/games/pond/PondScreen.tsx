@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import {
   PanResponder,
   StyleSheet,
@@ -6,6 +6,7 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native'
+import { Waves as _Waves } from 'lucide-react-native'
 import Svg, { Circle, ClipPath, Defs, Ellipse, G, Path } from 'react-native-svg'
 import {
   createPond,
@@ -19,7 +20,8 @@ import {
 } from '@/core/games/pond/engine'
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
 
 interface PondSave {
@@ -27,6 +29,10 @@ interface PondSave {
   totalGathered: number
   plays: number
 }
+
+const Waves = _Waves as unknown as ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
+const BEZEL_PADDING = 4
+const BEZEL_BORDER = 1
 
 const DEFAULT_SAVE: PondSave = {
   state: null,
@@ -224,16 +230,14 @@ export function PondScreen({ onExit }: GameScreenProps) {
   const stateRef = useRef<PondState>(initialStateRef.current)
   const [pondState, setPondState] = useState<PondState>(initialStateRef.current)
   const [paused, setPaused] = useState(false)
-  const [stageSize, setStageSize] = useState<{ w: number; h: number }>({ w: 320, h: 420 })
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
 
   const sizeRef = useRef(stageSize)
-  sizeRef.current = stageSize
   const touchOriginRef = useRef<Vec2 | null>(null)
   const pointerPosRef = useRef<Vec2 | null>(null)
-  const lastDragRippleMsRef = useRef<number>(0)
+  const lastRippleRef = useRef<{ point: Vec2; time: number } | null>(null)
   const prevGatherIdRef = useRef<number>(stateRef.current.gatherEventId)
   const pausedRef = useRef(paused)
-  pausedRef.current = paused
   const reducedMotionRef = useRef(reducedMotion)
   reducedMotionRef.current = reducedMotion
 
@@ -254,6 +258,12 @@ export function PondScreen({ onExit }: GameScreenProps) {
   cueRef.current = cue
   const hapticRef = useRef(haptic)
   hapticRef.current = haptic
+
+  const clearTouch = useCallback(() => {
+    touchOriginRef.current = null
+    pointerPosRef.current = null
+    lastRippleRef.current = null
+  }, [])
 
   // Persist quietly on unmount
   useEffect(() => {
@@ -285,30 +295,29 @@ export function PondScreen({ onExit }: GameScreenProps) {
       },
       [calm, cue, haptic, persist],
     ),
-    !paused,
+    !paused && stageSize.w > 0 && stageSize.h > 0,
   )
 
   const handlePauseChange = useCallback(
     (nextPaused: boolean) => {
+      pausedRef.current = nextPaused
       if (nextPaused) {
-        touchOriginRef.current = null
-        pointerPosRef.current = null
+        clearTouch()
         persist(stateRef.current)
       }
       setPaused(nextPaused)
     },
-    [persist],
+    [clearTouch, persist],
   )
 
   const handleRestart = useCallback(() => {
     const fresh = createPond({ seed: Date.now() >>> 0, calm })
     stateRef.current = fresh
     prevGatherIdRef.current = 0
-    touchOriginRef.current = null
-    pointerPosRef.current = null
+    clearTouch()
     setPondState(fresh)
     persist(fresh, true)
-  }, [calm, persist])
+  }, [calm, clearTouch, persist])
 
   const handleExit = useCallback(() => {
     persist(stateRef.current)
@@ -320,15 +329,14 @@ export function PondScreen({ onExit }: GameScreenProps) {
   const toNorm = (x: number, y: number): Vec2 => {
     const { w, h } = sizeRef.current
     return {
-      x: Math.max(0.04, Math.min(0.96, x / Math.max(1, w))),
-      y: Math.max(0.04, Math.min(0.96, y / Math.max(1, h))),
+      x: Math.max(0, Math.min(1, x / w)),
+      y: Math.max(0, Math.min(1, y / h)),
     }
   }
 
-  const panResponder = useRef(
+  const [panResponder] = useState(() =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !pausedRef.current,
-      onMoveShouldSetPanResponder: () => !pausedRef.current,
+      onStartShouldSetPanResponder: () => !pausedRef.current && sizeRef.current.w > 0 && sizeRef.current.h > 0,
       onPanResponderGrant: (e) => {
         if (pausedRef.current) return
         const lx = e.nativeEvent.locationX
@@ -336,36 +344,35 @@ export function PondScreen({ onExit }: GameScreenProps) {
         touchOriginRef.current = { x: lx, y: ly }
         const pt = toNorm(lx, ly)
         pointerPosRef.current = pt
-        lastDragRippleMsRef.current = Date.now()
+        lastRippleRef.current = { point: pt, time: Date.now() }
         stateRef.current = tapPond(stateRef.current, pt.x, pt.y)
         setPondState(stateRef.current)
         cueRef.current('tap', 0.35)
         hapticRef.current('light')
       },
+      onPanResponderStart: (_, g) => {
+        if (g.numberActiveTouches > 1) clearTouch()
+      },
       onPanResponderMove: (_, g) => {
-        if (pausedRef.current || !touchOriginRef.current) return
-        const pt = toNorm(touchOriginRef.current.x + g.dx, touchOriginRef.current.y + g.dy)
-        const prevPt = pointerPosRef.current
+        const origin = touchOriginRef.current
+        const lastRipple = lastRippleRef.current
+        if (pausedRef.current || !origin || !lastRipple) return
+        const pt = toNorm(origin.x + g.dx, origin.y + g.dy)
         pointerPosRef.current = pt
         const now = Date.now()
-        const movedFar = prevPt ? Math.hypot(pt.x - prevPt.x, pt.y - prevPt.y) > 0.08 : false
-        if (movedFar && now - lastDragRippleMsRef.current > 360) {
-          lastDragRippleMsRef.current = now
+        const { w, h } = sizeRef.current
+        const distance = Math.hypot((pt.x - lastRipple.point.x) * w, (pt.y - lastRipple.point.y) * h)
+        if (distance > Math.min(w, h) * 0.08 && now - lastRipple.time > 360) {
+          lastRippleRef.current = { point: pt, time: now }
           stateRef.current = tapPond(stateRef.current, pt.x, pt.y)
         } else {
           stateRef.current = setTarget(stateRef.current, pt.x, pt.y)
         }
       },
-      onPanResponderRelease: () => {
-        touchOriginRef.current = null
-        pointerPosRef.current = null
-      },
-      onPanResponderTerminate: () => {
-        touchOriginRef.current = null
-        pointerPosRef.current = null
-      },
+      onPanResponderRelease: clearTouch,
+      onPanResponderTerminate: clearTouch,
     }),
-  ).current
+  )
 
   /* --- Desktop Web keyboard nudging --------------------------------------- */
 
@@ -378,14 +385,15 @@ export function PondScreen({ onExit }: GameScreenProps) {
     stateRef.current = setTarget(s, nx, ny)
   }, [])
 
-  const keyboardRipple = useCallback(() => {
+  const handleScatter = useCallback(() => {
     if (pausedRef.current) return
     const s = stateRef.current
     const pt = s.target ?? s.koi.spine[0]!
     stateRef.current = tapPond(s, pt.x, pt.y)
     setPondState(stateRef.current)
     cue('tap', 0.35)
-  }, [cue])
+    haptic('light')
+  }, [cue, haptic])
 
   useKeys(
     {
@@ -408,9 +416,9 @@ export function PondScreen({ onExit }: GameScreenProps) {
 
   useKeys(
     {
-      Space: keyboardRipple,
-      ' ': keyboardRipple,
-      Enter: keyboardRipple,
+      Space: handleScatter,
+      ' ': handleScatter,
+      Enter: handleScatter,
       p: () => handlePauseChange(true),
       P: () => handlePauseChange(true),
       Escape: () => handlePauseChange(true),
@@ -430,14 +438,12 @@ export function PondScreen({ onExit }: GameScreenProps) {
 
   const handleLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout
-    if (width > 0 && height > 0) {
-      setStageSize((prev) =>
-        Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1
-          ? prev
-          : { w: Math.round(width), h: Math.round(height) },
-      )
-    }
-  }, [])
+    const prev = sizeRef.current
+    if (width === prev.w && height === prev.h) return
+    clearTouch()
+    sizeRef.current = { w: width, h: height }
+    setStageSize(sizeRef.current)
+  }, [clearTouch])
 
   /* --- Compute SVG geometry for current frame ----------------------------- */
 
@@ -563,266 +569,275 @@ export function PondScreen({ onExit }: GameScreenProps) {
       onExit={handleExit}
       howTo={HOW_TO}
       controls={
-        <Text style={[styles.caption, { color: color.ink3 }]}>Touch to guide</Text>
+        <GameControlBar>
+          <GlassSurface variant="pill" radius={16} style={styles.status}>
+            <Text style={[styles.caption, { color: color.ink2 }]}>Touch to guide</Text>
+          </GlassSurface>
+          <GameActionButton
+            label="Scatter"
+            icon={<Waves size={16} strokeWidth={1.5} color={color.ink2} />}
+            onPress={handleScatter}
+            disabled={paused}
+          />
+        </GameControlBar>
       }
     >
-      <View
-        {...panResponder.panHandlers}
-        onLayout={handleLayout}
-        accessibilityLabel="Koi pond — touch or drag to guide the fish"
-        style={[
-          styles.frame,
-          {
-            backgroundColor: color.bg,
-            borderColor: color.line,
-          },
-        ]}
-      >
-        <Svg pointerEvents="none" width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-          <Defs>
-            <ClipPath id={KOI_CLIP_ID}>
-              <Path d={bodyD} />
-            </ClipPath>
-          </Defs>
+      <GlassSurface variant="card" radius={radius.lg} style={styles.frame}>
+        <View onLayout={handleLayout} style={[styles.water, { backgroundColor: color.bg }]}>
+          {w > 0 && h > 0 && (
+            <Svg pointerEvents="none" width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={styles.canvas}>
+              <Defs>
+                <ClipPath id={KOI_CLIP_ID}>
+                  <Path d={bodyD} />
+                </ClipPath>
+              </Defs>
 
-          {/* 1. Quiet nocturnal wake lines behind the koi */}
-          {wakePaths.map((d, i) => (
-            <Path
-              key={`wake-${i}`}
-              d={d}
-              fill="none"
-              stroke={pieces.clay}
-              strokeOpacity={wakeAlpha}
-              strokeWidth={Math.max(0.8, unit * 0.002)}
-              strokeLinecap="round"
-            />
-          ))}
-
-          {/* 2. Translucent Moon Ivory pectoral & pelvic fins */}
-          <G transform={`translate(${pecL.x.toFixed(2)}, ${pecL.y.toFixed(2)}) rotate(${pecL.deg.toFixed(2)})`}>
-            <Path d={pecPathsL.body} fill={pieces.bone} fillOpacity={0.24} />
-            <Path
-              d={pecPathsL.rays}
-              fill="none"
-              stroke={pieces.bone}
-              strokeOpacity={0.14}
-              strokeWidth={Math.max(0.6, pecScale * 0.024)}
-            />
-          </G>
-          <G transform={`translate(${pecR.x.toFixed(2)}, ${pecR.y.toFixed(2)}) rotate(${pecR.deg.toFixed(2)})`}>
-            <Path d={pecPathsR.body} fill={pieces.bone} fillOpacity={0.24} />
-            <Path
-              d={pecPathsR.rays}
-              fill="none"
-              stroke={pieces.bone}
-              strokeOpacity={0.14}
-              strokeWidth={Math.max(0.6, pecScale * 0.024)}
-            />
-          </G>
-          <G transform={`translate(${pelvL.x.toFixed(2)}, ${pelvL.y.toFixed(2)}) rotate(${pelvL.deg.toFixed(2)})`}>
-            <Path d={pelvPathsL.body} fill={pieces.bone} fillOpacity={0.24} />
-            <Path
-              d={pelvPathsL.rays}
-              fill="none"
-              stroke={pieces.bone}
-              strokeOpacity={0.14}
-              strokeWidth={Math.max(0.6, pelvScale * 0.024)}
-            />
-          </G>
-          <G transform={`translate(${pelvR.x.toFixed(2)}, ${pelvR.y.toFixed(2)}) rotate(${pelvR.deg.toFixed(2)})`}>
-            <Path d={pelvPathsR.body} fill={pieces.bone} fillOpacity={0.24} />
-            <Path
-              d={pelvPathsR.rays}
-              fill="none"
-              stroke={pieces.bone}
-              strokeOpacity={0.14}
-              strokeWidth={Math.max(0.6, pelvScale * 0.024)}
-            />
-          </G>
-
-          {/* 3. Forked flowing tail fin */}
-          <G transform={`translate(${tailAnchor.x.toFixed(2)}, ${tailAnchor.y.toFixed(2)}) rotate(${(tailAngle * RAD_TO_DEG).toFixed(2)})`}>
-            <Path d={tailPaths.body} fill={pieces.bone} fillOpacity={0.32} />
-            <Path
-              d={tailPaths.rays}
-              fill="none"
-              stroke={pieces.bone}
-              strokeOpacity={0.15}
-              strokeWidth={Math.max(0.6, unit * 0.0016)}
-            />
-          </G>
-
-          {/* 4. Moon Ivory koi body with Antique Brass & Deep Navy Slate markings */}
-          <Path d={bodyD} fill={pieces.bone} />
-          <G clipPath={`url(#${KOI_CLIP_ID})`}>
-            {patches.map((patch, i) => {
-              const p = pts[patch.idx]!
-              const prev = pts[Math.max(0, patch.idx - 1)]!
-              const nm = normals[patch.idx]!
-              const deg = Math.atan2(prev.y - p.y, prev.x - p.x) * RAD_TO_DEG
-              const cx = p.x + nm.x * BODY_WIDTHS[patch.idx]! * unit * patch.offsetN
-              const cy = p.y + nm.y * BODY_WIDTHS[patch.idx]! * unit * patch.offsetN
-              return (
-                <G key={`patch-${i}`} transform={`translate(${cx.toFixed(2)}, ${cy.toFixed(2)}) rotate(${deg.toFixed(2)})`}>
-                  <Ellipse cx={0} cy={0} rx={patch.rx * unit} ry={patch.ry * unit} fill={patch.fill} />
-                </G>
-              )
-            })}
-          </G>
-
-          {/* Quiet hairline contour along the body silhouette */}
-          <Path
-            d={bodyD}
-            fill="none"
-            stroke={color.ink}
-            strokeOpacity={0.08}
-            strokeWidth={Math.max(1, unit * 0.0028)}
-          />
-
-          {/* Subtle dorsal ridge */}
-          <Path
-            d={dorsalD}
-            fill="none"
-            stroke={pieces.stone}
-            strokeOpacity={0.36}
-            strokeWidth={Math.max(1.1, unit * 0.003)}
-            strokeLinecap="round"
-          />
-
-          {/* Crisp obsidian eyes */}
-          {eyes.map((eye) => (
-            <Circle key={`eye-${eye.side}`} cx={eye.cx} cy={eye.cy} r={eyeR} fill={color.surface1} />
-          ))}
-
-          {/* 5. Concentric hairline ripples */}
-          {pondState.ripples.map((r) => {
-            const t = Math.max(0, Math.min(1, r.ageMs / r.durationMs))
-            const ease = 1 - Math.pow(1 - t, 2.2)
-            const fadeIn = Math.min(1, t / 0.09)
-            const fadeOut = Math.pow(1 - t, 1.7)
-            const baseAlpha = fadeIn * fadeOut * (r.kind === 'gather' ? 0.56 : r.kind === 'tap' ? 0.44 : 0.2)
-            if (baseAlpha <= 0.005) return null
-
-            const rx = r.x * w
-            const ry = r.y * h
-            const outerRadius = (r.startRadius + (r.maxRadius - r.startRadius) * ease) * unit
-            const ringCount = r.kind === 'tail' ? 1 : r.kind === 'gather' ? 3 : 2
-
-            const rings = []
-            for (let ring = 0; ring < ringCount; ring++) {
-              const ringRadius = outerRadius * (1 - ring * 0.26)
-              if (ringRadius <= 1) continue
-              const ringAlpha = baseAlpha * (1 - ring * 0.28)
-              const ringHex =
-                r.kind === 'gather'
-                  ? ring === 0
-                    ? pieces.clay
-                    : color.accentDim
-                  : r.kind === 'tap'
-                    ? pieces.clay
-                    : color.ink3
-              rings.push(
-                <Circle
-                  key={`${r.id}-${ring}`}
-                  cx={rx}
-                  cy={ry}
-                  r={ringRadius}
+              {/* 1. Quiet nocturnal wake lines behind the koi */}
+              {wakePaths.map((d, i) => (
+                <Path
+                  key={`wake-${i}`}
+                  d={d}
                   fill="none"
-                  stroke={ringHex}
-                  strokeOpacity={ringAlpha}
-                  strokeWidth={Math.max(0.75, (r.kind === 'gather' ? 1.15 : 0.9) - ring * 0.18)}
-                />,
-              )
-            }
-            return rings
-          })}
+                  stroke={pieces.clay}
+                  strokeOpacity={wakeAlpha}
+                  strokeWidth={Math.max(0.8, unit * 0.002)}
+                  strokeLinecap="round"
+                />
+              ))}
 
-          {/* 6. Floating lantern motes in Antique Brass & Moon Ivory */}
-          {pondState.motes.map((m) => {
-            if (m.fadeIn <= 0.01) return null
-            const mx = m.x * w
-            const my = m.y * h
-            const pulse = 0.5 + 0.5 * Math.sin(m.phase * 1.55) * motionAmp
-            const coreAlpha = m.fadeIn * (0.42 + 0.22 * pulse)
-            const coreR = m.radius * unit * (0.92 + 0.08 * pulse)
-            const isIvoryLantern = m.id % 3 === 0
-
-            return (
-              <G key={`mote-${m.id}`}>
-                <Circle
-                  cx={mx}
-                  cy={my}
-                  r={coreR * 1.95}
+              {/* 2. Translucent Moon Ivory pectoral & pelvic fins */}
+              <G transform={`translate(${pecL.x.toFixed(2)}, ${pecL.y.toFixed(2)}) rotate(${pecL.deg.toFixed(2)})`}>
+                <Path d={pecPathsL.body} fill={pieces.bone} fillOpacity={0.24} />
+                <Path
+                  d={pecPathsL.rays}
                   fill="none"
-                  stroke={isIvoryLantern ? pieces.clay : color.accentDim}
-                  strokeOpacity={0.34 * m.fadeIn}
-                  strokeWidth={0.85}
-                />
-                <Circle
-                  cx={mx}
-                  cy={my}
-                  r={coreR}
-                  fill={isIvoryLantern ? pieces.bone : color.accent}
-                  fillOpacity={coreAlpha}
-                />
-                <Circle
-                  cx={mx}
-                  cy={my}
-                  r={coreR * 0.38}
-                  fill={isIvoryLantern ? color.accent : pieces.bone}
-                  fillOpacity={m.fadeIn * 0.62}
+                  stroke={pieces.bone}
+                  strokeOpacity={0.14}
+                  strokeWidth={Math.max(0.6, pecScale * 0.024)}
                 />
               </G>
-            )
-          })}
-
-          {/* 7. Dark slate floating stepping leaves at the margins */}
-          {pondState.leaves.map((leaf) => {
-            const lx = leaf.x * w
-            const ly = leaf.y * h
-            const lr = leaf.radius * unit
-            const leafPaths = buildLeafPaths(lr, leaf.notch)
-            return (
-              <G key={`leaf-${leaf.id}`} transform={`translate(${lx.toFixed(2)}, ${ly.toFixed(2)}) rotate(${(leaf.angle * RAD_TO_DEG).toFixed(2)})`}>
+              <G transform={`translate(${pecR.x.toFixed(2)}, ${pecR.y.toFixed(2)}) rotate(${pecR.deg.toFixed(2)})`}>
+                <Path d={pecPathsR.body} fill={pieces.bone} fillOpacity={0.24} />
                 <Path
-                  d={leafPaths.body}
-                  fill={color.surface3}
-                  stroke={color.line}
-                  strokeWidth={0.9}
-                />
-                <Path
-                  d={leafPaths.veins}
+                  d={pecPathsR.rays}
                   fill="none"
-                  stroke={color.line}
-                  strokeWidth={0.7}
+                  stroke={pieces.bone}
+                  strokeOpacity={0.14}
+                  strokeWidth={Math.max(0.6, pecScale * 0.024)}
                 />
               </G>
-            )
-          })}
+              <G transform={`translate(${pelvL.x.toFixed(2)}, ${pelvL.y.toFixed(2)}) rotate(${pelvL.deg.toFixed(2)})`}>
+                <Path d={pelvPathsL.body} fill={pieces.bone} fillOpacity={0.24} />
+                <Path
+                  d={pelvPathsL.rays}
+                  fill="none"
+                  stroke={pieces.bone}
+                  strokeOpacity={0.14}
+                  strokeWidth={Math.max(0.6, pelvScale * 0.024)}
+                />
+              </G>
+              <G transform={`translate(${pelvR.x.toFixed(2)}, ${pelvR.y.toFixed(2)}) rotate(${pelvR.deg.toFixed(2)})`}>
+                <Path d={pelvPathsR.body} fill={pieces.bone} fillOpacity={0.24} />
+                <Path
+                  d={pelvPathsR.rays}
+                  fill="none"
+                  stroke={pieces.bone}
+                  strokeOpacity={0.14}
+                  strokeWidth={Math.max(0.6, pelvScale * 0.024)}
+                />
+              </G>
 
-          {/* 8. Quiet touch beacon while finger is held on the water */}
-          {pointerPos && (
-            <G>
-              <Circle
-                cx={pointerPos.x * w}
-                cy={pointerPos.y * h}
-                r={unit * 0.02}
+              {/* 3. Forked flowing tail fin */}
+              <G transform={`translate(${tailAnchor.x.toFixed(2)}, ${tailAnchor.y.toFixed(2)}) rotate(${(tailAngle * RAD_TO_DEG).toFixed(2)})`}>
+                <Path d={tailPaths.body} fill={pieces.bone} fillOpacity={0.32} />
+                <Path
+                  d={tailPaths.rays}
+                  fill="none"
+                  stroke={pieces.bone}
+                  strokeOpacity={0.15}
+                  strokeWidth={Math.max(0.6, unit * 0.0016)}
+                />
+              </G>
+
+              {/* 4. Moon Ivory koi body with Antique Brass & Deep Navy Slate markings */}
+              <Path d={bodyD} fill={pieces.bone} />
+              <G clipPath={`url(#${KOI_CLIP_ID})`}>
+                {patches.map((patch, i) => {
+                  const p = pts[patch.idx]!
+                  const prev = pts[Math.max(0, patch.idx - 1)]!
+                  const nm = normals[patch.idx]!
+                  const deg = Math.atan2(prev.y - p.y, prev.x - p.x) * RAD_TO_DEG
+                  const cx = p.x + nm.x * BODY_WIDTHS[patch.idx]! * unit * patch.offsetN
+                  const cy = p.y + nm.y * BODY_WIDTHS[patch.idx]! * unit * patch.offsetN
+                  return (
+                    <G key={`patch-${i}`} transform={`translate(${cx.toFixed(2)}, ${cy.toFixed(2)}) rotate(${deg.toFixed(2)})`}>
+                      <Ellipse cx={0} cy={0} rx={patch.rx * unit} ry={patch.ry * unit} fill={patch.fill} />
+                    </G>
+                  )
+                })}
+              </G>
+
+              {/* Quiet hairline contour along the body silhouette */}
+              <Path
+                d={bodyD}
                 fill="none"
-                stroke={pieces.clay}
-                strokeOpacity={0.45}
-                strokeWidth={1}
+                stroke={color.ink}
+                strokeOpacity={0.08}
+                strokeWidth={Math.max(1, unit * 0.0028)}
               />
-              <Circle
-                cx={pointerPos.x * w}
-                cy={pointerPos.y * h}
-                r={unit * 0.02 * 0.28}
-                fill={color.accent}
-                fillOpacity={0.5}
+
+              {/* Subtle dorsal ridge */}
+              <Path
+                d={dorsalD}
+                fill="none"
+                stroke={pieces.stone}
+                strokeOpacity={0.36}
+                strokeWidth={Math.max(1.1, unit * 0.003)}
+                strokeLinecap="round"
               />
-            </G>
+
+              {/* Crisp obsidian eyes */}
+              {eyes.map((eye) => (
+                <Circle key={`eye-${eye.side}`} cx={eye.cx} cy={eye.cy} r={eyeR} fill={color.surface1} />
+              ))}
+
+              {/* 5. Concentric hairline ripples */}
+              {pondState.ripples.map((r) => {
+                const t = Math.max(0, Math.min(1, r.ageMs / r.durationMs))
+                const ease = 1 - Math.pow(1 - t, 2.2)
+                const fadeIn = Math.min(1, t / 0.09)
+                const fadeOut = Math.pow(1 - t, 1.7)
+                const baseAlpha = fadeIn * fadeOut * (r.kind === 'gather' ? 0.56 : r.kind === 'tap' ? 0.44 : 0.2)
+                if (baseAlpha <= 0.005) return null
+
+                const rx = r.x * w
+                const ry = r.y * h
+                const outerRadius = (r.startRadius + (r.maxRadius - r.startRadius) * ease) * unit
+                const ringCount = r.kind === 'tail' ? 1 : r.kind === 'gather' ? 3 : 2
+
+                const rings = []
+                for (let ring = 0; ring < ringCount; ring++) {
+                  const ringRadius = outerRadius * (1 - ring * 0.26)
+                  if (ringRadius <= 1) continue
+                  const ringAlpha = baseAlpha * (1 - ring * 0.28)
+                  const ringHex =
+                    r.kind === 'gather'
+                      ? ring === 0
+                        ? pieces.clay
+                        : color.accentDim
+                      : r.kind === 'tap'
+                        ? pieces.clay
+                        : color.ink3
+                  rings.push(
+                    <Circle
+                      key={`${r.id}-${ring}`}
+                      cx={rx}
+                      cy={ry}
+                      r={ringRadius}
+                      fill="none"
+                      stroke={ringHex}
+                      strokeOpacity={ringAlpha}
+                      strokeWidth={Math.max(0.75, (r.kind === 'gather' ? 1.15 : 0.9) - ring * 0.18)}
+                    />,
+                  )
+                }
+                return rings
+              })}
+
+              {/* 6. Floating lantern motes in Antique Brass & Moon Ivory */}
+              {pondState.motes.map((m) => {
+                if (m.fadeIn <= 0.01) return null
+                const mx = m.x * w
+                const my = m.y * h
+                const pulse = 0.5 + 0.5 * Math.sin(m.phase * 1.55) * motionAmp
+                const coreAlpha = m.fadeIn * (0.42 + 0.22 * pulse)
+                const coreR = m.radius * unit * (0.92 + 0.08 * pulse)
+                const isIvoryLantern = m.id % 3 === 0
+
+                return (
+                  <G key={`mote-${m.id}`}>
+                    <Circle
+                      cx={mx}
+                      cy={my}
+                      r={coreR * 1.95}
+                      fill="none"
+                      stroke={isIvoryLantern ? pieces.clay : color.accentDim}
+                      strokeOpacity={0.34 * m.fadeIn}
+                      strokeWidth={0.85}
+                    />
+                    <Circle
+                      cx={mx}
+                      cy={my}
+                      r={coreR}
+                      fill={isIvoryLantern ? pieces.bone : color.accent}
+                      fillOpacity={coreAlpha}
+                    />
+                    <Circle
+                      cx={mx}
+                      cy={my}
+                      r={coreR * 0.38}
+                      fill={isIvoryLantern ? color.accent : pieces.bone}
+                      fillOpacity={m.fadeIn * 0.62}
+                    />
+                  </G>
+                )
+              })}
+
+              {/* 7. Dark slate floating stepping leaves at the margins */}
+              {pondState.leaves.map((leaf) => {
+                const lx = leaf.x * w
+                const ly = leaf.y * h
+                const lr = leaf.radius * unit
+                const leafPaths = buildLeafPaths(lr, leaf.notch)
+                return (
+                  <G key={`leaf-${leaf.id}`} transform={`translate(${lx.toFixed(2)}, ${ly.toFixed(2)}) rotate(${(leaf.angle * RAD_TO_DEG).toFixed(2)})`}>
+                    <Path
+                      d={leafPaths.body}
+                      fill={color.surface3}
+                      stroke={color.line}
+                      strokeWidth={0.9}
+                    />
+                    <Path
+                      d={leafPaths.veins}
+                      fill="none"
+                      stroke={color.line}
+                      strokeWidth={0.7}
+                    />
+                  </G>
+                )
+              })}
+
+              {/* 8. Quiet touch beacon while finger is held on the water */}
+              {pointerPos && (
+                <G>
+                  <Circle
+                    cx={pointerPos.x * w}
+                    cy={pointerPos.y * h}
+                    r={unit * 0.02}
+                    fill="none"
+                    stroke={pieces.clay}
+                    strokeOpacity={0.45}
+                    strokeWidth={1}
+                  />
+                  <Circle
+                    cx={pointerPos.x * w}
+                    cy={pointerPos.y * h}
+                    r={unit * 0.02 * 0.28}
+                    fill={color.accent}
+                    fillOpacity={0.5}
+                  />
+                </G>
+              )}
+            </Svg>
           )}
-        </Svg>
-      </View>
+          <View
+            {...panResponder.panHandlers}
+            collapsable={false}
+            accessibilityLabel="Koi pond — touch or drag to guide the fish"
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      </GlassSurface>
     </GameShell>
   )
 }
@@ -833,10 +848,20 @@ const styles = StyleSheet.create({
   frame: {
     flex: 1,
     width: '100%',
-    minHeight: 260,
-    borderRadius: radius.lg,
+    padding: BEZEL_PADDING,
+  },
+  water: {
+    flex: 1,
+    borderRadius: radius.lg - BEZEL_PADDING - BEZEL_BORDER,
     overflow: 'hidden',
-    borderWidth: 1,
+  },
+  canvas: {
+    position: 'absolute',
+  },
+  status: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
   },
   caption: {
     fontSize: 13,
