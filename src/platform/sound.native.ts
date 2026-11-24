@@ -23,13 +23,15 @@ function resolveArtworkUri(): string | undefined {
  * Software Mansion's `react-native-audio-api` (C++ CoreAudio / Oboe Web Audio API).
  *
  * - Runs the exact same zero-audio-file synthesis graph as Web on the native audio thread.
- * - Configures AVAudioSession (`playback` + Bluetooth A2DP + AirPlay + haptics allowed)
- *   so audio plays in silent mode and continues smoothly when the screen locks.
+ * - Uses valid iOS AVAudioSessionCategoryPlayback (`options: []`) — Apple automatically
+ *   routes Playback to speaker, headphones, Bluetooth A2DP, and AirPlay while allowing
+ *   UIKit haptics, silent-mode playback, and background audio without paramErr (-50).
  * - Integrates `PlaybackNotificationManager` for iOS Dynamic Island, Lock Screen, and
  *   Control Center artwork + play/pause synchronization.
  */
 export function createPlatformSoundEngine(): SoundEngine {
   let sessionConfigured = false
+  let sessionActive = false
   let controlsConfigured = false
 
   const prepareSession = async () => {
@@ -40,15 +42,19 @@ export function createPlatformSoundEngine(): SoundEngine {
           ios: {
             category: 'playback',
             mode: 'default',
-            options: ['allowBluetoothA2DP', 'allowAirPlay'],
-            allowHaptics: true,
+            options: [],
+            allowHaptics: false,
+            notifyOthersOnDeactivation: true,
           },
         })
         AudioManager.observeAudioInterruptions(true)
       }
-      await AudioManager.setAudioSessionActivity(true)
+      if (!sessionActive) {
+        await AudioManager.setAudioSessionActivity(true)
+        sessionActive = true
+      }
     } catch {
-      /* ignore on unsupported runtimes */
+      sessionActive = false
     }
   }
 
@@ -92,6 +98,7 @@ export function createPlatformSoundEngine(): SoundEngine {
   return createNeuroSoundEngine({
     createContext: () => {
       try {
+        void prepareSession()
         return new AudioContext() as unknown as AudioContextLike
       } catch {
         return null
@@ -115,9 +122,11 @@ export function createPlatformSoundEngine(): SoundEngine {
           subs.push(
             AudioManager.addSystemEventListener('interruption', (ev) => {
               if (ev.type === 'began') {
+                sessionActive = false
                 onPause()
               } else if (ev.type === 'ended' && ev.shouldResume) {
-                onPlay()
+                sessionActive = false
+                void prepareSession().then(() => onPlay())
               }
             }),
           )

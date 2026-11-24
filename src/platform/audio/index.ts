@@ -416,7 +416,7 @@ export function createNeuroSoundEngine({
     }
 
     ensureRemoteControls()
-    void Promise.resolve(hooks?.onPrepareSession?.()).catch(() => {})
+    const sessionReady = Promise.resolve(hooks?.onPrepareSession?.()).catch(() => {})
 
     const g = ensureGraph()
     if (!g) return
@@ -427,6 +427,11 @@ export function createNeuroSoundEngine({
     if (g.ctx.state !== 'running' && g.ctx.state !== 'closed') {
       void resumeContext(g.ctx)
     }
+    void sessionReady.then(() => {
+      if (running && g.ctx.state !== 'running' && g.ctx.state !== 'closed') {
+        void resumeContext(g.ctx)
+      }
+    })
 
     rampParam(g.ambientGateGain.gain, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
 

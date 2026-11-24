@@ -26,7 +26,6 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
-import { AmbientBackdrop } from './AmbientBackdrop'
 import { BedtimeWheel } from './BedtimeWheel'
 import { ContinuePreview } from './ContinuePreview'
 import { Button, FRAME_MAX_WIDTH, LightSlider, Slider } from './controls'
@@ -241,7 +240,19 @@ export function Onboarding() {
           },
         ]}
       >
-        <AmbientBackdrop />
+        {/* Lightweight static nocturnal glow (avoids double AmbientBackdrop animation behind FullWindowOverlay glass) */}
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <Svg width="100%" height="100%" viewBox="0 0 400 840" preserveAspectRatio="xMidYMin slice">
+            <Defs>
+              <RadialGradient id="onbGlowTop" cx="50%" cy="14%" r="58%">
+                <Stop offset="0%" stopColor="#264A7A" stopOpacity="0.42" />
+                <Stop offset="55%" stopColor="#1B3254" stopOpacity="0.14" />
+                <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
+              </RadialGradient>
+            </Defs>
+            <Circle cx={200} cy={120} r={260} fill="url(#onbGlowTop)" />
+          </Svg>
+        </View>
         <View style={[styles.frame, { paddingHorizontal: sideMargin + 2 }]}>
           <View style={styles.top}>
             <View style={styles.dots}>
@@ -310,7 +321,6 @@ export function Onboarding() {
                     compact={isCompact}
                     value={schedule.bedtime}
                     onChange={(bedtime) => {
-                      playCue('tap', 0.22)
                       setSchedule({ bedtime })
                     }}
                   />

@@ -11,8 +11,13 @@ import type { AudioBufferLike, AudioContextLike } from './types'
 
 export type NoiseKind = 'white' | 'pink' | 'brown' | 'rain-patter' | 'fire-crackle'
 
-export const NOISE_BUFFER_SECONDS = 12
-const LOOP_XFADE_SECONDS = 0.45
+/**
+ * 6 seconds at <=24 kHz keeps Nyquist at 12 kHz (over 2x our highest low-pass
+ * cutoff of 5.2 kHz) while generating ~4x faster on mobile JS engines (<25 ms).
+ */
+export const NOISE_BUFFER_SECONDS = 6
+export const NOISE_MAX_SAMPLE_RATE = 24000
+const LOOP_XFADE_SECONDS = 0.35
 
 export interface NoiseBufferBank {
   get(kind: NoiseKind): AudioBufferLike
@@ -197,7 +202,7 @@ export function createNoiseBuffer(
   kind: NoiseKind,
   seconds = NOISE_BUFFER_SECONDS,
 ): AudioBufferLike {
-  const sampleRate = Math.max(8000, Math.round(ctx.sampleRate || 44100))
+  const sampleRate = Math.max(8000, Math.min(NOISE_MAX_SAMPLE_RATE, Math.round(ctx.sampleRate || 44100)))
   const length = Math.max(1, Math.round(sampleRate * seconds))
   const xfade = Math.min(Math.floor(length / 4), Math.round(sampleRate * LOOP_XFADE_SECONDS))
   const buffer = ctx.createBuffer(2, length, sampleRate)

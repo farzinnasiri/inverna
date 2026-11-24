@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 PORT ?= 8081
 
-.PHONY: help install dev dev-portless dev-client web start expo ios android check typecheck test sounds build-web deploy doctor \
+.PHONY: help install dev dev-portless expo-dev dev-client web start expo ios android check typecheck test build-web deploy doctor \
 	build-ios-dev build-ios-sim build-ios-preview build-ios-testflight submit-testflight builds credentials
 
 help: ## List available commands
@@ -19,8 +19,10 @@ dev: dev-portless ## Run Lull through Portless (named local URL + LAN Metro)
 dev-portless: ## Run Lull through Portless (auto-picks free port, works alongside other apps)
 	node scripts/dev-portless.mjs
 
-dev-client: ## Run Metro for your installed iPhone development build (--dev-client --lan + Portless)
+expo-dev: ## Run Metro for your installed iPhone development build (--dev-client --lan + Portless)
 	EXPO_DEV_CLIENT=1 node scripts/dev-portless.mjs
+
+dev-client: expo-dev
 
 web: ## Start Expo web dev server directly on PORT (default 8081)
 	pnpm exec expo start --web --lan --port $(PORT)

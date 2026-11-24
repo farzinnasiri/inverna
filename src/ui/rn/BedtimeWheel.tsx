@@ -20,8 +20,8 @@ const VISIBLE_ROWS = 5
 const WHEEL_H = ITEM_H * VISIBLE_ROWS
 const PAD_V = ITEM_H * 2
 
-const LOOP_CYCLES = 7
-const CENTER_CYCLE = 3
+const LOOP_CYCLES = 5
+const CENTER_CYCLE = 2
 
 const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const
 const MINUTES_5 = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55] as const
