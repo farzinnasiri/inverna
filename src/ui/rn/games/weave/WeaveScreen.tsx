@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PanResponder, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
-import { RotateCcw, Sparkles, Undo2 } from 'lucide-react-native'
+import { Lightbulb, RotateCcw, Undo2 } from 'lucide-react-native'
 import {
   clearWeave,
   countFilledCells,
@@ -535,7 +535,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
               disabled={paused || state.solved || state.undoStack.length === 0}
             />
             <GameActionButton
-              icon={<Sparkles size={16} strokeWidth={1.6} color={color.ink2} />}
+              icon={<Lightbulb size={16} strokeWidth={1.6} color={color.ink2} />}
               label="Hint"
               onPress={handleHint}
               disabled={paused || state.solved}

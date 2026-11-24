@@ -367,8 +367,8 @@ describe('createNeuroSoundEngine — lifecycle, soft-clipper & native compatibil
     vi.advanceTimersByTime(1000)
     expect(ctx.suspendCalls).toBe(0)
 
-    // Clean stop suspends context and releases all ambient nodes
-    engine.stop(0.2)
+    // Clean stop with hideNotification suspends context and releases all ambient nodes
+    engine.stop(0.2, { hideNotification: true })
     vi.advanceTimersByTime(400)
     expect(ctx.suspendCalls).toBe(1)
     expect(ctx.sources.every((s) => s.stopped)).toBe(true)

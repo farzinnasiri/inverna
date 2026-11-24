@@ -1,24 +1,33 @@
 import type { CueName } from './engine'
 
 /**
- * Curated nocturnal harmonic keys.
- * Every authored soundscape locks its harmonic pad, binaural carrier, and
- * interactive game cues to the exact same musical scale so playing a puzzle
+ * Curated nocturnal harmonic moods & scales.
+ * Every soundscape locks its harmonic pad, binaural carrier, classical motifs,
+ * and interactive game cues to the exact same musical scale so playing a puzzle
  * literally becomes playing the sleep soundtrack.
  */
-export type HarmonicKeyId = 'd-dorian' | 'f-lydian' | 'c-maj9' | 'g-min9' | 'a-min9'
+export type HarmonicKeyId =
+  | 'd-dorian'
+  | 'e-min-classical'
+  | 'f-lydian'
+  | 'c-maj9'
+  | 'g-min9'
+  | 'a-min9'
 
 export type CueTimbre = 'felt' | 'warm-bell' | 'glass' | 'velvet' | 'harp'
 
 export interface HarmonicKeyMeta {
   id: HarmonicKeyId
+  /** Friendly evocative mood name shown in UI instead of music-theory jargon. */
+  moodName: string
+  /** Technical musical scale name (kept for internal reference / subtle display). */
   label: string
   mood: string
   /** Primary harmonic anchor in Hz (also ideal binaural carrier). */
   rootHz: number
   /** 4-voice open voicing (root, fifth, seventh/third, ninth) for the ambient pad. */
   padHz: readonly [number, number, number, number]
-  /** 6-note pentatonic/modal scale for generative game cues (zero dissonant semitones). */
+  /** 6-note modal/pentatonic scale for generative game cues & classical motifs. */
   scaleHz: readonly [number, number, number, number, number, number]
   timbre: CueTimbre
 }
@@ -28,6 +37,7 @@ export const DEFAULT_HARMONIC_KEY: HarmonicKeyId = 'd-dorian'
 export const HARMONIC_KEYS: Record<HarmonicKeyId, HarmonicKeyMeta> = {
   'd-dorian': {
     id: 'd-dorian',
+    moodName: 'Rain',
     label: 'D Dorian',
     mood: 'Contemplative rain warmth',
     rootHz: 146.83, // D3
@@ -35,8 +45,19 @@ export const HARMONIC_KEYS: Record<HarmonicKeyId, HarmonicKeyMeta> = {
     scaleHz: [293.66, 349.23, 392.0, 440.0, 523.25, 587.33], // D4 F4 G4 A4 C5 D5
     timbre: 'felt',
   },
+  'e-min-classical': {
+    id: 'e-min-classical',
+    moodName: 'Nocturne',
+    label: 'E Minor',
+    mood: 'Satie & Chopin twilight piano',
+    rootHz: 164.81, // E3
+    padHz: [164.81, 246.94, 293.66, 369.99], // E3, B3, D4, F#4 (Em9)
+    scaleHz: [246.94, 293.66, 329.63, 369.99, 392.0, 493.88], // B3 D4 E4 F#4 G4 B4
+    timbre: 'felt',
+  },
   'f-lydian': {
     id: 'f-lydian',
+    moodName: 'Hearth',
     label: 'F Lydian',
     mood: 'Glowing hearth resonance',
     rootHz: 174.61, // F3
@@ -46,6 +67,7 @@ export const HARMONIC_KEYS: Record<HarmonicKeyId, HarmonicKeyMeta> = {
   },
   'c-maj9': {
     id: 'c-maj9',
+    moodName: 'Tide',
     label: 'C Major 9',
     mood: 'Open lunar horizon',
     rootHz: 130.81, // C3
@@ -55,18 +77,20 @@ export const HARMONIC_KEYS: Record<HarmonicKeyId, HarmonicKeyMeta> = {
   },
   'g-min9': {
     id: 'g-min9',
+    moodName: 'Velvet',
     label: 'G Minor 9',
     mood: 'Velvet deep-sleep floor',
-    rootHz: 146.83, // D3 (fifth of G, crisp on speakers & warm on headphones)
+    rootHz: 146.83, // D3
     padHz: [98.0, 146.83, 174.61, 220.0], // G2, D3, F3, A3 (Gm9)
     scaleHz: [196.0, 233.08, 261.63, 293.66, 349.23, 392.0], // G3 Bb3 C4 D4 F4 G4
     timbre: 'velvet',
   },
   'a-min9': {
     id: 'a-min9',
+    moodName: 'Air',
     label: 'A Minor 9',
     mood: 'Weightless twilight air',
-    rootHz: 164.81, // E3 (fifth of A)
+    rootHz: 164.81, // E3
     padHz: [110.0, 164.81, 196.0, 246.94], // A2, E3, G3, B3 (Am9)
     scaleHz: [220.0, 261.63, 293.66, 329.63, 392.0, 440.0], // A3 C4 D4 E4 G4 A4
     timbre: 'harp',
@@ -91,16 +115,9 @@ export interface QuantizedNote {
   pan: number
 }
 
-/** Musical meandering motif indices across the 6-note scale so rapid taps never feel robotic. */
 const MOTIF = [0, 2, 1, 3, 2, 4, 3, 5, 4, 2, 3, 1] as const
-
 const clamp01 = (v: number) => Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0))
 
-/**
- * Generates scale-quantized, Iso-darkness-adapted felt/glass notes for a game cue.
- * As `darkness` rises (0 -> 1 over the final 60m before bed), filter cutoffs warm
- * down, attacks soften slightly, and peaks stay whisper-gentle.
- */
 export function resolveGameNotes(
   cue: CueName,
   keyId: HarmonicKeyId = DEFAULT_HARMONIC_KEY,
@@ -113,7 +130,6 @@ export function resolveGameNotes(
   const idx = Math.abs(Math.floor(stepIndex)) % MOTIF.length
   const deg = MOTIF[idx]!
 
-  // Darkening multiplier lowers high-frequency brightness and velocity late at night.
   const cutoffScale = 1 - d * 0.44
   const velScale = 1 - d * 0.24
   const overtoneScale = (key.timbre === 'glass' ? 0.22 : key.timbre === 'velvet' ? 0.08 : 0.14) * (1 - d * 0.4)
@@ -191,7 +207,6 @@ export function resolveGameNotes(
     }
 
     case 'chime': {
-      // Serene 3-note arpeggio (root -> fifth -> octave) dissolving into echo tail
       return [
         {
           freq: scale[0]!,

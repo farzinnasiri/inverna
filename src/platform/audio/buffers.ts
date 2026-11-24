@@ -12,15 +12,17 @@ import type { AudioBufferLike, AudioContextLike } from './types'
 export type NoiseKind = 'white' | 'pink' | 'brown' | 'rain-patter' | 'fire-crackle'
 
 /**
- * 6 seconds at <=24 kHz keeps Nyquist at 12 kHz (over 2x our highest low-pass
- * cutoff of 5.2 kHz) while generating ~4x faster on mobile JS engines (<25 ms).
+ * 4.5 seconds at <=22.05 kHz keeps Nyquist at 11 kHz (over 2x our highest low-pass
+ * cutoff) while generating in <8 ms per buffer on Hermes — zero tap stutter.
  */
-export const NOISE_BUFFER_SECONDS = 6
-export const NOISE_MAX_SAMPLE_RATE = 24000
-const LOOP_XFADE_SECONDS = 0.35
+export const NOISE_BUFFER_SECONDS = 4.5
+export const NOISE_MAX_SAMPLE_RATE = 22050
+const LOOP_XFADE_SECONDS = 0.32
 
 export interface NoiseBufferBank {
   get(kind: NoiseKind): AudioBufferLike
+  /** Stagger-prewarm remaining noise textures lazily so preset switches never stutter. */
+  prewarm(): void
 }
 
 /** Deterministic fast PRNG per buffer so stereo channels stay richly uncorrelated and reproducible. */
@@ -235,16 +237,42 @@ export function createNoiseBuffer(
   return buffer
 }
 
+const ALL_KINDS: readonly NoiseKind[] = ['pink', 'brown', 'rain-patter', 'fire-crackle', 'white']
+
 export function createNoiseBufferBank(ctx: AudioContextLike): NoiseBufferBank {
   const cache: Partial<Record<NoiseKind, AudioBufferLike>> = {}
+  let prewarmStarted = false
+
+  const get = (kind: NoiseKind) => {
+    let existing = cache[kind]
+    if (!existing) {
+      existing = createNoiseBuffer(ctx, kind)
+      cache[kind] = existing
+    }
+    return existing
+  }
+
   return {
-    get(kind) {
-      let existing = cache[kind]
-      if (!existing) {
-        existing = createNoiseBuffer(ctx, kind)
-        cache[kind] = existing
+    get,
+    prewarm() {
+      if (prewarmStarted) return
+      prewarmStarted = true
+      let i = 0
+      const next = () => {
+        if (i >= ALL_KINDS.length) return
+        const kind = ALL_KINDS[i++]!
+        if (!cache[kind]) {
+          try {
+            get(kind)
+          } catch {
+            /* ignore */
+          }
+        }
+        if (i < ALL_KINDS.length) {
+          setTimeout(next, 140)
+        }
       }
-      return existing
+      setTimeout(next, 220)
     },
   }
 }

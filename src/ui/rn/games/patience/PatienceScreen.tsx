@@ -12,7 +12,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native'
 import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
-import { RotateCcw, Sparkles, Undo2 } from 'lucide-react-native'
+import { Lightbulb, RotateCcw, Undo2 } from 'lucide-react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import {
   FOUNDATION_COUNT,
@@ -1196,7 +1196,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
             />
             <GameActionButton
               label="Hint"
-              icon={<Sparkles size={16} strokeWidth={1.5} color={hint ? color.accent : color.ink2} />}
+              icon={<Lightbulb size={16} strokeWidth={1.5} color={hint ? color.accent : color.ink2} />}
               onPress={handleHint}
               disabled={inputLocked}
               active={hint !== null}

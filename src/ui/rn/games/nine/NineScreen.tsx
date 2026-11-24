@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
-import { Eraser, Pencil, Sparkles, Undo2 } from 'lucide-react-native'
+import { Eraser, Lightbulb, Pencil, Undo2 } from 'lucide-react-native'
 import {
   BOARD_SIZE,
   CELL_COUNT,
@@ -426,7 +426,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
               disabled={paused || state.solved}
               onPress={handleHint}
             >
-              <Sparkles size={15} strokeWidth={1.6} color={color.ink2} />
+              <Lightbulb size={15} strokeWidth={1.6} color={color.ink2} />
               <Text style={[styles.actionBtnText, { color: color.ink2 }]}>Hint</Text>
             </KeypadButton>
           </View>

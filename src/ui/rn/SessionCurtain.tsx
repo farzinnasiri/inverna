@@ -31,7 +31,7 @@ export function SessionCurtain() {
 
       // Ambient sleep timer check
       if (playing && stopAt && now >= stopAt) {
-        stopSound(4)
+        stopSound(4, { hideNotification: true })
       }
 
       // Wind-down session progression
@@ -49,7 +49,7 @@ export function SessionCurtain() {
         const d = new Date(now)
         useSettings.getState().set({ lastLightsOut: formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes())) })
         finish()
-        stopSound(3)
+        stopSound(3, { hideNotification: true })
       }
     }
 

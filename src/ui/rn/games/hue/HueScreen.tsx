@@ -14,7 +14,7 @@ import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reani
 import {
   RotateCcw as _RotateCcw,
   Shuffle as _Shuffle,
-  Sparkles as _Sparkles,
+  Lightbulb as _Lightbulb,
 } from 'lucide-react-native'
 import {
   createHue,
@@ -33,7 +33,7 @@ import { useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hoo
 type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
 const RotateCcw = _RotateCcw as unknown as LucideSvgIcon
 const Shuffle = _Shuffle as unknown as LucideSvgIcon
-const Sparkles = _Sparkles as unknown as LucideSvgIcon
+const Lightbulb = _Lightbulb as unknown as LucideSvgIcon
 
 type HueDifficulty = 'cozy' | 'medium' | 'classic'
 
@@ -571,7 +571,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
           <GameControlBar>
             <GameActionButton
               label="Hint"
-              icon={<Sparkles size={16} strokeWidth={1.5} color={hintIndices ? color.accent : color.ink2} />}
+              icon={<Lightbulb size={16} strokeWidth={1.5} color={hintIndices ? color.accent : color.ink2} />}
               active={hintIndices !== null}
               onPress={handleHint}
               disabled={state.solved}

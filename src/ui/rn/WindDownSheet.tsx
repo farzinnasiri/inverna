@@ -109,7 +109,7 @@ export function WindDownSheet() {
           <View style={styles.soundGrid}>
             {[
               { id: null as string | null, name: 'Silence' },
-              ...PRESETS.map((p) => ({ id: p.id as string | null, name: p.name })),
+              ...PRESETS.filter((p) => p.page === 0).slice(0, 5).map((p) => ({ id: p.id as string | null, name: p.name })),
             ].map((opt) => {
               const active = selectedPreset === opt.id
               return (

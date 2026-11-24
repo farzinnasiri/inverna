@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { computeDescent, type DescentSnapshot } from '@/core/sound/arc'
-import { DEFAULT_PRESET_ID, presetById, type Mix } from '@/core/sound/catalog'
+import { DEFAULT_PRESET_ID, presetById, type Mix, type SoundSceneId } from '@/core/sound/catalog'
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { sound } from '@/platform'
 import { useSession } from './session'
@@ -10,11 +10,8 @@ interface SoundState {
   playing: boolean
   presetId: string | null
   mix: Mix | null
-  /** Active harmonic scale locking pad + interactive game cues. */
   harmonicKey: HarmonicKeyId
-  /** Live 60-minute Iso-descent acoustic telemetry snapshot. */
   descent: DescentSnapshot
-  /** User-controlled ambient master volume 0..1. */
   volume: number
   stopAt: number | null
   playPreset: (id: string, timerMinutes?: number) => void
@@ -23,10 +20,26 @@ interface SoundState {
   setVolume: (volume: number) => void
   setTimer: (minutes: number) => void
   syncDescent: (now?: Date, rampSeconds?: number) => DescentSnapshot
-  stop: (fadeSeconds?: number) => void
+  stop: (fadeSeconds?: number, opts?: { hideNotification?: boolean }) => void
 }
 
 const timerToStopAt = (minutes: number | undefined) => (minutes && minutes > 0 ? Date.now() + minutes * 60_000 : null)
+
+function inferSceneFromMix(mix: Mix | null): SoundSceneId {
+  if (!mix) return 'rain'
+  if (mix.classicalMotif === 'reverie') return 'reverie'
+  if (mix.classicalMotif) return 'classical'
+  const l = mix.layers
+  const ranked: [SoundSceneId, number][] = [
+    ['rain', l.rain ?? 0],
+    ['waves', l.waves ?? 0],
+    ['fire', l.fire ?? 0],
+    ['wind', l.wind ?? 0],
+    ['delta', (l.brown ?? 0) + (l.pink ?? 0) * 0.6 + (mix.band === 'delta' ? 0.5 : 0)],
+  ]
+  ranked.sort((a, b) => b[1] - a[1])
+  return ranked[0]![1] > 0.05 ? ranked[0]![0] : 'rain'
+}
 
 function buildDescentSnapshot(presetId: string | null, now = new Date()): DescentSnapshot {
   const settings = useSettings.getState()
@@ -42,16 +55,11 @@ function buildDescentSnapshot(presetId: string | null, now = new Date()): Descen
   })
 }
 
-function nowPlayingSubtitle(descent: DescentSnapshot, mins: number): string {
-  const phaseStr =
-    descent.depth === 'off'
-      ? `${descent.phaseLabel} phase`
-      : `${descent.bandLabel} · ${descent.modHz.toFixed(1)} Hz · ${descent.phaseLabel}`
-  return mins > 0 ? `${phaseStr} · fades in ${mins}m` : phaseStr
+function nowPlayingSubtitle(hint: string, mins: number): string {
+  return mins > 0 ? `${hint} · ${mins}m timer` : hint
 }
 
 export const useSound = create<SoundState>()((set, get) => {
-  // Keep Zustand store in sync when the user pauses or resumes from iOS Lock Screen / Dynamic Island.
   sound.onExternalPause?.(() => {
     set({ playing: false, stopAt: null })
   })
@@ -85,10 +93,11 @@ export const useSound = create<SoundState>()((set, get) => {
       sound.setDescent?.(descent, 0.6)
       sound.setNowPlayingMeta?.({
         title: preset.name,
-        subtitle: nowPlayingSubtitle(descent, mins),
+        subtitle: nowPlayingSubtitle(preset.hint, mins),
+        scene: preset.scene,
       })
       sound.setMaster(get().volume, 0.5)
-      sound.setMix(preset.mix, 1.8)
+      sound.setMix(preset.mix, 1.4)
       set({
         playing: true,
         presetId: preset.id,
@@ -104,14 +113,16 @@ export const useSound = create<SoundState>()((set, get) => {
       const mins = timerMinutes ?? useSettings.getState().sleepTimer
       const key = mix.harmonicKey ?? get().harmonicKey ?? DEFAULT_HARMONIC_KEY
       const descent = buildDescentSnapshot(null)
+      const scene = inferSceneFromMix(mix)
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(descent, 0.6)
       sound.setNowPlayingMeta?.({
-        title: 'Custom Soundscape',
-        subtitle: nowPlayingSubtitle(descent, mins),
+        title: 'Custom mix',
+        subtitle: nowPlayingSubtitle('Your layered blend', mins),
+        scene,
       })
       sound.setMaster(get().volume, 0.5)
-      sound.setMix({ ...mix, harmonicKey: key }, 1.4)
+      sound.setMix({ ...mix, harmonicKey: key }, 1.2)
       set({
         playing: true,
         presetId: null,
@@ -129,8 +140,9 @@ export const useSound = create<SoundState>()((set, get) => {
       if (get().playing) {
         const mins = useSettings.getState().sleepTimer
         sound.setNowPlayingMeta?.({
-          title: 'Custom Soundscape',
-          subtitle: nowPlayingSubtitle(get().descent, mins),
+          title: 'Custom mix',
+          subtitle: nowPlayingSubtitle('Your layered blend', mins),
+          scene: inferSceneFromMix(nextMix),
         })
         sound.setMix(nextMix, 0.25)
       }
@@ -147,8 +159,9 @@ export const useSound = create<SoundState>()((set, get) => {
       if (get().playing) {
         const preset = get().presetId ? presetById(get().presetId!) : null
         sound.setNowPlayingMeta?.({
-          title: preset?.name ?? 'Custom Soundscape',
-          subtitle: nowPlayingSubtitle(get().descent, minutes),
+          title: preset?.name ?? 'Custom mix',
+          subtitle: nowPlayingSubtitle(preset?.hint ?? 'Your layered blend', minutes),
+          scene: preset?.scene ?? inferSceneFromMix(get().mix),
         })
         set({ stopAt: timerToStopAt(minutes) })
       }
@@ -164,19 +177,12 @@ export const useSound = create<SoundState>()((set, get) => {
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(next, rampSeconds)
 
-      if (state.playing && next.phase !== state.descent.phase) {
-        sound.setNowPlayingMeta?.({
-          title: activePreset?.name ?? 'Custom Soundscape',
-          subtitle: nowPlayingSubtitle(next, settings.sleepTimer),
-        })
-      }
-
       set({ descent: next, harmonicKey: key })
       return next
     },
 
-    stop: (fadeSeconds = 1.4) => {
-      sound.stop(fadeSeconds)
+    stop: (fadeSeconds = 1.4, opts) => {
+      sound.stop(fadeSeconds, opts)
       set({ playing: false, stopAt: null })
     },
   }

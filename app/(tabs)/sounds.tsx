@@ -1,27 +1,33 @@
-import { useState } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useRef, useState, type ComponentRef } from 'react'
 import {
-  ChevronRight,
-  CloudRain,
-  Flame,
-  SlidersHorizontal,
-  Sparkles,
-  Timer,
-  Volume2,
-  Waves,
-  Wind,
-} from 'lucide-react-native'
-import { DEFAULT_PRESET_ID, PRESETS, presetById, SILENT_MIX } from '@/core/sound/catalog'
-import { harmonicKeyMeta } from '@/core/sound/harmonics'
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native'
+import { ChevronRight, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
+import {
+  BANDS,
+  DEFAULT_PRESET_ID,
+  PRESET_PAGES,
+  PRESETS,
+  presetById,
+  SILENT_MIX,
+} from '@/core/sound/catalog'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { AcousticEngineSheet } from '@/ui/rn/AcousticEngineSheet'
 import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { FRAME_MAX_WIDTH, PopoverMenu, Slider } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
 import { useResponsiveLayout } from '@/ui/rn/hooks'
-import { MixSheet } from '@/ui/rn/MixSheet'
+import { MixSheet, type StudioTab } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
+import { SoundGlyph } from '@/ui/rn/SoundGlyph'
 import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
@@ -34,19 +40,13 @@ const TIMER_OPTIONS = [
   { value: 60, label: 'Fade out in 60 min' },
 ] as const
 
-function SoundGlyph({ id, color }: { id: string; color: string }) {
-  if (id === 'theta-rain' || id === 'rainfall') return <CloudRain size={16} strokeWidth={1.65} color={color} />
-  if (id === 'low-tide') return <Waves size={16} strokeWidth={1.65} color={color} />
-  if (id === 'hearth') return <Flame size={16} strokeWidth={1.65} color={color} />
-  if (id === 'deep-drift') return <Sparkles size={16} strokeWidth={1.65} color={color} />
-  return <Wind size={16} strokeWidth={1.65} color={color} />
-}
-
 /**
- * Neuroacoustic Sound Sanctuary:
- * - Serene Watchmaker surface by default (Header, quiet telemetry pill, breathing 0.1 Hz Dial,
- *   1 full-width flagship Theta Rain card + balanced 2x2 authored compositions, Volume, Timer, Mix).
- * - Tapping the quiet telemetry pill opens the optional Acoustic Engine inspector sheet.
+ * Sound Sanctuary:
+ * - Clean Watchmaker header + quiet tappable rhythm pill (opens unified Mix studio -> Rhythm tab).
+ * - Breathing 0.1 Hz Dial.
+ * - 12 authored soundscapes across 2 horizontally swipeable pages of 6 (Night | Reverie)
+ *   with consistent sensory subtitles (zero truncation, zero jargon).
+ * - Volume bar + Fade timer + Mix button (opens unified Mix studio -> Layers tab).
  */
 export default function SoundsScreen() {
   const { insets, isCompact, sideMargin } = useResponsiveLayout()
@@ -55,7 +55,6 @@ export default function SoundsScreen() {
   const playing = useSound((s) => s.playing)
   const activePresetId = useSound((s) => s.presetId)
   const activeMix = useSound((s) => s.mix)
-  const harmonicKey = useSound((s) => s.harmonicKey)
   const descent = useSound((s) => s.descent)
   const volume = useSound((s) => s.volume)
   const setVolume = useSound((s) => s.setVolume)
@@ -78,43 +77,27 @@ export default function SoundsScreen() {
   const [selectedId, setSelectedId] = useState<string>(
     () => activePresetId ?? presetById(savedPreset)?.id ?? DEFAULT_PRESET_ID,
   )
+  const [studioTab, setStudioTab] = useState<StudioTab>('layers')
   const [timerOpen, setTimerOpen] = useState(false)
-  const [engineOpen, setEngineOpen] = useState(false)
-
-  const items = [
-    ...PRESETS.map((p) => ({
-      id: p.id,
-      name: p.name,
-      hint: p.hint,
-      mix: p.mix,
-      badge: p.badge,
-      keyLabel: harmonicKeyMeta(p.harmonicKey).label,
-    })),
-    ...(hasCustomMix
-      ? [
-          {
-            id: 'custom',
-            name: 'Custom',
-            hint: 'Your layered composition',
-            mix: customMix,
-            badge: undefined,
-            keyLabel: harmonicKeyMeta(customMix.harmonicKey ?? harmonicKey).label,
-          },
-        ]
-      : []),
-  ]
+  const [pageIdx, setPageIdx] = useState<0 | 1>(() => presetById(activePresetId ?? savedPreset)?.page ?? 0)
+  const [pagerWidth, setPagerWidth] = useState(0)
+  const pagerRef = useRef<ComponentRef<typeof ScrollView>>(null)
 
   const currentId = activePresetId ?? selectedId
-  const currentItem = items.find((i) => i.id === currentId) ?? items[0]!
-  const currentPreset = presetById(currentItem.id)
-  const displayMix = playing && activeMix ? activeMix : currentItem.mix
-  const activeKeyId = displayMix.harmonicKey ?? currentPreset?.harmonicKey ?? harmonicKey
-  const keyMeta = harmonicKeyMeta(activeKeyId)
+  const currentPreset = currentId === 'custom' ? null : (presetById(currentId) ?? PRESETS[0]!)
+  const currentName = currentPreset ? currentPreset.name : 'Custom mix'
+  const displayMix = playing && activeMix ? activeMix : (currentPreset?.mix ?? customMix)
 
-  const selectItem = (id: string, autoPlay = true) => {
+  const openStudio = (tab: StudioTab) => {
     if (hapticsOn) haptics.play('light')
-    if (playing && id === currentItem.id) {
-      stopSound(1.0)
+    setStudioTab(tab)
+    setMixOpen(true)
+  }
+
+  const selectPreset = (id: string, autoPlay = true) => {
+    if (hapticsOn) haptics.play('light')
+    if (playing && id === currentId) {
+      stopSound(0.9)
       return
     }
     setSelectedId(id)
@@ -131,25 +114,45 @@ export default function SoundsScreen() {
   const togglePlayback = () => {
     if (hapticsOn) haptics.play('medium')
     if (playing) {
-      stopSound(1.2)
-    } else if (currentItem.id === 'custom') {
+      stopSound(1.0)
+    } else if (currentId === 'custom') {
       playMix(customMix, sleepTimer)
     } else {
-      playPreset(currentItem.id, sleepTimer)
+      playPreset(currentPreset?.id ?? DEFAULT_PRESET_ID, sleepTimer)
     }
   }
 
   const swipePreset = (dir: -1 | 1) => {
-    const idx = items.findIndex((i) => i.id === currentItem.id)
-    const next = items[(idx + dir + items.length) % items.length]!
-    selectItem(next.id, playing)
+    const idx = PRESETS.findIndex((p) => p.id === (currentPreset?.id ?? DEFAULT_PRESET_ID))
+    const next = PRESETS[(idx + dir + PRESETS.length) % PRESETS.length]!
+    if (next.page !== pageIdx && pagerWidth > 0) {
+      setPageIdx(next.page)
+      pagerRef.current?.scrollTo({ x: next.page * pagerWidth, animated: true })
+    }
+    selectPreset(next.id, playing)
   }
 
-  const timerLabel = sleepTimer > 0 ? `Fades in ${sleepTimer}m` : 'No fade timer'
-  const telemetryLabel =
+  const goToPage = (nextPage: 0 | 1) => {
+    if (hapticsOn) haptics.play('light')
+    setPageIdx(nextPage)
+    if (pagerWidth > 0) {
+      pagerRef.current?.scrollTo({ x: nextPage * pagerWidth, animated: true })
+    }
+  }
+
+  const onPagerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (pagerWidth <= 0) return
+    const idx = Math.round(e.nativeEvent.contentOffset.x / pagerWidth) === 1 ? 1 : 0
+    if (idx !== pageIdx) setPageIdx(idx)
+  }
+
+  const bandMeta = BANDS.find((b) => b.id === displayMix.band)
+  const rhythmPillText =
     descent.depth === 'off'
-      ? `${keyMeta.label} · ${descent.phaseLabel} phase`
-      : `${descent.bandLabel} · ${descent.modHz.toFixed(1)} Hz · ${keyMeta.label}`
+      ? `${descent.phaseLabel} · Tune`
+      : `${bandMeta?.greek ?? 'θ'} ${descent.bandLabel} · ${descent.modHz.toFixed(1)} Hz`
+
+  const timerLabel = sleepTimer > 0 ? `Fades in ${sleepTimer}m` : 'No fade timer'
 
   return (
     <View style={styles.root}>
@@ -160,36 +163,28 @@ export default function SoundsScreen() {
           styles.content,
           {
             paddingHorizontal: sideMargin,
-            paddingTop: insets.top + (isCompact ? 10 : 16),
-            paddingBottom: Platform.OS === 'ios' ? 20 : Math.max(insets.bottom, 16) + 88,
+            paddingTop: insets.top + (isCompact ? 8 : 14),
+            paddingBottom: Platform.OS === 'ios' ? 18 : Math.max(insets.bottom, 16) + 88,
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.frame, { gap: isCompact ? 13 : 16 }]}>
-          {/* Header + quiet tappable neuroacoustic telemetry pill */}
+        <View style={[styles.frame, { gap: isCompact ? 11 : 14 }]}>
+          {/* Header + quiet rhythm pill (taps into unified Mix -> Rhythm) */}
           <View style={styles.head}>
-            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 26 : 30 }]}>
-              {currentItem.name}
+            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 25 : 29 }]}>
+              {currentName}
             </Text>
             <Pressable
-              onPress={() => {
-                if (hapticsOn) haptics.play('light')
-                setEngineOpen(true)
-              }}
+              onPress={() => openStudio('rhythm')}
               accessibilityRole="button"
-              accessibilityLabel="Open acoustic engine details"
-              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1, marginTop: 4 }]}
+              accessibilityLabel="Tune rhythm and bedtime descent"
+              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1, marginTop: 3 }]}
             >
               <GlassSurface variant="pill" radius={999} accent={playing} style={styles.telemetryPill}>
-                <View
-                  style={[
-                    styles.pulseDot,
-                    { backgroundColor: playing ? color.accent : color.ink3 },
-                  ]}
-                />
+                <View style={[styles.pulseDot, { backgroundColor: playing ? color.accent : color.ink3 }]} />
                 <Text style={[styles.telemetryText, { color: playing ? color.ink : color.ink2 }]} numberOfLines={1}>
-                  {telemetryLabel}
+                  {rhythmPillText}
                 </Text>
                 <ChevronRight size={13} strokeWidth={1.7} color={color.ink3} />
               </GlassSurface>
@@ -201,61 +196,153 @@ export default function SoundsScreen() {
             <SoundField
               mix={displayMix}
               playing={playing}
-              label={currentItem.name}
+              label={currentName}
               breathHz={descent.breathHz}
               onToggle={togglePlayback}
               onSwipe={swipePreset}
             />
           </View>
 
-          {/* Architectural grid: Flagship Theta Rain full-width lead + balanced 2x2 compositions */}
-          <View style={[styles.grid, { gap: isCompact ? 8 : 10 }]}>
-            {items.map((item, idx) => {
-              const selected = item.id === currentItem.id
-              const live = playing && selected
-              const isFlagship = idx === 0 && items.length % 2 === 1
-              return (
+          {/* Page switcher header (Night 6 | Reverie 6 + optional Custom pill) */}
+          <View style={styles.pageHeader}>
+            <View style={styles.pageTabs}>
+              {PRESET_PAGES.map((pg) => {
+                const active = pageIdx === pg.id
+                return (
+                  <Pressable
+                    key={pg.id}
+                    onPress={() => goToPage(pg.id)}
+                    style={[
+                      styles.pageTab,
+                      active
+                        ? {
+                            backgroundColor: color.accentWash,
+                            borderColor: color.accentDim,
+                          }
+                        : {
+                            backgroundColor: 'transparent',
+                            borderColor: 'transparent',
+                          },
+                    ]}
+                  >
+                    <Text style={[styles.pageTabText, { color: active ? color.accent : color.ink3 }]}>
+                      {pg.label}
+                    </Text>
+                  </Pressable>
+                )
+              })}
+              {hasCustomMix ? (
                 <Pressable
-                  key={item.id}
-                  onPress={() => selectItem(item.id, true)}
-                  style={({ pressed }) => [
-                    isFlagship ? styles.cardWrapFull : styles.cardWrap,
-                    {
-                      opacity: pressed ? 0.85 : 1,
-                      transform: [{ scale: pressed ? 0.98 : 1 }],
-                    },
+                  onPress={() => selectPreset('custom', true)}
+                  style={[
+                    styles.pageTab,
+                    currentId === 'custom'
+                      ? { backgroundColor: color.accentWash, borderColor: color.accentDim }
+                      : { backgroundColor: 'transparent', borderColor: 'transparent' },
                   ]}
                 >
-                  <GlassSurface
-                    variant="card"
-                    radius={18}
-                    accent={live || selected}
-                    interactive
-                    style={[styles.presetCard, { minHeight: isCompact ? 62 : 68 }]}
+                  <Text
+                    style={[
+                      styles.pageTabText,
+                      { color: currentId === 'custom' ? color.accent : color.ink3 },
+                    ]}
                   >
-                    <View style={styles.presetTop}>
-                      <View style={styles.presetTitleRow}>
-                        <SoundGlyph id={item.id} color={live || selected ? color.accent : color.ink2} />
-                        <Text
-                          numberOfLines={1}
-                          style={[styles.presetName, { color: live || selected ? color.ink : color.ink2 }]}
-                        >
-                          {item.name}
-                        </Text>
-                      </View>
-                      {isFlagship ? (
-                        <Text style={[styles.keyBadge, { color: live || selected ? color.accent : color.ink3 }]}>
-                          {item.keyLabel}
-                        </Text>
-                      ) : null}
-                    </View>
-                    <Text numberOfLines={1} style={[styles.presetHint, { color: color.ink3 }]}>
-                      {live ? `Playing · ${descent.phaseLabel.toLowerCase()} phase` : item.hint}
-                    </Text>
-                  </GlassSurface>
+                    Custom
+                  </Text>
                 </Pressable>
-              )
-            })}
+              ) : null}
+            </View>
+
+            <View style={styles.pageDots}>
+              {[0, 1].map((idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.pageDot,
+                    {
+                      width: pageIdx === idx ? 14 : 5,
+                      backgroundColor: pageIdx === idx ? color.accent : 'rgba(255,255,255,0.22)',
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+
+          {/* Horizontally swipeable 2-page x 6-card soundscape browser */}
+          <View
+            style={styles.pagerWrap}
+            onLayout={(e: LayoutChangeEvent) => {
+              const w = Math.floor(e.nativeEvent.layout.width)
+              if (w > 0 && w !== pagerWidth) setPagerWidth(w)
+            }}
+          >
+            <ScrollView
+              ref={pagerRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={onPagerScrollEnd}
+              scrollEventThrottle={32}
+            >
+              {PRESET_PAGES.map((pg) => {
+                const pageItems = PRESETS.filter((p) => p.page === pg.id)
+                return (
+                  <View
+                    key={pg.id}
+                    style={[styles.gridPage, { width: pagerWidth || '100%', gap: isCompact ? 8 : 9 }]}
+                  >
+                    {pageItems.map((item) => {
+                      const selected = item.id === currentId
+                      const live = playing && selected
+                      return (
+                        <Pressable
+                          key={item.id}
+                          onPress={() => selectPreset(item.id, true)}
+                          style={({ pressed }) => [
+                            styles.cardWrap,
+                            {
+                              opacity: pressed ? 0.85 : 1,
+                              transform: [{ scale: pressed ? 0.97 : 1 }],
+                            },
+                          ]}
+                        >
+                          <GlassSurface
+                            variant="card"
+                            radius={17}
+                            accent={live || selected}
+                            interactive
+                            style={[styles.presetCard, { minHeight: isCompact ? 58 : 63 }]}
+                          >
+                            <View style={styles.presetTop}>
+                              <View style={styles.presetTitleRow}>
+                                <SoundGlyph
+                                  icon={item.icon}
+                                  size={15}
+                                  color={live || selected ? color.accent : color.ink2}
+                                />
+                                <Text
+                                  numberOfLines={1}
+                                  style={[styles.presetName, { color: live || selected ? color.ink : color.ink2 }]}
+                                >
+                                  {item.name}
+                                </Text>
+                              </View>
+                              {live ? (
+                                <View style={[styles.liveDot, { backgroundColor: color.accent }]} />
+                              ) : null}
+                            </View>
+                            <Text numberOfLines={1} style={[styles.presetHint, { color: color.ink3 }]}>
+                              {item.hint}
+                            </Text>
+                          </GlassSurface>
+                        </Pressable>
+                      )
+                    })}
+                  </View>
+                )
+              })}
+            </ScrollView>
           </View>
 
           {/* Volume bar */}
@@ -267,7 +354,7 @@ export default function SoundsScreen() {
             <Text style={[styles.volPct, { color: color.accent }]}>{Math.round(volume * 100)}%</Text>
           </GlassSurface>
 
-          {/* Timer + Mix controls */}
+          {/* Timer + Unified Mix studio controls */}
           <View style={styles.pillRow}>
             <Pressable
               onPress={() => {
@@ -285,10 +372,7 @@ export default function SoundsScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => {
-                if (hapticsOn) haptics.play('light')
-                setMixOpen(true)
-              }}
+              onPress={() => openStudio('layers')}
               style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
             >
               <GlassSurface variant="pill" radius={22} interactive style={[styles.pillBtn, { paddingHorizontal: 22 }]}>
@@ -299,13 +383,6 @@ export default function SoundsScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <AcousticEngineSheet
-        open={engineOpen}
-        onClose={() => setEngineOpen(false)}
-        preset={currentPreset}
-        harmonicKey={activeKeyId}
-      />
 
       <PopoverMenu
         open={timerOpen}
@@ -321,8 +398,10 @@ export default function SoundsScreen() {
 
       <MixSheet
         open={mixOpen}
+        initialTab={studioTab}
         onClose={() => setMixOpen(false)}
         mix={displayMix}
+        preset={currentPreset}
         onChange={(next) => {
           setSettings({ mix: next, hasCustomMix: true })
           setSelectedId('custom')
@@ -373,7 +452,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    height: 30,
+    height: 29,
     paddingHorizontal: 12,
   },
   pulseDot: {
@@ -390,22 +469,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  grid: {
+  pageHeader: {
     width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: -4,
+  },
+  pageTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pageTab: {
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  pageTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.1,
+  },
+  pageDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingRight: 2,
+  },
+  pageDot: {
+    height: 5,
+    borderRadius: 2.5,
+  },
+  pagerWrap: {
+    width: '100%',
+  },
+  gridPage: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
-  cardWrapFull: {
-    width: '100%',
-  },
   cardWrap: {
-    width: '48.5%',
+    width: '48.4%',
     flexGrow: 1,
   },
   presetCard: {
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    gap: 4,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    gap: 3,
     justifyContent: 'center',
   },
   presetTop: {
@@ -417,24 +528,25 @@ const styles = StyleSheet.create({
   presetTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     flex: 1,
   },
   presetName: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '600',
     letterSpacing: -0.15,
   },
-  keyBadge: {
-    fontSize: 11.5,
-    fontWeight: '500',
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   presetHint: {
-    fontSize: 12,
+    fontSize: 11.5,
   },
   volumeBar: {
     width: '100%',
-    height: 52,
+    height: 50,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,

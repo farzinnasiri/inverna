@@ -5,14 +5,19 @@ import { DEFAULT_PRESET_ID, isSilent, PRESETS, presetById, SILENT_MIX } from './
 import { HARMONIC_KEYS, resolveGameNotes, type HarmonicKeyId } from './harmonics'
 
 describe('Neuroacoustic catalog', () => {
-  it('promotes Theta Rain as the flagship default and maps legacy rainfall cleanly', () => {
+  it('promotes Theta Rain as the flagship default with 12 presets across 2 pages of 6', () => {
     expect(DEFAULT_PRESET_ID).toBe('theta-rain')
     expect(PRESETS[0]?.id).toBe('theta-rain')
     expect(presetById('rainfall')?.id).toBe('theta-rain')
-    expect(PRESETS).toHaveLength(5)
+    expect(PRESETS).toHaveLength(12)
+    expect(PRESETS.filter((p) => p.page === 0)).toHaveLength(6)
+    expect(PRESETS.filter((p) => p.page === 1)).toHaveLength(6)
+    expect(presetById('nocturne')?.mix.classicalMotif).toBe('nocturne')
+    expect(presetById('ink-reverie')?.mix.classicalMotif).toBe('reverie')
     for (const p of PRESETS) {
       expect(p.descentRange[0]).toBeGreaterThan(p.descentRange[1])
       expect(p.descentRange[1]).toBeGreaterThan(p.descentRange[2])
+      expect(p.hint.length).toBeLessThanOrEqual(28)
       expect(HARMONIC_KEYS[p.harmonicKey]).toBeDefined()
       expect(isSilent(p.mix)).toBe(false)
     }

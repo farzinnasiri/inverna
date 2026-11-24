@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { Award, Moon, Sparkles } from 'lucide-react-native'
+import { Award, Compass, Moon } from 'lucide-react-native'
 import { GAMES, type GameId, type GameMeta } from '@/core/games/catalog'
 import { bestFor, formatBestCompact } from '@/core/highscores'
 import { formatBedtime12h, minutesUntilBedtime, parseHHMM } from '@/core/night'
@@ -259,7 +259,7 @@ export default function HomeScreen() {
                 ]}
               >
                 <GlassSurface variant="pill" radius={21} interactive style={styles.moodBtn}>
-                  <Sparkles size={14} strokeWidth={1.65} color={moodText ? color.accent : color.ink2} />
+                  <Compass size={14} strokeWidth={1.65} color={moodText ? color.accent : color.ink2} />
                   <Text style={[styles.moodLabel, { color: color.ink2 }]} numberOfLines={1}>
                     {moodText ?? "Tonight's mood"}
                   </Text>

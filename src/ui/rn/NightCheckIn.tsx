@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated'
-import { CloudMoon, Feather, Sparkles, Sun, Target, Wind } from 'lucide-react-native'
+import { CloudMoon, Feather, Flame, Sun, Target, Wind } from 'lucide-react-native'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useNav } from '@/ui/state/nav'
@@ -77,7 +77,7 @@ function DayGlyph({ kind, color }: { kind: 'heavy' | 'restless' | 'steady' | 'br
 function IntentGlyph({ kind, color }: { kind: 'melt' | 'focus' | 'light'; color: string }) {
   if (kind === 'melt') return <Feather size={18} strokeWidth={1.65} color={color} />
   if (kind === 'focus') return <Target size={18} strokeWidth={1.65} color={color} />
-  return <Sparkles size={18} strokeWidth={1.65} color={color} />
+  return <Flame size={18} strokeWidth={1.65} color={color} />
 }
 
 /**

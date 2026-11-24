@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import Animated, {
   Easing,
   ReduceMotion,
@@ -7,249 +8,104 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withTiming,
-  type SharedValue,
 } from 'react-native-reanimated'
-import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
+import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { DEFAULT_PRESET_ID, presetById, type Mix, type SoundSceneId } from '@/core/sound/catalog'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
 import { useReducedMotion } from './hooks'
 
-type Scene = SoundSceneId
-
-function dominantScene(mix: Mix | null, presetId: string | null): Scene {
+function resolveScene(mix: Mix | null, presetId: string | null): SoundSceneId {
   const matched = presetById(presetId)
   if (matched) return matched.scene
   if (!mix) return 'rain'
+  if (mix.classicalMotif === 'reverie') return 'reverie'
+  if (mix.classicalMotif) return 'classical'
   const l = mix.layers
-  const entries: [Scene, number][] = [
+  const entries: [SoundSceneId, number][] = [
     ['rain', l.rain ?? 0],
     ['waves', l.waves ?? 0],
     ['fire', l.fire ?? 0],
     ['wind', l.wind ?? 0],
-    ['binaural', (l.brown ?? 0) + (l.pink ?? 0) + (l.white ?? 0) * 0.5 + (mix.band ? mix.bandGain * 1.4 : 0)],
+    ['delta', (l.brown ?? 0) + (l.pink ?? 0) * 0.6 + (mix.band === 'delta' ? 0.5 : 0)],
   ]
   entries.sort((a, b) => b[1] - a[1])
   return entries[0]![1] > 0.05 ? entries[0]![0] : 'rain'
 }
 
-const SCENE_PALETTES: Record<
-  Scene,
-  { primary: string; secondary: string; glow: string; accent: string }
-> = {
-  rain: {
-    primary: '#264A7A',   // Deep storm sapphire
-    secondary: '#4B78B0', // Moonlit silver-blue mist
-    glow: '#3B6EA8',
-    accent: '#9EC5F2',
-  },
-  waves: {
-    primary: '#195E66',   // Deep lunar ocean teal
-    secondary: '#2E8082', // Bioluminescent tide glow
-    glow: '#3D9699',
-    accent: '#8DD4D2',
-  },
-  fire: {
-    primary: '#A84B1B',   // Deep hearth ember
-    secondary: '#E07A2B', // Warm flame glow
-    glow: '#C45B20',
-    accent: '#F5B864',
-  },
-  wind: {
-    primary: '#324468',   // Twilight alpine slate
-    secondary: '#6B7E9E', // Silver air current
-    glow: '#4C6288',
-    accent: '#B6C5DC',
-  },
-  binaural: {
-    primary: '#493882',   // Deep cosmic violet-indigo
-    secondary: '#7B5CC2', // Aurora ribbon violet
-    glow: '#624BA3',
-    accent: '#C4B3F5',
-  },
-}
-
-/* --- Bespoke UI-thread Reanimated scene detail layers -------------------- */
-
-const EMBER_SPECS = [
-  { x: 0.14, size: 3.4, phase: 0.02, drift: -14, bright: true },
-  { x: 0.24, size: 2.2, phase: 0.28, drift: 10, bright: false },
-  { x: 0.35, size: 3.8, phase: 0.56, drift: -18, bright: true },
-  { x: 0.44, size: 2.5, phase: 0.14, drift: 16, bright: false },
-  { x: 0.52, size: 4.2, phase: 0.72, drift: -12, bright: true },
-  { x: 0.61, size: 2.4, phase: 0.39, drift: 14, bright: false },
-  { x: 0.70, size: 3.5, phase: 0.85, drift: -10, bright: true },
-  { x: 0.80, size: 2.6, phase: 0.21, drift: 12, bright: false },
-  { x: 0.88, size: 3.0, phase: 0.63, drift: -16, bright: true },
-  { x: 0.30, size: 2.0, phase: 0.91, drift: 11, bright: false },
-  { x: 0.57, size: 2.8, phase: 0.48, drift: -9, bright: true },
-  { x: 0.75, size: 2.1, phase: 0.09, drift: 15, bright: false },
-] as const
-
-function RisingEmber({
-  spec,
-  width,
-  height,
-  clock,
-  intensity,
-}: {
-  spec: (typeof EMBER_SPECS)[number]
-  width: number
-  height: number
-  clock: SharedValue<number>
-  intensity: number
-}) {
-  const style = useAnimatedStyle(() => {
-    const p = (clock.get() + spec.phase) % 1
-    const y = height * 0.96 - p * height * 0.72
-    const x = spec.x * width + Math.sin(p * Math.PI * 2.5) * spec.drift
-    const fadeIn = Math.min(1, p * 5)
-    const fadeOut = Math.max(0, 1 - Math.max(0, (p - 0.55) / 0.45))
-    const scale = 0.75 + (1 - p) * 0.45
-    return {
-      opacity: fadeIn * fadeOut * (spec.bright ? 0.78 : 0.46) * intensity,
-      transform: [{ translateX: x }, { translateY: y }, { scale }],
-    }
-  })
-
-  return (
-    <Animated.View
-      style={[
-        styles.particle,
-        {
-          width: spec.size * 2,
-          height: spec.size * 2,
-          borderRadius: spec.size,
-          backgroundColor: spec.bright ? '#F8C471' : '#E07A2B',
-          shadowColor: '#F59E3F',
-          shadowOpacity: 0.9,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: 0 },
-        },
-        style,
-      ]}
-    />
-  )
-}
-
-const RAIN_SPECS = [
-  { x: 0.08, len: 54, phase: 0.05, speed: 1.0, op: 0.24 },
-  { x: 0.16, len: 42, phase: 0.42, speed: 1.3, op: 0.18 },
-  { x: 0.24, len: 64, phase: 0.78, speed: 0.9, op: 0.28 },
-  { x: 0.33, len: 38, phase: 0.19, speed: 1.2, op: 0.16 },
-  { x: 0.42, len: 58, phase: 0.61, speed: 1.0, op: 0.25 },
-  { x: 0.51, len: 46, phase: 0.31, speed: 1.15, op: 0.20 },
-  { x: 0.60, len: 68, phase: 0.87, speed: 0.95, op: 0.27 },
-  { x: 0.69, len: 40, phase: 0.14, speed: 1.25, op: 0.17 },
-  { x: 0.78, len: 56, phase: 0.53, speed: 1.05, op: 0.24 },
-  { x: 0.87, len: 48, phase: 0.24, speed: 1.1, op: 0.21 },
-  { x: 0.94, len: 60, phase: 0.69, speed: 0.92, op: 0.22 },
-  { x: 0.28, len: 44, phase: 0.93, speed: 1.18, op: 0.16 },
-  { x: 0.56, len: 52, phase: 0.08, speed: 1.08, op: 0.20 },
-  { x: 0.82, len: 36, phase: 0.76, speed: 1.28, op: 0.15 },
-] as const
-
-function RainStreak({
-  spec,
-  width,
-  height,
-  clock,
-  intensity,
-}: {
-  spec: (typeof RAIN_SPECS)[number]
-  width: number
-  height: number
-  clock: SharedValue<number>
-  intensity: number
-}) {
-  const style = useAnimatedStyle(() => {
-    const p = (clock.get() * spec.speed + spec.phase) % 1
-    const y = -80 + p * (height * 0.92 + 120)
-    const x = spec.x * width - p * 44
-    const edgeFade = Math.min(1, p * 4) * Math.max(0, 1 - Math.max(0, (p - 0.7) / 0.3))
-    return {
-      opacity: spec.op * edgeFade * intensity,
-      transform: [{ translateX: x }, { translateY: y }, { rotate: '12deg' }],
-    }
-  })
-
-  return (
-    <Animated.View
-      style={[
-        styles.rainLine,
-        {
-          height: spec.len,
-          backgroundColor: '#A8CEF8',
-        },
-        style,
-      ]}
-    />
-  )
-}
-
-const STAR_SPECS = [
-  { x: 0.14, y: 0.12, r: 1.7, phase: 0.1 },
-  { x: 0.31, y: 0.09, r: 1.3, phase: 0.45 },
-  { x: 0.52, y: 0.16, r: 2.0, phase: 0.72 },
-  { x: 0.74, y: 0.11, r: 1.5, phase: 0.28 },
-  { x: 0.88, y: 0.20, r: 1.8, phase: 0.86 },
-  { x: 0.20, y: 0.29, r: 1.4, phase: 0.62 },
-  { x: 0.64, y: 0.27, r: 1.6, phase: 0.19 },
-  { x: 0.41, y: 0.34, r: 1.2, phase: 0.91 },
-  { x: 0.82, y: 0.38, r: 1.5, phase: 0.37 },
-  { x: 0.12, y: 0.46, r: 1.3, phase: 0.54 },
-] as const
-
-function StarMote({
-  spec,
-  width,
-  height,
-  breath,
-  intensity,
-}: {
-  spec: (typeof STAR_SPECS)[number]
-  width: number
-  height: number
-  breath: SharedValue<number>
-  intensity: number
-}) {
-  const style = useAnimatedStyle(() => {
-    const wave = 0.5 + 0.5 * Math.sin((breath.get() + spec.phase) * Math.PI * 2)
-    return {
-      opacity: (0.18 + wave * 0.55) * intensity,
-      transform: [{ scale: 0.8 + wave * 0.4 }],
-    }
-  })
-
-  return (
-    <Animated.View
-      style={[
-        styles.particle,
-        {
-          left: spec.x * width,
-          top: spec.y * height,
-          width: spec.r * 2,
-          height: spec.r * 2,
-          borderRadius: spec.r,
-          backgroundColor: '#DDD2FF',
-        },
-        style,
-      ]}
-    />
-  )
+interface AtmosphericPalette {
+  /** Upper architectural light canopy */
+  canopy: string
+  /** Mid-field volumetric bloom */
+  mid: string
+  /** Lower refractive horizon wash */
+  horizon: string
+  /** Delicate specular caustic arc stroke */
+  caustic: string
 }
 
 /**
- * Rich, bespoke sound-reactive nocturnal atmosphere on the UI thread (Reanimated).
- *
- * Each soundscape renders its own living nocturnal world behind Liquid Glass:
- * - Hearth (`fire`): radiant low hearth glow + flickering warm canopy + rising glowing embers
- * - Rainfall / Theta rain (`rain`): midnight storm sapphire mist + drifting silver rain streaks
- * - Low tide (`waves`): deep lunar ocean horizon + slow rolling tidal swells & moon shimmer
- * - Deep drift (`binaural`): velvety cosmic indigo-violet aurora ribbons + breathing starlight
- * - Wind (`wind`): sweeping silver twilight air currents
+ * Abstract volumetric light fields inspired by James Turrell installations
+ * and Watchmaker refraction — zero clipart rainlines or flat particle dots.
+ */
+const SCENE_PALETTES: Record<SoundSceneId, AtmosphericPalette> = {
+  rain: {
+    canopy: '#1E3F6E',
+    mid: '#356099',
+    horizon: '#182D4F',
+    caustic: '#8AB8EA',
+  },
+  classical: {
+    canopy: '#3C2854',
+    mid: '#78507D',
+    horizon: '#523426',
+    caustic: '#DEC090',
+  },
+  fire: {
+    canopy: '#632912',
+    mid: '#C45A1E',
+    horizon: '#9E3E12',
+    caustic: '#F4B86A',
+  },
+  waves: {
+    canopy: '#114A54',
+    mid: '#23757C',
+    horizon: '#144452',
+    caustic: '#7ED4D2',
+  },
+  delta: {
+    canopy: '#2A1F5C',
+    mid: '#4C3694',
+    horizon: '#191438',
+    caustic: '#B3A0F0',
+  },
+  wind: {
+    canopy: '#253852',
+    mid: '#4C6484',
+    horizon: '#1E2C42',
+    caustic: '#B2C6DE',
+  },
+  reverie: {
+    canopy: '#47311E',
+    mid: '#7D5B34',
+    horizon: '#2C263B',
+    caustic: '#E4C58D',
+  },
+}
+
+/**
+ * Single-tree, zero-remount volumetric nocturnal backdrop:
+ * - Pauses updates on unfocused tabs (`useIsFocused`) so NativeTabs never renders 3x backdrops.
+ * - Never unmounts/remounts particle arrays on preset switch — smooth, locked 120fps switching.
  */
 export function AmbientBackdrop() {
+  const [isFocused, setIsFocused] = useState(true)
+  useFocusEffect(
+    useCallback(() => {
+      setIsFocused(true)
+      return () => setIsFocused(false)
+    }, []),
+  )
   const { width, height } = useWindowDimensions()
   const playing = useSound((s) => s.playing)
   const soundMix = useSound((s) => s.mix)
@@ -259,405 +115,234 @@ export function AmbientBackdrop() {
 
   const activePresetId = soundPreset ?? savedPreset ?? DEFAULT_PRESET_ID
   const activeMix = soundMix ?? presetById(activePresetId)?.mix ?? null
-  const scene = dominantScene(activeMix, playing ? soundPreset : activePresetId)
+  const scene = resolveScene(activeMix, playing ? soundPreset : activePresetId)
   const pal = SCENE_PALETTES[scene]
 
   const driftA = useSharedValue(0)
   const driftB = useSharedValue(0)
   const breath = useSharedValue(0)
-  const rainClock = useSharedValue(0)
-  const emberClock = useSharedValue(0)
-  const waveClock = useSharedValue(0)
+  const causticSpin = useSharedValue(0)
+  const intensitySV = useSharedValue(playing ? 1 : 0.65)
 
   useEffect(() => {
-    if (reduced) {
-      driftA.set(0.5)
-      driftB.set(0.5)
-      breath.set(0.5)
+    intensitySV.set(
+      withTiming(playing ? 1 : 0.65, {
+        duration: 650,
+        easing: Easing.inOut(Easing.sin),
+        reduceMotion: ReduceMotion.System,
+      }),
+    )
+  }, [playing, intensitySV])
+
+  useEffect(() => {
+    if (reduced || !isFocused) {
       return
     }
     driftA.set(
       withRepeat(
-        withTiming(1, { duration: 13000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
+        withTiming(1, { duration: 15000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
         -1,
         true,
       ),
     )
     driftB.set(
       withRepeat(
-        withTiming(1, { duration: 17000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
+        withTiming(1, { duration: 19000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
         -1,
         true,
       ),
     )
+    // 10-second asymmetric-feel cardiorespiratory breath glow
     breath.set(
       withRepeat(
-        withTiming(1, { duration: 7600, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
+        withTiming(1, { duration: 10000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
         -1,
         true,
       ),
     )
-    rainClock.set(
+    causticSpin.set(
       withRepeat(
-        withTiming(1, { duration: 3600, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
+        withTiming(1, { duration: 42000, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
         -1,
         false,
       ),
     )
-    emberClock.set(
-      withRepeat(
-        withTiming(1, { duration: 9200, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
-        -1,
-        false,
-      ),
-    )
-    waveClock.set(
-      withRepeat(
-        withTiming(1, { duration: 11000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-        -1,
-        true,
-      ),
-    )
-  }, [reduced, driftA, driftB, breath, rainClock, emberClock, waveClock])
+  }, [reduced, isFocused, driftA, driftB, breath, causticSpin])
 
-  const orbSize = Math.max(width, 390) * 1.24
-  const intensity = playing ? 1 : 0.68
+  const orbW = Math.max(width, 390) * 1.28
+  const orbH = Math.max(height * 0.56, 440)
 
-  const topOrbStyle = useAnimatedStyle(() => ({
-    opacity: (0.58 + breath.get() * 0.24) * intensity,
+  const canopyStyle = useAnimatedStyle(() => ({
+    opacity: (0.64 + breath.get() * 0.24) * intensitySV.get(),
     transform: [
-      { translateX: (driftA.get() - 0.5) * 56 },
-      { translateY: (driftB.get() - 0.5) * 38 },
-      { scale: 0.96 + breath.get() * 0.1 },
+      { translateX: (driftA.get() - 0.5) * 48 },
+      { translateY: (driftB.get() - 0.5) * 32 },
+      { scale: 0.98 + breath.get() * 0.08 },
     ],
   }))
 
-  const midOrbStyle = useAnimatedStyle(() => ({
-    opacity: (0.44 + (1 - breath.get()) * 0.22) * intensity,
+  const midStyle = useAnimatedStyle(() => ({
+    opacity: (0.44 + (1 - breath.get()) * 0.24) * intensitySV.get(),
     transform: [
-      { translateX: (0.5 - driftB.get()) * 64 },
-      { translateY: (driftA.get() - 0.5) * 48 },
-      { scale: 1.04 - breath.get() * 0.08 },
+      { translateX: (0.5 - driftB.get()) * 58 },
+      { translateY: (driftA.get() - 0.5) * 44 },
+      { scale: 1.04 - breath.get() * 0.07 },
     ],
   }))
 
-  const hearthBaseStyle = useAnimatedStyle(() => ({
-    opacity: (0.64 + breath.get() * 0.28) * intensity,
+  const horizonStyle = useAnimatedStyle(() => ({
+    opacity: (0.48 + breath.get() * 0.22) * intensitySV.get(),
     transform: [
-      { scaleX: 0.96 + breath.get() * 0.09 },
-      { scaleY: 0.92 + breath.get() * 0.14 },
+      { translateX: (driftA.get() - 0.5) * 34 },
+      { scaleX: 1.02 + breath.get() * 0.08 },
     ],
   }))
 
-  const waveBandA = useAnimatedStyle(() => ({
-    opacity: (0.36 + breath.get() * 0.18) * intensity,
+  const causticStyle = useAnimatedStyle(() => ({
+    opacity: (0.24 + breath.get() * 0.16) * intensitySV.get(),
     transform: [
-      { translateX: (waveClock.get() - 0.5) * 54 },
-      { translateY: Math.sin(waveClock.get() * Math.PI) * 14 },
+      { rotate: `${causticSpin.get() * 360}deg` },
+      { scale: 0.96 + breath.get() * 0.07 },
     ],
   }))
 
-  const waveBandB = useAnimatedStyle(() => ({
-    opacity: (0.28 + (1 - breath.get()) * 0.18) * intensity,
-    transform: [
-      { translateX: (0.5 - waveClock.get()) * 68 },
-      { translateY: -Math.sin(waveClock.get() * Math.PI) * 12 },
-    ],
-  }))
-
-  const auroraRibbonStyle = useAnimatedStyle(() => ({
-    opacity: (0.45 + breath.get() * 0.24) * intensity,
-    transform: [
-      { translateX: (driftA.get() - 0.5) * 44 },
-      { translateY: (driftB.get() - 0.5) * 28 },
-      { rotate: `${-12 + (driftA.get() - 0.5) * 10}deg` },
-    ],
-  }))
-
-  const gradSuffix = scene
+  if (!isFocused) {
+    return <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.wrap]} />
+  }
 
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.wrap]}>
-      {/* Upper nocturnal atmospheric canopy */}
+      {/* Layer 1: Upper volumetric light canopy */}
       <Animated.View
         style={[
-          styles.orb,
+          styles.layer,
           {
-            width: orbSize,
-            height: orbSize,
-            top: scene === 'fire' ? -orbSize * 0.42 : -orbSize * 0.30,
-            left: (width - orbSize) / 2 - width * 0.08,
+            width: orbW,
+            height: orbH,
+            top: -orbH * 0.34,
+            left: (width - orbW) / 2 - width * 0.06,
           },
-          topOrbStyle,
+          canopyStyle,
         ]}
       >
-        <Svg width={orbSize} height={orbSize}>
+        <Svg width={orbW} height={orbH}>
           <Defs>
-            <RadialGradient id={`lullTop-${gradSuffix}`} cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor={pal.primary} stopOpacity="0.82" />
-              <Stop offset="48%" stopColor={pal.glow} stopOpacity="0.34" />
+            <RadialGradient id="lullVolCanopy" cx="48%" cy="46%" r="52%">
+              <Stop offset="0%" stopColor={pal.canopy} stopOpacity="0.92" />
+              <Stop offset="48%" stopColor={pal.mid} stopOpacity="0.34" />
               <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
             </RadialGradient>
           </Defs>
-          <Rect x={0} y={0} width={orbSize} height={orbSize} fill={`url(#lullTop-${gradSuffix})`} />
+          <Rect x={0} y={0} width={orbW} height={orbH} fill="url(#lullVolCanopy)" />
         </Svg>
       </Animated.View>
 
-      {/* Mid-screen living secondary bloom */}
+      {/* Layer 2: Asymmetric counter-drifting mid-screen bokeh veil */}
       <Animated.View
         style={[
-          styles.orb,
+          styles.layer,
           {
-            width: orbSize * 0.98,
-            height: orbSize * 0.98,
-            top: height * 0.20,
-            left: (width - orbSize * 0.98) / 2 + width * 0.14,
+            width: orbW * 0.96,
+            height: orbH * 0.96,
+            top: height * 0.16,
+            left: (width - orbW * 0.96) / 2 + width * 0.15,
           },
-          midOrbStyle,
+          midStyle,
         ]}
       >
-        <Svg width={orbSize * 0.98} height={orbSize * 0.98}>
+        <Svg width={orbW * 0.96} height={orbH * 0.96}>
           <Defs>
-            <RadialGradient id={`lullMid-${gradSuffix}`} cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor={pal.secondary} stopOpacity="0.46" />
-              <Stop offset="52%" stopColor={pal.primary} stopOpacity="0.16" />
+            <RadialGradient id="lullVolMid" cx="52%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor={pal.mid} stopOpacity="0.54" />
+              <Stop offset="44%" stopColor={pal.canopy} stopOpacity="0.18" />
               <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
             </RadialGradient>
           </Defs>
-          <Rect x={0} y={0} width={orbSize * 0.98} height={orbSize * 0.98} fill={`url(#lullMid-${gradSuffix})`} />
+          <Rect x={0} y={0} width={orbW * 0.96} height={orbH * 0.96} fill="url(#lullVolMid)" />
         </Svg>
       </Animated.View>
 
-      {/* HEARTH / FIRE: Warm radiant hearth firebed at bottom + rising glowing embers */}
-      {scene === 'fire' && (
-        <>
-          <Animated.View
-            style={[
-              styles.orb,
-              {
-                width: orbSize * 1.12,
-                height: orbSize * 0.85,
-                bottom: -orbSize * 0.34,
-                left: (width - orbSize * 1.12) / 2,
-              },
-              hearthBaseStyle,
-            ]}
-          >
-            <Svg width={orbSize * 1.12} height={orbSize * 0.85}>
-              <Defs>
-                <RadialGradient id="lullFireBed" cx="50%" cy="62%" r="54%">
-                  <Stop offset="0%" stopColor="#F5A442" stopOpacity="0.62" />
-                  <Stop offset="34%" stopColor="#CC551C" stopOpacity="0.42" />
-                  <Stop offset="68%" stopColor="#7A280C" stopOpacity="0.18" />
-                  <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-                </RadialGradient>
-              </Defs>
-              <Rect x={0} y={0} width={orbSize * 1.12} height={orbSize * 0.85} fill="url(#lullFireBed)" />
-            </Svg>
-          </Animated.View>
-          {!reduced &&
-            EMBER_SPECS.map((spec, idx) => (
-              <RisingEmber
-                key={idx}
-                spec={spec}
-                width={width}
-                height={height}
-                clock={emberClock}
-                intensity={intensity}
-              />
-            ))}
-        </>
-      )}
+      {/* Layer 3: Subtle lower horizon refractive warmth */}
+      <Animated.View
+        style={[
+          styles.layer,
+          {
+            width: orbW * 1.1,
+            height: orbH * 0.85,
+            bottom: -orbH * 0.36,
+            left: (width - orbW * 1.1) / 2,
+          },
+          horizonStyle,
+        ]}
+      >
+        <Svg width={orbW * 1.1} height={orbH * 0.85}>
+          <Defs>
+            <RadialGradient id="lullVolHorizon" cx="50%" cy="62%" r="54%">
+              <Stop offset="0%" stopColor={pal.caustic} stopOpacity="0.28" />
+              <Stop offset="36%" stopColor={pal.horizon} stopOpacity="0.48" />
+              <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x={0} y={0} width={orbW * 1.1} height={orbH * 0.85} fill="url(#lullVolHorizon)" />
+        </Svg>
+      </Animated.View>
 
-      {/* RAINFALL / THETA RAIN: Drifting silver rain streaks + moonlight ripple rings */}
-      {scene === 'rain' && (
-        <>
-          {!reduced &&
-            RAIN_SPECS.map((spec, idx) => (
-              <RainStreak
-                key={idx}
-                spec={spec}
-                width={width}
-                height={height}
-                clock={rainClock}
-                intensity={intensity}
-              />
-            ))}
-          <Animated.View
-            style={[
-              styles.orb,
-              {
-                width: width,
-                height: 220,
-                bottom: 40,
-                left: 0,
-              },
-              waveBandA,
-            ]}
-          >
-            <Svg width={width} height={220}>
-              <Circle
-                cx={width * 0.28}
-                cy={120}
-                r={58}
-                fill="none"
-                stroke={pal.accent}
-                strokeOpacity={0.14}
-                strokeWidth={1}
-              />
-              <Circle
-                cx={width * 0.72}
-                cy={88}
-                r={76}
-                fill="none"
-                stroke={pal.accent}
-                strokeOpacity={0.1}
-                strokeWidth={1}
-              />
-            </Svg>
-          </Animated.View>
-        </>
-      )}
-
-      {/* LOW TIDE / WAVES: Rolling oceanic horizon swells + moonlit water shimmer */}
-      {scene === 'waves' && (
-        <>
-          <Animated.View
-            style={[
-              styles.orb,
-              { width: width + 140, height: 260, bottom: 20, left: -70 },
-              waveBandA,
-            ]}
-          >
-            <Svg width={width + 140} height={260} viewBox="0 0 560 260" preserveAspectRatio="none">
-              <Defs>
-                <LinearGradient id="lullWaveA" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor={pal.accent} stopOpacity="0.28" />
-                  <Stop offset="45%" stopColor={pal.primary} stopOpacity="0.22" />
-                  <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-                </LinearGradient>
-              </Defs>
-              <Path
-                d="M0 90 Q140 34 280 90 T560 90 L560 260 L0 260 Z"
-                fill="url(#lullWaveA)"
-              />
-              <Path
-                d="M0 90 Q140 34 280 90 T560 90"
-                fill="none"
-                stroke={pal.accent}
-                strokeOpacity={0.28}
-                strokeWidth={1.3}
-              />
-            </Svg>
-          </Animated.View>
-
-          <Animated.View
-            style={[
-              styles.orb,
-              { width: width + 140, height: 220, bottom: -10, left: -70 },
-              waveBandB,
-            ]}
-          >
-            <Svg width={width + 140} height={220} viewBox="0 0 560 220" preserveAspectRatio="none">
-              <Defs>
-                <LinearGradient id="lullWaveB" x1="0" y1="0" x2="0" y2="1">
-                  <Stop offset="0%" stopColor={pal.secondary} stopOpacity="0.30" />
-                  <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-                </LinearGradient>
-              </Defs>
-              <Path
-                d="M0 80 Q140 130 280 80 T560 80 L560 220 L0 220 Z"
-                fill="url(#lullWaveB)"
-              />
-              <Path
-                d="M0 80 Q140 130 280 80 T560 80"
-                fill="none"
-                stroke={pal.accent}
-                strokeOpacity={0.20}
-                strokeWidth={1}
-              />
-            </Svg>
-          </Animated.View>
-        </>
-      )}
-
-      {/* DEEP DRIFT / BINAURAL: Cosmic aurora ribbon + breathing starlight dust */}
-      {scene === 'binaural' && (
-        <>
-          <Animated.View
-            style={[
-              styles.orb,
-              {
-                width: width * 1.4,
-                height: 240,
-                top: height * 0.14,
-                left: -width * 0.2,
-              },
-              auroraRibbonStyle,
-            ]}
-          >
-            <Svg width={width * 1.4} height={240} viewBox="0 0 560 240" preserveAspectRatio="none">
-              <Defs>
-                <LinearGradient id="lullAurora" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0%" stopColor="#6E52C4" stopOpacity="0" />
-                  <Stop offset="35%" stopColor="#8E6EE6" stopOpacity="0.34" />
-                  <Stop offset="68%" stopColor="#4672B8" stopOpacity="0.26" />
-                  <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-                </LinearGradient>
-              </Defs>
-              <Path
-                d="M0 140 C150 40, 320 210, 560 80 L560 170 C340 250, 160 110, 0 210 Z"
-                fill="url(#lullAurora)"
-              />
-            </Svg>
-          </Animated.View>
-          {STAR_SPECS.map((spec, idx) => (
-            <StarMote
-              key={idx}
-              spec={spec}
-              width={width}
-              height={height}
-              breath={breath}
-              intensity={intensity}
-            />
-          ))}
-        </>
-      )}
-
-      {/* WIND: Sweeping silver twilight air currents */}
-      {scene === 'wind' && (
-        <Animated.View
-          style={[
-            styles.orb,
-            { width: width + 120, height: 280, top: height * 0.24, left: -60 },
-            waveBandA,
-          ]}
-        >
-          <Svg width={width + 120} height={280} viewBox="0 0 540 280" preserveAspectRatio="none">
-            <Path
-              d="M0 70 C140 30, 310 110, 540 55"
-              fill="none"
-              stroke={pal.accent}
-              strokeOpacity={0.22}
-              strokeWidth={1.4}
-            />
-            <Path
-              d="M0 150 C180 190, 340 110, 540 160"
-              fill="none"
-              stroke={pal.accent}
-              strokeOpacity={0.16}
-              strokeWidth={1.1}
-            />
-            <Path
-              d="M0 225 C150 185, 360 250, 540 205"
-              fill="none"
-              stroke={pal.accent}
-              strokeOpacity={0.12}
-              strokeWidth={1}
-            />
-          </Svg>
-        </Animated.View>
-      )}
+      {/* Layer 4: Delicate Watchmaker optical caustic filaments (abstract lens refraction) */}
+      <Animated.View
+        style={[
+          styles.layer,
+          {
+            width: width * 1.25,
+            height: width * 1.25,
+            top: height * 0.04,
+            left: -width * 0.125,
+          },
+          causticStyle,
+        ]}
+      >
+        <Svg width={width * 1.25} height={width * 1.25} viewBox="0 0 480 480">
+          <Ellipse
+            cx={240}
+            cy={240}
+            rx={196}
+            ry={148}
+            transform="rotate(-18 240 240)"
+            fill="none"
+            stroke={pal.caustic}
+            strokeOpacity={0.22}
+            strokeWidth={0.9}
+          />
+          <Ellipse
+            cx={240}
+            cy={240}
+            rx={162}
+            ry={208}
+            transform="rotate(24 240 240)"
+            fill="none"
+            stroke={pal.caustic}
+            strokeOpacity={0.14}
+            strokeWidth={0.8}
+          />
+          <Path
+            d="M84 260 C140 160, 320 132, 404 220"
+            fill="none"
+            stroke={pal.caustic}
+            strokeOpacity={0.24}
+            strokeWidth={1.1}
+            strokeLinecap="round"
+          />
+          <Circle
+            cx={240}
+            cy={240}
+            r={126}
+            fill="none"
+            stroke={pal.caustic}
+            strokeOpacity={0.12}
+            strokeWidth={0.75}
+            strokeDasharray="2 10"
+          />
+        </Svg>
+      </Animated.View>
     </View>
   )
 }
@@ -668,19 +353,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#000000',
   },
-  orb: {
+  layer: {
     position: 'absolute',
-  },
-  particle: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-  },
-  rainLine: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 1.25,
-    borderRadius: 1,
   },
 })

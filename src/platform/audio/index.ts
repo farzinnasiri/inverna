@@ -1,9 +1,10 @@
 import type { DescentSnapshot } from '@/core/sound/arc'
 import { isSilent, LAYERS, type LayerId, type Mix } from '@/core/sound/catalog'
-import type { CueName, SoundEngine } from '@/core/sound/engine'
+import type { CueName, NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { createBinauralController, type BinauralController } from './binaural'
 import { createNoiseBufferBank, type NoiseBufferBank } from './buffers'
+import { createClassicalMotifController, type ClassicalMotifController } from './classical'
 import { createCueBloomBus, playHarmonicCue, type CueBloomBus } from './cues'
 import { createAmbientLayer, type AmbientLayer } from './layers'
 import { createAsymmetricBreathWave, createHarmonicPadController, type HarmonicPadController } from './pad'
@@ -18,11 +19,13 @@ import type {
   WaveShaperNodeLike,
 } from './types'
 
+export type NowPlayingState = 'playing' | 'paused' | 'stopped'
+
 export interface NeuroEngineHooks {
   /** Called right before audio starts (e.g., configure native AVAudioSession). */
   onPrepareSession?: () => Promise<void> | void
-  /** Called when ambient sound starts or updates metadata (e.g., Lock Screen / Dynamic Island). */
-  onNowPlayingUpdate?: (meta: { title: string; subtitle?: string } | null, playing: boolean) => void
+  /** Called when ambient sound plays, pauses, or fully stops (Lock Screen / Dynamic Island). */
+  onNowPlayingUpdate?: (meta: NowPlayingMeta | null, state: NowPlayingState) => void
   /** Wire OS remote pause/play events back into the engine. */
   bindRemoteControls?: (handlers: { onPause: () => void; onPlay: () => void }) => () => void
 }
@@ -50,6 +53,7 @@ interface AudioGraph {
   softClipper: WaveShaperNodeLike | null
   pad: HarmonicPadController
   binaural: BinauralController
+  classical: ClassicalMotifController
 }
 
 const ALL_LAYER_IDS: readonly LayerId[] = LAYERS.map((layer) => layer.id)
@@ -85,9 +89,10 @@ export function createNeuroSoundEngine({
   let activeKey: HarmonicKeyId = DEFAULT_HARMONIC_KEY
   let lastMix: Mix | null = null
   let cueStep = 0
-  let nowPlayingMeta: { title: string; subtitle?: string } | null = {
+  let nowPlayingMeta: NowPlayingMeta | null = {
     title: 'Theta rain',
-    subtitle: 'Lull · 5.0 Hz Theta',
+    subtitle: 'Soft rain & felt fifths',
+    scene: 'rain',
   }
 
   let descent: DescentSnapshot = {
@@ -147,6 +152,7 @@ export function createNeuroSoundEngine({
     }
     graph?.pad.dispose()
     graph?.binaural.dispose()
+    graph?.classical.dispose()
   }
 
   const ensureRemoteControls = () => {
@@ -155,7 +161,7 @@ export function createNeuroSoundEngine({
     hooks.bindRemoteControls({
       onPause: () => {
         if (!running) return
-        stopAmbient(0.6)
+        stopAmbient(0.6, false)
         for (const fn of externalPauseListeners) fn()
       },
       onPlay: () => {
@@ -289,6 +295,7 @@ export function createNeuroSoundEngine({
       )
 
       const binaural = createBinauralController(ctx, ambientGateGain)
+      const classical = createClassicalMotifController(ctx, cueBloom.input)
 
       graph = {
         ctx,
@@ -308,6 +315,7 @@ export function createNeuroSoundEngine({
         softClipper,
         pad,
         binaural,
+        classical,
       }
       return graph
     } catch {
@@ -345,6 +353,14 @@ export function createNeuroSoundEngine({
 
     g.cueBloom.setWarmth(descent.cueBloomCutoffHz, ramp)
 
+    if (running && lastMix?.classicalMotif) {
+      g.classical.update({
+        style: lastMix.classicalMotif,
+        keyId: lastMix.harmonicKey ?? activeKey,
+        darkness: descent.cueDarkness,
+      })
+    }
+
     g.pad.setDescent(
       {
         modHz: descent.modHz,
@@ -369,21 +385,22 @@ export function createNeuroSoundEngine({
     }
   }
 
-  const stopAmbient = (fadeSeconds = 1.5) => {
+  const stopAmbient = (fadeSeconds = 1.5, hideNotification = false) => {
     running = false
     clearStopTimer()
-    hooks?.onNowPlayingUpdate?.(nowPlayingMeta, false)
+    hooks?.onNowPlayingUpdate?.(nowPlayingMeta, hideNotification ? 'stopped' : 'paused')
     if (!graph) return
 
     const g = graph
     const safeFade = Math.max(0, Number.isFinite(fadeSeconds) ? fadeSeconds : 1.5)
 
     for (const id of activeLayers.keys()) clearLayerTimer(id)
+    g.classical.stop()
 
     if (safeFade <= 0.002) {
       rampParam(g.ambientGateGain.gain, 0, 0, g.ctx.currentTime)
       disposeAllAmbientNow()
-      if (g.ctx.state === 'running' && typeof g.ctx.suspend === 'function') {
+      if (hideNotification && g.ctx.state === 'running' && typeof g.ctx.suspend === 'function') {
         void g.ctx.suspend().catch(() => {})
       }
       return
@@ -397,7 +414,7 @@ export function createNeuroSoundEngine({
       stopTimer = null
       if (running) return
       disposeAllAmbientNow()
-      if (g.ctx.state === 'running' && typeof g.ctx.suspend === 'function') {
+      if (hideNotification && g.ctx.state === 'running' && typeof g.ctx.suspend === 'function') {
         void g.ctx.suspend().catch(() => {})
       }
     }, Math.ceil(safeFade * 1000) + 120)
@@ -476,8 +493,15 @@ export function createNeuroSoundEngine({
       scale: descent.binauralScale,
     })
 
+    g.classical.update({
+      style: mix.classicalMotif ?? null,
+      keyId: mix.harmonicKey ?? activeKey,
+      darkness: descent.cueDarkness,
+    })
+
+    g.bank.prewarm()
     applyDescentNodes(g, Math.min(safeFade, 0.8))
-    hooks?.onNowPlayingUpdate?.(nowPlayingMeta, true)
+    hooks?.onNowPlayingUpdate?.(nowPlayingMeta, 'playing')
   }
 
   return {
@@ -516,8 +540,8 @@ export function createNeuroSoundEngine({
       rampParam(graph.masterGain.gain, masterVolume, safeRamp, graph.ctx.currentTime)
     },
 
-    stop(fadeSeconds = 1.5) {
-      stopAmbient(fadeSeconds)
+    stop(fadeSeconds = 1.5, opts?: { hideNotification?: boolean }) {
+      stopAmbient(fadeSeconds, opts?.hideNotification ?? false)
     },
 
     cue(name: CueName, volume = 1) {
@@ -568,7 +592,7 @@ export function createNeuroSoundEngine({
     setNowPlayingMeta(meta) {
       nowPlayingMeta = meta
       if (running) {
-        hooks?.onNowPlayingUpdate?.(meta, true)
+        hooks?.onNowPlayingUpdate?.(meta, 'playing')
       }
     },
 

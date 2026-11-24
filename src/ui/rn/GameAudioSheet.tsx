@@ -22,7 +22,7 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
   const sfx = useSettings((s) => s.sfx)
   const haptics = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
-  const keyLabel = harmonicKeyMeta(harmonicKey).label
+  const keyLabel = harmonicKeyMeta(harmonicKey).moodName
 
   const toggleAmbient = (on: boolean) => {
     if (on) playPreset(presetId ?? sessionPreset ?? DEFAULT_PRESET_ID, sleepTimer)
@@ -47,7 +47,7 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
       </View>
 
       <View style={styles.chips}>
-        {PRESETS.map((p) => {
+        {PRESETS.filter((p) => p.page === 0).map((p) => {
           const active = playing && presetId === p.id
           return (
             <Pressable

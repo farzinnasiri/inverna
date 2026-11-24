@@ -1,21 +1,41 @@
 import { Image } from 'react-native'
 import { AudioContext, AudioManager, PlaybackNotificationManager } from 'react-native-audio-api'
-import type { SoundEngine } from '@/core/sound/engine'
-import { createNeuroSoundEngine } from './audio'
+import type { SoundSceneId } from '@/core/sound/catalog'
+import type { NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
+import { createNeuroSoundEngine, type NowPlayingState } from './audio'
 import type { AudioContextLike } from './audio/types'
 
-const LULL_ARTWORK_MODULE = require('../../assets/images/icon.png')
-let cachedArtworkUri: string | undefined
+const DEFAULT_ARTWORK_MODULE = require('../../assets/images/icon.png')
 
-function resolveArtworkUri(): string | undefined {
-  if (cachedArtworkUri !== undefined) return cachedArtworkUri
+/**
+ * Per-soundscape 512x512 Watchmaker PNG artworks so Dynamic Island & Lock Screen
+ * display each sound signature's own bespoke icon rather than a generic icon.
+ */
+const SCENE_ARTWORK_MODULES: Record<SoundSceneId, number> = {
+  rain: require('../../assets/artwork/scene-rain.png'),
+  classical: require('../../assets/artwork/scene-classical.png'),
+  fire: require('../../assets/artwork/scene-fire.png'),
+  waves: require('../../assets/artwork/scene-waves.png'),
+  delta: require('../../assets/artwork/scene-delta.png'),
+  wind: require('../../assets/artwork/scene-wind.png'),
+  reverie: require('../../assets/artwork/scene-reverie.png'),
+}
+
+const artworkUriCache = new Map<string, string | undefined>()
+
+function resolveArtworkUri(scene?: SoundSceneId): string | undefined {
+  const key = scene ?? 'default'
+  if (artworkUriCache.has(key)) return artworkUriCache.get(key)
   try {
-    const resolved = Image.resolveAssetSource(LULL_ARTWORK_MODULE)
-    cachedArtworkUri = resolved?.uri || undefined
+    const mod = scene ? SCENE_ARTWORK_MODULES[scene] : DEFAULT_ARTWORK_MODULE
+    const resolved = Image.resolveAssetSource(mod)
+    const uri = resolved?.uri || undefined
+    artworkUriCache.set(key, uri)
+    return uri
   } catch {
-    cachedArtworkUri = undefined
+    artworkUriCache.set(key, undefined)
+    return undefined
   }
-  return cachedArtworkUri
 }
 
 /**
@@ -23,11 +43,10 @@ function resolveArtworkUri(): string | undefined {
  * Software Mansion's `react-native-audio-api` (C++ CoreAudio / Oboe Web Audio API).
  *
  * - Runs the exact same zero-audio-file synthesis graph as Web on the native audio thread.
- * - Uses valid iOS AVAudioSessionCategoryPlayback (`options: []`) — Apple automatically
- *   routes Playback to speaker, headphones, Bluetooth A2DP, and AirPlay while allowing
- *   UIKit haptics, silent-mode playback, and background audio without paramErr (-50).
- * - Integrates `PlaybackNotificationManager` for iOS Dynamic Island, Lock Screen, and
- *   Control Center artwork + play/pause synchronization.
+ * - Uses valid iOS AVAudioSessionCategoryPlayback (`options: []`) — automatically routes
+ *   to Speaker, Headphones, Bluetooth A2DP, and AirPlay with silent-mode & background audio.
+ * - Integrates `PlaybackNotificationManager` with per-soundscape artwork and persistent
+ *   Lock Screen / Dynamic Island Play & Pause controls when paused.
  */
 export function createPlatformSoundEngine(): SoundEngine {
   let sessionConfigured = false
@@ -58,19 +77,19 @@ export function createPlatformSoundEngine(): SoundEngine {
     }
   }
 
-  const updateNowPlaying = (meta: { title: string; subtitle?: string } | null, playing: boolean) => {
+  const updateNowPlaying = (meta: NowPlayingMeta | null, state: NowPlayingState) => {
     try {
-      if (!playing) {
+      if (state === 'stopped') {
         void PlaybackNotificationManager.hide().catch(() => {})
         return
       }
-      const artwork = resolveArtworkUri()
+      const artwork = resolveArtworkUri(meta?.scene)
       const showPromise = PlaybackNotificationManager.show({
         title: meta?.title ?? 'Theta rain',
         artist: 'Lull',
-        album: meta?.subtitle ?? 'Neuroacoustic Soundscape',
+        album: meta?.subtitle ?? 'Night Soundscape',
         ...(artwork ? { artwork: { uri: artwork } } : {}),
-        state: 'playing',
+        state: state === 'playing' ? 'playing' : 'paused',
         isLiveStream: true,
       })
 

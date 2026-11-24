@@ -25,7 +25,6 @@ import { Check, Moon, Sun } from 'lucide-react-native'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSettings } from '@/ui/state/settings'
-import { GlassSurface } from './Glass'
 import { Layer } from './Layer'
 
 export const FRAME_MAX_WIDTH = 440
@@ -705,17 +704,23 @@ export function Sheet({
           style={[
             styles.sheetWrap,
             {
-              paddingBottom: Math.max(insets.bottom, 10),
               transform: [{ translateY }],
             },
           ]}
         >
-          <GlassSurface variant="elevated" radius={34} style={styles.sheetCard}>
-            <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.26)' }]} />
+          <View
+            style={[
+              styles.sheetCard,
+              {
+                paddingBottom: Math.max(insets.bottom, 16) + 12,
+              },
+            ]}
+          >
+            <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.28)' }]} />
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
               {children}
             </ScrollView>
-          </GlassSurface>
+          </View>
         </Animated.View>
       </View>
     </Layer>
@@ -900,15 +905,25 @@ const styles = StyleSheet.create({
   },
   sheetWrap: {
     width: '100%',
-    maxWidth: FRAME_MAX_WIDTH,
-    maxHeight: '88%',
-    paddingHorizontal: 8,
+    maxWidth: FRAME_MAX_WIDTH + 40,
+    maxHeight: '86%',
   },
   sheetCard: {
     width: '100%',
+    backgroundColor: '#0E1016',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderCurve: 'continuous',
+    borderTopWidth: 1,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
     paddingTop: 10,
-    paddingBottom: 20,
     paddingHorizontal: 20,
+    overflow: 'hidden',
   },
   sheetGrab: {
     width: 36,

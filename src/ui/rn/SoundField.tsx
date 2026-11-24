@@ -52,7 +52,7 @@ export function SoundField({
   ).current
 
   const { width, height } = useWindowDimensions()
-  const size = Math.min(176, Math.max(142, Math.round(Math.min(width - 154, height * 0.21))))
+  const size = Math.min(160, Math.max(134, Math.round(Math.min(width - 170, height * 0.19))))
   const vb = 248
   const c = vb / 2
   const l = mix.layers

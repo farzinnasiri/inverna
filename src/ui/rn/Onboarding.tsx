@@ -11,14 +11,10 @@ import Animated, {
 } from 'react-native-reanimated'
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
 import {
-  CloudRain,
-  Flame,
   Gamepad2,
   Moon,
-  Sparkles,
   Volume2,
   Waves,
-  Wind,
 } from 'lucide-react-native'
 import { DEFAULT_PRESET_ID, PRESETS } from '@/core/sound/catalog'
 import { haptics, sound } from '@/platform'
@@ -32,6 +28,7 @@ import { Button, FRAME_MAX_WIDTH, LightSlider, Slider } from './controls'
 import { GlassSurface } from './Glass'
 import { useReducedMotion, useResponsiveLayout } from './hooks'
 import { Layer } from './Layer'
+import { SoundGlyph } from './SoundGlyph'
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 
@@ -40,14 +37,6 @@ function lightStageLabel(light: number): string {
   if (light < 0.5) return 'Soft warm'
   if (light < 0.78) return 'Candlelight'
   return 'Deep ember'
-}
-
-function PresetGlyph({ id, color }: { id: string; color: string }) {
-  if (id === 'theta-rain' || id === 'rainfall') return <CloudRain size={17} strokeWidth={1.65} color={color} />
-  if (id === 'low-tide') return <Waves size={17} strokeWidth={1.65} color={color} />
-  if (id === 'hearth') return <Flame size={17} strokeWidth={1.65} color={color} />
-  if (id === 'deep-drift') return <Sparkles size={17} strokeWidth={1.65} color={color} />
-  return <Wind size={17} strokeWidth={1.65} color={color} />
 }
 
 /**
@@ -399,7 +388,7 @@ export function Onboarding() {
                   </View>
 
                   <View style={styles.soundList}>
-                    {PRESETS.map((p) => {
+                    {PRESETS.filter((p) => p.page === 0).map((p) => {
                       const active = playing && presetId === p.id
                       const selected = active || (!playing && (sessionPreset ?? DEFAULT_PRESET_ID) === p.id)
                       return (
@@ -427,7 +416,7 @@ export function Onboarding() {
                                   },
                                 ]}
                               >
-                                <PresetGlyph id={p.id} color={selected ? color.accent : color.ink2} />
+                                <SoundGlyph icon={p.icon} size={17} color={selected ? color.accent : color.ink2} />
                               </View>
                               <View style={{ flex: 1 }}>
                                 <Text style={[styles.soundName, { color: selected ? color.ink : color.ink2 }]}>
