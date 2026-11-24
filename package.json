@@ -16,9 +16,11 @@
     "test": "vitest run",
     "build": "node scripts/export-web.mjs",
     "deploy": "pnpm build && npx wrangler deploy",
-    "doctor": "pnpm dlx expo-doctor"
+    "doctor": "pnpm dlx expo-doctor",
+    "postinstall": "setup-skia-web public"
   },
   "dependencies": {
+    "@shopify/react-native-skia": "2.14.0",
     "expo": "~58.0.23",
     "expo-blur": "58.0.3",
     "expo-constants": "~58.0.15",

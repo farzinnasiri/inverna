@@ -1,5 +1,6 @@
 import type { ClassicalMotifStyle } from '@/core/sound/catalog'
 import { harmonicKeyMeta, type HarmonicKeyId } from '@/core/sound/harmonics'
+import { emitMotifPhrase } from './motifEvents'
 import { clamp, safeDisconnect } from './params'
 import type { AudioContextLike, AudioNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
 
@@ -156,12 +157,18 @@ export function createClassicalMotifController(
     const d = clamp(darkness, 0, 1)
     const cutScale = 1 - d * 0.46
     const velScale = 1 - d * 0.25
+    const notes: number[] = []
+    // Plays a note and remembers it for the visuals (voice 0 = bass, else 1 + degree).
+    const play = (voice: number, opts: Parameters<typeof triggerFeltPianoNote>[2]) => {
+      triggerFeltPianoNote(ctx, destination, opts)
+      notes.push(opts.delay, voice, opts.gain, opts.decay)
+    }
 
     try {
       if (activeStyle === 'nocturne') {
         const phrase = NOCTURNE_PHRASES[phraseIdx % NOCTURNE_PHRASES.length]!
         // Gentle low bass root anchor + sparse Satie/Chopin broken felt-piano figure
-        triggerFeltPianoNote(ctx, destination, {
+        play(0, {
           freq: key.padHz[0]!,
           delay: 0,
           attack: 0.04,
@@ -173,7 +180,7 @@ export function createClassicalMotifController(
         })
         phrase.forEach((deg, idx) => {
           const freq = scale[deg % scale.length]!
-          triggerFeltPianoNote(ctx, destination, {
+          play(1 + (deg % scale.length), {
             freq,
             delay: 0.55 + idx * 0.72,
             attack: 0.018 + d * 0.012,
@@ -189,7 +196,7 @@ export function createClassicalMotifController(
         const pair = ADAGIO_PHRASES[phraseIdx % ADAGIO_PHRASES.length]!
         pair.forEach((deg, idx) => {
           const freq = scale[deg % scale.length]! * (idx === 0 ? 0.5 : 1)
-          triggerFeltPianoNote(ctx, destination, {
+          play(1 + (deg % scale.length), {
             freq,
             delay: idx * 0.45,
             attack: 0.85,
@@ -205,7 +212,7 @@ export function createClassicalMotifController(
         const phrase = REVERIE_PHRASES[phraseIdx % REVERIE_PHRASES.length]!
         phrase.forEach((deg, idx) => {
           const freq = scale[deg % scale.length]!
-          triggerFeltPianoNote(ctx, destination, {
+          play(1 + (deg % scale.length), {
             freq,
             delay: idx * 0.85,
             attack: 0.025,
@@ -220,6 +227,7 @@ export function createClassicalMotifController(
     } catch {
       /* never throw from ambient motifs */
     }
+    if (notes.length > 0) emitMotifPhrase({ style: activeStyle, notes })
     phraseIdx += 1
   }
 

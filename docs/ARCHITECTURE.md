@@ -51,6 +51,31 @@ export function tickX(state: XState, dtMs: number, calm: number): XState // only
 Engines take `calm` (0..1). During a wind-down session it rises toward 1 and
 games should get slower and gentler — never harder.
 
+## Night backdrop (Play, Sounds, Settings)
+
+Every sound preset has its own living scene (rain on a window, embers, moonlight
+on water, Chladni sand, ...). `AmbientBackdrop` stacks two layers:
+
+| Layer | Files | What it does |
+|---|---|---|
+| Colour | `src/ui/rn/AmbientBackdrop.tsx`, palettes in `src/core/backdrop/scenes.ts` | Palette-family glows and caustic rings, crossfaded over 1.6s |
+| Scene | `src/core/backdrop/sim.ts` (simulation), `src/ui/rn/backdrop/` (Skia) | Particles, structures and a soft field shader |
+
+- **Simulation** (`sim.ts`): one pool of particles shared by all 12 scenes. On
+  a sound change a circular front grows from the dial; each particle it passes
+  is handed to the new scene where it stands and blends to its new look, so
+  shapes morph instead of crossfading. Pure TS worklets, unit tested.
+- **Rendering**: `fieldShader.ts` (one SkSL shader, all scenes, drawn at ~1px
+  per 1.5pt and scaled up), `draw.ts` (structures + one `drawAtlas` for all
+  particles), `BackdropCanvas.tsx` (30 fps clock on the UI thread).
+- **Audio link**: `platform/audio/motifEvents.ts` reports classical motif notes,
+  so Nocturne strings sound with their notes, ink drops on each Reverie phrase
+  and the Adagio plate changes with the harmony.
+- **Web** loads CanvasKit (`public/canvaskit.wasm`, copied on `pnpm install`)
+  before the Skia chunk; the rest of the app does not wait for it.
+- Worklets must be defined above their callers (the worklet compiler captures
+  dependencies at definition time). `backdrop/worklets.test.ts` enforces it.
+
 ## Data
 
 All data is on-device under the `lull:` key prefix. Clearing site data resets

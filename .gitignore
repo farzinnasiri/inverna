@@ -6,3 +6,5 @@ dev-dist
 *.local
 .DS_Store
 /scratch
+# Copied from @shopify/react-native-skia on install (pnpm postinstall)
+public/canvaskit.wasm
