@@ -33,6 +33,12 @@ export interface NeuroEngineHooks {
 export interface CreateNeuroSoundEngineOptions {
   createContext: () => AudioContextLike | null
   hooks?: NeuroEngineHooks
+  /**
+   * Compensate `AudioBufferSourceNode.playbackRate` by `buffer.sampleRate / ctx.sampleRate`.
+   * Required on `react-native-audio-api@1.0.1` (whose C++ `SingleBufferProcessor` steps
+   * in raw buffer frames per output frame), and false on Web Audio (browsers already resample).
+   */
+  compensateBufferSampleRate?: boolean
 }
 
 interface AudioGraph {
@@ -80,6 +86,7 @@ function createSoftTanhCurve(samples = 1024): Float32Array {
 export function createNeuroSoundEngine({
   createContext,
   hooks,
+  compensateBufferSampleRate = false,
 }: CreateNeuroSoundEngineOptions): SoundEngine {
   let graph: AudioGraph | null = null
   let running = false
@@ -188,11 +195,13 @@ export function createNeuroSoundEngine({
       const textureBus = ctx.createGain()
       textureBus.gain.value = 1
 
-      // Master Iso-descent warmth lowpass across natural texture layers
+      // Master Iso-descent warmth high-shelf across natural texture layers:
+      // smoothly tilts highs down (-0.5 -> -5.5 dB) as bedtime deepens without
+      // brick-wall lowpassing crisp rain drops or fire crackles into mud!
       const masterWarmthFilter = ctx.createBiquadFilter()
-      masterWarmthFilter.type = 'lowpass'
+      masterWarmthFilter.type = 'highshelf'
       masterWarmthFilter.frequency.value = descent.masterCutoffHz
-      masterWarmthFilter.Q.value = 0.55
+      masterWarmthFilter.gain.value = -(0.5 + descent.progress * 5.0)
 
       // Gentle asymmetric 0.1 Hz (~4s rise / ~6s release) breath swell across the texture bed
       const textureBreathVca = ctx.createGain()
@@ -218,16 +227,18 @@ export function createNeuroSoundEngine({
       textureBreathDepth.connect(textureBreathVca.gain)
       textureBreathLfo.start(ctx.currentTime)
 
-      // Subtle coupled phase-locked AM shimmer on textures so noise-forward beds also entrain on speakers
+      // Subtle coupled phase-locked AM shimmer on textures (capped at <=3.2% so
+      // rain & fire stay smooth and free of choppy flutter; Harmonic Pad carries full AM)
+      const initTexAm = clamp(descent.amDepth * 0.09, 0, 0.032)
       const textureAmVca = ctx.createGain()
-      textureAmVca.gain.value = 1 - descent.amDepth * 0.24
+      textureAmVca.gain.value = 1 - initTexAm
 
       const textureAmLfo = ctx.createOscillator()
       textureAmLfo.type = 'sine'
       textureAmLfo.frequency.value = clamp(descent.modHz, 0.5, 16)
 
       const textureAmDepth = ctx.createGain()
-      textureAmDepth.gain.value = descent.amDepth * 0.24
+      textureAmDepth.gain.value = initTexAm
 
       textureAmLfo.connect(textureAmDepth)
       textureAmDepth.connect(textureAmVca.gain)
@@ -340,13 +351,14 @@ export function createNeuroSoundEngine({
     const breathOn = lastMix?.breathPacing !== false
 
     rampParam(g.masterWarmthFilter.frequency, clamp(descent.masterCutoffHz, 520, 6500), ramp, now)
+    rampParam(g.masterWarmthFilter.gain, -(0.5 + clamp(descent.progress, 0, 1) * 5.0), ramp, now)
     rampParam(g.textureBreathLfo.frequency, clamp(descent.breathHz, 0.06, 0.2), ramp, now)
 
-    const texBreathAmp = breathOn ? clamp(descent.breathDepth * 0.28, 0, 0.12) : 0
+    const texBreathAmp = breathOn ? clamp(descent.breathDepth * 0.24, 0, 0.09) : 0
     rampParam(g.textureBreathVca.gain, 1 - texBreathAmp, ramp, now)
     rampParam(g.textureBreathDepth.gain, texBreathAmp, ramp, now)
 
-    const texAmAmp = clamp(descent.amDepth * 0.26, 0, 0.12)
+    const texAmAmp = clamp(descent.amDepth * 0.09, 0, 0.032)
     rampParam(g.textureAmLfo.frequency, clamp(descent.modHz, 0.5, 16), ramp, now)
     rampParam(g.textureAmVca.gain, 1 - texAmAmp, ramp, now)
     rampParam(g.textureAmDepth.gain, texAmAmp, ramp, now)
@@ -458,7 +470,8 @@ export function createNeuroSoundEngine({
 
       if (gain > 0.001) {
         clearLayerTimer(id)
-        const layer = existing ?? createAmbientLayer(g.ctx, g.bank, id, g.textureBus)
+        const layer =
+          existing ?? createAmbientLayer(g.ctx, g.bank, id, g.textureBus, compensateBufferSampleRate)
         if (!existing) activeLayers.set(id, layer)
         layer.setGain(gain, safeFade)
       } else if (existing) {

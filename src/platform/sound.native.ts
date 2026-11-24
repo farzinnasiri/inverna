@@ -120,6 +120,7 @@ export function createPlatformSoundEngine(): SoundEngine {
   }
 
   return createNeuroSoundEngine({
+    compensateBufferSampleRate: true,
     createContext: () => {
       try {
         void prepareSession()

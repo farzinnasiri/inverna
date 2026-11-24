@@ -8,9 +8,9 @@ import { useReducedMotion } from './hooks'
 import { SoundGlyph } from './SoundGlyph'
 
 /**
- * Reimagined hero Watchmaker Acoustic Dial:
+ * Watchmaker Acoustic Dial:
  * - Precision watch bezel ticks + 3 breathing 0.1 Hz harmonic wave rings
- * - Sculpted center obsidian-and-brass medallion featuring the active soundscape's exact icon
+ * - Clean floating center icon (no heavy medallion circle) directly inside the acoustic field
  * - Swipe left/right to glide between soundscapes, tap to play/pause
  */
 export function SoundField({
@@ -77,7 +77,7 @@ export function SoundField({
 
   // 3 organic watchmaker acoustic rings breathing in sync with the 0.1 Hz resonance swell
   const rings = [0, 1, 2].map((idx) => {
-    const baseR = 54 + idx * 24 + (playing ? Math.sin(phase - idx * 0.65) * 4.5 : 0)
+    const baseR = 48 + idx * 26 + (playing ? Math.sin(phase - idx * 0.65) * 4.5 : 0)
     const pts: string[] = []
     const steps = 48
     for (let i = 0; i <= steps; i++) {
@@ -109,7 +109,7 @@ export function SoundField({
     }
   })
 
-  const medallionSize = Math.round(size * 0.34)
+  const iconSize = Math.round(size * 0.19)
 
   return (
     <View {...panResponder.panHandlers} style={styles.wrap}>
@@ -128,8 +128,8 @@ export function SoundField({
           <Svg width={size} height={size} viewBox={`0 0 ${vb} ${vb}`}>
             <Defs>
               <RadialGradient id="dialCoreHalo" cx="50%" cy="50%" r="50%">
-                <Stop offset="0%" stopColor={color.accent} stopOpacity={playing ? 0.28 : 0.08} />
-                <Stop offset="58%" stopColor={color.accent} stopOpacity={playing ? 0.08 : 0.02} />
+                <Stop offset="0%" stopColor={color.accent} stopOpacity={playing ? 0.26 : 0.08} />
+                <Stop offset="52%" stopColor={color.accent} stopOpacity={playing ? 0.07 : 0.02} />
                 <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
               </RadialGradient>
             </Defs>
@@ -159,38 +159,11 @@ export function SoundField({
                 strokeOpacity={playing ? 0.72 - i * 0.14 : 0.24 - i * 0.05}
               />
             ))}
-
-            {/* Subtle breathing pulse halo around center medallion */}
-            <Circle
-              cx={c}
-              cy={c}
-              r={playing ? 42 + breathWave * 4.5 : 39}
-              fill="none"
-              stroke={color.accent}
-              strokeOpacity={playing ? 0.34 : 0.1}
-              strokeWidth={1}
-            />
           </Svg>
 
-          {/* Sculpted Center Medallion holding the active soundscape's exact icon */}
-          <View
-            pointerEvents="none"
-            style={[
-              styles.medallion,
-              {
-                width: medallionSize,
-                height: medallionSize,
-                borderRadius: medallionSize / 2,
-                backgroundColor: playing ? 'rgba(18, 20, 26, 0.88)' : 'rgba(18, 20, 26, 0.72)',
-                borderColor: playing ? color.accentDim : 'rgba(255, 255, 255, 0.14)',
-              },
-            ]}
-          >
-            <SoundGlyph
-              icon={icon}
-              size={Math.round(medallionSize * 0.46)}
-              color={playing ? color.accent : color.ink2}
-            />
+          {/* Clean floating soundscape icon at the center — no inner disc or heavy border */}
+          <View pointerEvents="none" style={styles.centerIcon}>
+            <SoundGlyph icon={icon} size={iconSize} color={playing ? color.accent : color.ink} />
           </View>
 
           <View pointerEvents="none" style={styles.caption}>
@@ -215,9 +188,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  medallion: {
+  centerIcon: {
     position: 'absolute',
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

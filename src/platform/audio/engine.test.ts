@@ -135,12 +135,19 @@ class MockAudioBuffer {
 class MockBufferSourceNode extends MockAudioNode {
   buffer: MockAudioBuffer | null = null
   loop = false
+  loopStart = 0
+  loopEnd = 0
+  playbackRate = new MockAudioParam(1)
   started = false
+  startedLoopEnd = 0
+  startedOffset = 0
   stopped = false
   onended: (() => void) | null = null
 
-  start() {
+  start(_when?: number, offset = 0) {
     this.started = true
+    this.startedLoopEnd = this.loopEnd
+    this.startedOffset = offset
   }
 
   stop() {
@@ -288,9 +295,10 @@ class MockAudioContext implements AudioContextLike {
   }
 }
 
-function makeTestEngine(opts: MockContextOptions = {}) {
+function makeTestEngine(opts: MockContextOptions & { compensateBufferSampleRate?: boolean } = {}) {
   const contexts: MockAudioContext[] = []
   const engine = createNeuroSoundEngine({
+    compensateBufferSampleRate: opts.compensateBufferSampleRate,
     createContext: () => {
       const ctx = new MockAudioContext(opts)
       contexts.push(ctx)
@@ -404,8 +412,8 @@ describe('createNeuroSoundEngine — background-safe layers, harmonic pad & AM d
     engine.setMix(allMix, 0.5)
     const ctx = contexts[0]!
 
-    // 6 stereo seamless buffers (white, pink, brown, rain-patter, fire-crackle, waves-surf)
-    expect(ctx.buffers).toHaveLength(6)
+    // 9 stereo seamless buffers (white, pink, brown, rain-patter, rain-near, fire-crackle, fire-bed, waves-surf, wind-gust)
+    expect(ctx.buffers).toHaveLength(9)
     for (const buf of ctx.buffers) {
       expect(buf.numberOfChannels).toBe(2)
       expect(buf.length).toBeGreaterThanOrEqual(NOISE_BUFFER_SECONDS * ctx.sampleRate)
@@ -451,6 +459,48 @@ describe('createNeuroSoundEngine — background-safe layers, harmonic pad & AM d
     engine.stop(0.2)
     vi.advanceTimersByTime(400)
     expect(ctx.sources.every((s) => s.stopped)).toBe(true)
+  })
+
+  it('compensates buffer sampleRate and sets loopEnd before start() for react-native-audio-api native 48 kHz playback', () => {
+    const { engine, contexts } = makeTestEngine({
+      initialState: 'running',
+      sampleRate: 48000,
+      compensateBufferSampleRate: true,
+    })
+
+    engine.setMix(
+      {
+        layers: { rain: 0.6, waves: 0.6, fire: 0.6, wind: 0.6 },
+        padGain: 0,
+        band: null,
+        bandGain: 0,
+        carrier: 146.83,
+      },
+      0.1,
+    )
+
+    const ctx = contexts[0]!
+    expect(ctx.sources.length).toBeGreaterThanOrEqual(10)
+
+    // Every looping source MUST set loopEnd === buffer.duration BEFORE start() so native never clamps offsets to 0
+    for (const src of ctx.sources) {
+      expect(src.loop).toBe(true)
+      expect(src.buffer).not.toBeNull()
+      expect(src.startedLoopEnd).toBeCloseTo(src.buffer!.duration, 5)
+    }
+
+    // Verify exact buffer.sampleRate / 48000 playbackRate scaling on native:
+    // - 24 kHz rain srcA (1.0 * 24000 / 48000 = 0.5)
+    // - 16 kHz waves mainSurf (0.87 * 16000 / 48000 = 0.29)
+    // - 8 kHz wind srcB (0.853 * 8000 / 48000 = 0.14217)
+    // - 8 kHz fire bedSrc (1.0 * 8000 / 48000 = 0.16667)
+    const rates = ctx.sources.map((s) => s.playbackRate.value)
+    expect(rates.some((r) => Math.abs(r - 0.5) < 1e-4)).toBe(true)
+    expect(rates.some((r) => Math.abs(r - 0.87 / 3) < 1e-4)).toBe(true)
+    expect(rates.some((r) => Math.abs(r - 0.853 / 6) < 1e-4)).toBe(true)
+    expect(rates.some((r) => Math.abs(r - 1 / 6) < 1e-4)).toBe(true)
+
+    engine.stop(0)
   })
 
   it('routes stereo binaural oscillators strictly to L/R via ChannelMerger', () => {

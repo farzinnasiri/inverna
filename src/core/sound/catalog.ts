@@ -179,7 +179,7 @@ export const PRESETS: readonly Preset[] = [
     harmonicKey: 'f-lydian',
     descentRange: [6.8, 4.5, 2.2],
     mix: {
-      layers: { fire: 0.66, rain: 0.16 },
+      layers: { fire: 0.76, brown: 0.06 },
       padGain: 0.54,
       harmonicKey: 'f-lydian',
       classicalMotif: null,
@@ -242,7 +242,7 @@ export const PRESETS: readonly Preset[] = [
     harmonicKey: 'a-min9',
     descentRange: [8.0, 5.0, 2.4],
     mix: {
-      layers: { wind: 0.58, pink: 0.2 },
+      layers: { wind: 0.64, pink: 0.10 },
       padGain: 0.62,
       harmonicKey: 'a-min9',
       classicalMotif: null,
@@ -265,7 +265,7 @@ export const PRESETS: readonly Preset[] = [
     harmonicKey: 'd-dorian',
     descentRange: [9.0, 6.2, 3.0],
     mix: {
-      layers: { rain: 0.26, pink: 0.22, fire: 0.14 },
+      layers: { rain: 0.30, pink: 0.18 },
       padGain: 0.62,
       harmonicKey: 'd-dorian',
       classicalMotif: 'reverie',
@@ -328,7 +328,7 @@ export const PRESETS: readonly Preset[] = [
     harmonicKey: 'e-min-classical',
     descentRange: [8.4, 5.6, 2.8],
     mix: {
-      layers: { fire: 0.48, brown: 0.2 },
+      layers: { fire: 0.56, brown: 0.08 },
       padGain: 0.48,
       harmonicKey: 'e-min-classical',
       classicalMotif: 'nocturne',
@@ -370,7 +370,7 @@ export const PRESETS: readonly Preset[] = [
     harmonicKey: 'c-maj9',
     descentRange: [5.4, 3.0, 1.7],
     mix: {
-      layers: { waves: 0.58, brown: 0.34 },
+      layers: { waves: 0.62, brown: 0.16 },
       padGain: 0.52,
       harmonicKey: 'c-maj9',
       classicalMotif: null,
