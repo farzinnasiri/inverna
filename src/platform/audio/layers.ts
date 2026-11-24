@@ -1,6 +1,16 @@
 import type { LayerId } from '@/core/sound/catalog'
 import type { NoiseBufferBank } from './buffers'
 import { clamp, rampParam, safeDisconnect, safeStop } from './params'
+import type {
+  AudioBufferLike,
+  AudioBufferSourceNodeLike,
+  AudioContextLike,
+  AudioNodeLike,
+  BiquadFilterNodeLike,
+  BiquadFilterTypeLike,
+  GainNodeLike,
+  OscillatorNodeLike,
+} from './types'
 
 export interface AmbientLayer {
   readonly id: LayerId
@@ -10,19 +20,25 @@ export interface AmbientLayer {
 
 /**
  * Perceptual loudness balancing per layer so 100% on any slider feels calm,
- * warm, and roughly matched to the other layers.
+ * warm, and matched across iPhone speakers and headphones.
+ * Every layer runs 100% natively on the C++ audio thread (zero JS timers)
+ * so soundscapes remain alive and textured even when the screen locks.
  */
 const LAYER_SCALE: Record<LayerId, number> = {
-  white: 0.22,
-  pink: 0.38,
-  brown: 0.65,
+  white: 0.2,
+  pink: 0.36,
+  brown: 0.62,
   rain: 0.58,
   waves: 0.6,
-  fire: 0.65,
+  fire: 0.64,
   wind: 0.56,
 }
 
-function createLoopingSource(ctx: AudioContext, buffer: AudioBuffer, offsetSeconds = 0): AudioBufferSourceNode {
+function createLoopingSource(
+  ctx: AudioContextLike,
+  buffer: AudioBufferLike,
+  offsetSeconds = 0,
+): AudioBufferSourceNodeLike {
   const src = ctx.createBufferSource()
   src.buffer = buffer
   src.loop = true
@@ -32,12 +48,12 @@ function createLoopingSource(ctx: AudioContext, buffer: AudioBuffer, offsetSecon
 }
 
 function createFilter(
-  ctx: AudioContext,
-  type: BiquadFilterType,
+  ctx: AudioContextLike,
+  type: BiquadFilterTypeLike,
   frequency: number,
   q = 0.7,
   gain = 0,
-): BiquadFilterNode {
+): BiquadFilterNodeLike {
   const filter = ctx.createBiquadFilter()
   filter.type = type
   filter.frequency.value = frequency
@@ -46,10 +62,10 @@ function createFilter(
   return filter
 }
 
-function createLfo(ctx: AudioContext, frequencyHz: number, phaseRadians = 0): OscillatorNode {
+function createLfo(ctx: AudioContextLike, frequencyHz: number, phaseRadians = 0): OscillatorNodeLike {
   const osc = ctx.createOscillator()
   osc.frequency.value = frequencyHz
-  if (phaseRadians !== 0 && typeof ctx.createPeriodicWave === 'function') {
+  if (phaseRadians !== 0 && typeof ctx.createPeriodicWave === 'function' && typeof osc.setPeriodicWave === 'function') {
     const real = new Float32Array([0, Math.cos(phaseRadians)])
     const imag = new Float32Array([0, Math.sin(phaseRadians)])
     try {
@@ -64,25 +80,10 @@ function createLfo(ctx: AudioContext, frequencyHz: number, phaseRadians = 0): Os
   return osc
 }
 
-function createOptionalPanner(ctx: AudioContext, pan: number): StereoPannerNode | null {
-  if (typeof ctx.createStereoPanner !== 'function') return null
-  try {
-    const panner = ctx.createStereoPanner()
-    panner.pan.value = clamp(pan, -1, 1)
-    return panner
-  } catch {
-    return null
-  }
-}
-
-function randomBetween(min: number, max: number): number {
-  return min + Math.random() * (max - min)
-}
-
 function makeLayerHandle(
-  ctx: AudioContext,
+  ctx: AudioContextLike,
   id: LayerId,
-  outputGain: GainNode,
+  outputGain: GainNodeLike,
   cleanup: () => void,
 ): AmbientLayer {
   let disposed = false
@@ -102,10 +103,10 @@ function makeLayerHandle(
   }
 }
 
-function createWhiteLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: AudioNode): AmbientLayer {
+function createWhiteLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destination: AudioNodeLike): AmbientLayer {
   const output = ctx.createGain()
   output.gain.value = 0
-  const lowpass = createFilter(ctx, 'lowpass', 6000, 0.5)
+  const lowpass = createFilter(ctx, 'lowpass', 5200, 0.5)
   const src = createLoopingSource(ctx, bank.get('white'))
 
   src.connect(lowpass)
@@ -119,11 +120,11 @@ function createWhiteLayer(ctx: AudioContext, bank: NoiseBufferBank, destination:
   })
 }
 
-function createPinkLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: AudioNode): AmbientLayer {
+function createPinkLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destination: AudioNodeLike): AmbientLayer {
   const output = ctx.createGain()
   output.gain.value = 0
   const warmth = createFilter(ctx, 'lowshelf', 260, 0.7, 2.5)
-  const lowpass = createFilter(ctx, 'lowpass', 4800, 0.5)
+  const lowpass = createFilter(ctx, 'lowpass', 4200, 0.5)
   const src = createLoopingSource(ctx, bank.get('pink'))
 
   src.connect(warmth)
@@ -139,7 +140,7 @@ function createPinkLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: 
   })
 }
 
-function createBrownLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: AudioNode): AmbientLayer {
+function createBrownLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destination: AudioNodeLike): AmbientLayer {
   const output = ctx.createGain()
   output.gain.value = 0
   const subClean = createFilter(ctx, 'highpass', 30, 0.5)
@@ -159,111 +160,54 @@ function createBrownLayer(ctx: AudioContext, bank: NoiseBufferBank, destination:
   })
 }
 
-function createRainLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: AudioNode): AmbientLayer {
+function createRainLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destination: AudioNodeLike): AmbientLayer {
   const output = ctx.createGain()
   output.gain.value = 0
   output.connect(destination)
 
   const pinkBuffer = bank.get('pink')
   const whiteBuffer = bank.get('white')
+  const patterBuffer = bank.get('rain-patter')
 
-  // Steady warm rain bed
+  // Steady warm rain bed (1/f filtered)
   const bedSrc = createLoopingSource(ctx, pinkBuffer)
-  const bedHp = createFilter(ctx, 'highpass', 260, 0.5)
-  const bedLp = createFilter(ctx, 'lowpass', 3600, 0.6)
+  const bedHp = createFilter(ctx, 'highpass', 240, 0.5)
+  const bedLp = createFilter(ctx, 'lowpass', 3400, 0.6)
   const bedGain = ctx.createGain()
-  bedGain.gain.value = 0.55
+  bedGain.gain.value = 0.52
 
   bedSrc.connect(bedHp)
   bedHp.connect(bedLp)
   bedLp.connect(bedGain)
   bedGain.connect(output)
 
-  // Gentle soft air sheen
+  // Gentle misty air sheen
   const sheenSrc = createLoopingSource(ctx, whiteBuffer, 4.3)
-  const sheenBp = createFilter(ctx, 'bandpass', 2300, 0.7)
+  const sheenBp = createFilter(ctx, 'bandpass', 2100, 0.7)
   const sheenGain = ctx.createGain()
-  sheenGain.gain.value = 0.09
+  sheenGain.gain.value = 0.08
 
   sheenSrc.connect(sheenBp)
   sheenBp.connect(sheenGain)
   sheenGain.connect(output)
 
-  // Subtle randomized soft droplet envelope bursts
-  let active = true
-  let timerId: ReturnType<typeof setTimeout> | null = null
-  const activeDrops = new Set<AudioBufferSourceNode>()
+  // Background-safe stereo window raindrop micro-patter (two phase-offset loops for non-repeating texture)
+  const patterA = createLoopingSource(ctx, patterBuffer, 0)
+  const patterB = createLoopingSource(ctx, patterBuffer, 5.3)
+  const patterBp = createFilter(ctx, 'bandpass', 1650, 0.65)
+  const patterGain = ctx.createGain()
+  patterGain.gain.value = 0.44
 
-  const spawnDroplet = () => {
-    if (!active || ctx.state !== 'running') return
-    try {
-      const now = ctx.currentTime
-      const buffer = Math.random() < 0.7 ? pinkBuffer : whiteBuffer
-      const src = ctx.createBufferSource()
-      src.buffer = buffer
-
-      const duration = randomBetween(0.03, 0.065)
-      const maxOffset = Math.max(0, buffer.duration - duration - 0.05)
-      const offset = maxOffset > 0 ? Math.random() * maxOffset : 0
-
-      const bp = createFilter(ctx, 'bandpass', randomBetween(950, 2600), randomBetween(2.8, 5.2))
-      const env = ctx.createGain()
-      const peak = randomBetween(0.024, 0.064)
-      const attack = randomBetween(0.003, 0.006)
-
-      env.gain.setValueAtTime(0.0001, now)
-      env.gain.linearRampToValueAtTime(peak, now + attack)
-      env.gain.exponentialRampToValueAtTime(0.0001, now + duration)
-
-      const panner = createOptionalPanner(ctx, randomBetween(-0.75, 0.75))
-      src.connect(bp)
-      if (panner) {
-        bp.connect(panner)
-        panner.connect(env)
-      } else {
-        bp.connect(env)
-      }
-      env.connect(output)
-
-      activeDrops.add(src)
-      src.onended = () => {
-        activeDrops.delete(src)
-        safeDisconnect(src)
-        safeDisconnect(bp)
-        safeDisconnect(panner)
-        safeDisconnect(env)
-      }
-      src.start(now, offset, duration + 0.01)
-    } catch {
-      // Ignore scheduling errors in mock/restricted environments.
-    }
-  }
-
-  const scheduleNext = () => {
-    if (!active) return
-    timerId = setTimeout(() => {
-      timerId = null
-      if (!active) return
-      spawnDroplet()
-      if (Math.random() < 0.25) spawnDroplet()
-      scheduleNext()
-    }, Math.round(randomBetween(150, 460)))
-  }
-  scheduleNext()
+  patterA.connect(patterBp)
+  patterB.connect(patterBp)
+  patterBp.connect(patterGain)
+  patterGain.connect(output)
 
   return makeLayerHandle(ctx, 'rain', output, () => {
-    active = false
-    if (timerId !== null) {
-      clearTimeout(timerId)
-      timerId = null
-    }
-    for (const drop of activeDrops) {
-      safeStop(drop)
-      safeDisconnect(drop)
-    }
-    activeDrops.clear()
     safeStop(bedSrc)
     safeStop(sheenSrc)
+    safeStop(patterA)
+    safeStop(patterB)
     safeDisconnect(bedSrc)
     safeDisconnect(bedHp)
     safeDisconnect(bedLp)
@@ -271,10 +215,14 @@ function createRainLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: 
     safeDisconnect(sheenSrc)
     safeDisconnect(sheenBp)
     safeDisconnect(sheenGain)
+    safeDisconnect(patterA)
+    safeDisconnect(patterB)
+    safeDisconnect(patterBp)
+    safeDisconnect(patterGain)
   })
 }
 
-function createWavesLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: AudioNode): AmbientLayer {
+function createWavesLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destination: AudioNodeLike): AmbientLayer {
   const output = ctx.createGain()
   output.gain.value = 0
   output.connect(destination)
@@ -286,26 +234,26 @@ function createWavesLayer(ctx: AudioContext, bank: NoiseBufferBank, destination:
 
   const pinkSrc = createLoopingSource(ctx, bank.get('pink'), 3.1)
   const foamHp = createFilter(ctx, 'highpass', 120, 0.5)
-  const foamLp = createFilter(ctx, 'lowpass', 1650, 0.5)
+  const foamLp = createFilter(ctx, 'lowpass', 1550, 0.5)
   const foamGain = ctx.createGain()
   foamGain.gain.value = 0.34
 
-  // Shared surf lowpass and VCA modulated by two slow phase-offset LFOs (~8.5s and ~11.2s)
-  const surfFilter = createFilter(ctx, 'lowpass', 620, 0.7)
+  // Shared surf lowpass and VCA paced near 0.10 Hz (10s cardiorespiratory breath resonance) + slow 13.7s swell
+  const surfFilter = createFilter(ctx, 'lowpass', 600, 0.7)
   const surfVca = ctx.createGain()
   surfVca.gain.value = 0.55
 
-  const lfo1 = createLfo(ctx, 1 / 8.5, 0)
+  const lfo1 = createLfo(ctx, 0.1, 0)
   const lfo1FreqDepth = ctx.createGain()
   lfo1FreqDepth.gain.value = 250
   const lfo1GainDepth = ctx.createGain()
-  lfo1GainDepth.gain.value = 0.22
+  lfo1GainDepth.gain.value = 0.24
 
-  const lfo2 = createLfo(ctx, 1 / 11.2, (115 * Math.PI) / 180)
+  const lfo2 = createLfo(ctx, 1 / 13.7, (115 * Math.PI) / 180)
   const lfo2FreqDepth = ctx.createGain()
-  lfo2FreqDepth.gain.value = 170
+  lfo2FreqDepth.gain.value = 155
   const lfo2GainDepth = ctx.createGain()
-  lfo2GainDepth.gain.value = 0.15
+  lfo2GainDepth.gain.value = 0.13
 
   brownSrc.connect(deepLp)
   deepLp.connect(deepGain)
@@ -352,16 +300,16 @@ function createWavesLayer(ctx: AudioContext, bank: NoiseBufferBank, destination:
   })
 }
 
-function createFireLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: AudioNode): AmbientLayer {
+function createFireLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destination: AudioNodeLike): AmbientLayer {
   const output = ctx.createGain()
   output.gain.value = 0
   output.connect(destination)
 
   const brownBuffer = bank.get('brown')
   const pinkBuffer = bank.get('pink')
-  const whiteBuffer = bank.get('white')
+  const crackleBuffer = bank.get('fire-crackle')
 
-  // Deep hearth rumble (~140Hz lowpass) with subtle organic flicker
+  // Deep hearth rumble (~140 Hz lowpass) with subtle organic audio-thread flicker
   const rumbleSrc = createLoopingSource(ctx, brownBuffer)
   const rumbleLp = createFilter(ctx, 'lowpass', 140, 0.75)
   const rumbleVca = ctx.createGain()
@@ -381,99 +329,26 @@ function createFireLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: 
   const emberSrc = createLoopingSource(ctx, pinkBuffer, 5.7)
   const emberBp = createFilter(ctx, 'bandpass', 360, 0.9)
   const emberGain = ctx.createGain()
-  emberGain.gain.value = 0.1
+  emberGain.gain.value = 0.11
 
   emberSrc.connect(emberBp)
   emberBp.connect(emberGain)
   emberGain.connect(output)
 
-  // Occasional soft filtered woody crackles (never loud or startling)
-  let active = true
-  let timerId: ReturnType<typeof setTimeout> | null = null
-  const subTimers = new Set<ReturnType<typeof setTimeout>>()
-  const activeCrackles = new Set<AudioBufferSourceNode>()
+  // Background-safe warm woody crackle texture
+  const crackleSrc = createLoopingSource(ctx, crackleBuffer, 1.7)
+  const crackleBp = createFilter(ctx, 'bandpass', 1750, 0.85)
+  const crackleGain = ctx.createGain()
+  crackleGain.gain.value = 0.36
 
-  const spawnCrackle = (intensity = 1) => {
-    if (!active || ctx.state !== 'running') return
-    try {
-      const now = ctx.currentTime
-      const buffer = Math.random() < 0.6 ? whiteBuffer : pinkBuffer
-      const src = ctx.createBufferSource()
-      src.buffer = buffer
-
-      const duration = randomBetween(0.01, 0.026)
-      const maxOffset = Math.max(0, buffer.duration - duration - 0.05)
-      const offset = maxOffset > 0 ? Math.random() * maxOffset : 0
-
-      const bp = createFilter(ctx, 'bandpass', randomBetween(1200, 3200), randomBetween(2.0, 4.2))
-      const warmLp = createFilter(ctx, 'lowpass', 3800, 0.5)
-      const env = ctx.createGain()
-      const peak = randomBetween(0.032, 0.092) * intensity
-      const attack = randomBetween(0.0015, 0.003)
-
-      env.gain.setValueAtTime(0.0001, now)
-      env.gain.linearRampToValueAtTime(peak, now + attack)
-      env.gain.exponentialRampToValueAtTime(0.0001, now + duration)
-
-      const panner = createOptionalPanner(ctx, randomBetween(-0.5, 0.5))
-      src.connect(bp)
-      bp.connect(warmLp)
-      if (panner) {
-        warmLp.connect(panner)
-        panner.connect(env)
-      } else {
-        warmLp.connect(env)
-      }
-      env.connect(output)
-
-      activeCrackles.add(src)
-      src.onended = () => {
-        activeCrackles.delete(src)
-        safeDisconnect(src)
-        safeDisconnect(bp)
-        safeDisconnect(warmLp)
-        safeDisconnect(panner)
-        safeDisconnect(env)
-      }
-      src.start(now, offset, duration + 0.01)
-    } catch {
-      // Ignore scheduling errors in mock/restricted environments.
-    }
-  }
-
-  const scheduleNext = () => {
-    if (!active) return
-    timerId = setTimeout(() => {
-      timerId = null
-      if (!active) return
-      spawnCrackle(1)
-      if (Math.random() < 0.25) {
-        const subId = setTimeout(() => {
-          subTimers.delete(subId)
-          spawnCrackle(0.6)
-        }, Math.round(randomBetween(45, 95)))
-        subTimers.add(subId)
-      }
-      scheduleNext()
-    }, Math.round(randomBetween(320, 1450)))
-  }
-  scheduleNext()
+  crackleSrc.connect(crackleBp)
+  crackleBp.connect(crackleGain)
+  crackleGain.connect(output)
 
   return makeLayerHandle(ctx, 'fire', output, () => {
-    active = false
-    if (timerId !== null) {
-      clearTimeout(timerId)
-      timerId = null
-    }
-    for (const id of subTimers) clearTimeout(id)
-    subTimers.clear()
-    for (const crackle of activeCrackles) {
-      safeStop(crackle)
-      safeDisconnect(crackle)
-    }
-    activeCrackles.clear()
     safeStop(rumbleSrc)
     safeStop(emberSrc)
+    safeStop(crackleSrc)
     safeStop(flickerLfo)
     safeDisconnect(rumbleSrc)
     safeDisconnect(rumbleLp)
@@ -483,17 +358,20 @@ function createFireLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: 
     safeDisconnect(emberSrc)
     safeDisconnect(emberBp)
     safeDisconnect(emberGain)
+    safeDisconnect(crackleSrc)
+    safeDisconnect(crackleBp)
+    safeDisconnect(crackleGain)
   })
 }
 
-function createWindLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: AudioNode): AmbientLayer {
+function createWindLayer(ctx: AudioContextLike, bank: NoiseBufferBank, destination: AudioNodeLike): AmbientLayer {
   const output = ctx.createGain()
   output.gain.value = 0
   output.connect(destination)
 
   const pinkBuffer = bank.get('pink')
 
-  // Primary narrow bandpass pink noise drifting slowly via ~0.08Hz LFO between ~220Hz and ~620Hz
+  // Primary narrow bandpass pink noise drifting slowly via ~0.08 Hz LFO
   const primarySrc = createLoopingSource(ctx, pinkBuffer)
   const primaryBp = createFilter(ctx, 'bandpass', 420, 3.2)
   const windCeiling = createFilter(ctx, 'lowpass', 1800, 0.5)
@@ -554,10 +432,10 @@ function createWindLayer(ctx: AudioContext, bank: NoiseBufferBank, destination: 
 }
 
 export function createAmbientLayer(
-  ctx: AudioContext,
+  ctx: AudioContextLike,
   bank: NoiseBufferBank,
   id: LayerId,
-  destination: AudioNode,
+  destination: AudioNodeLike,
 ): AmbientLayer {
   switch (id) {
     case 'white':

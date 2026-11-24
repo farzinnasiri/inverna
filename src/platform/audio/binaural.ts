@@ -1,33 +1,46 @@
 import { BANDS, type BandId } from '@/core/sound/catalog'
 import { clamp, rampParam, safeDisconnect, safeStop } from './params'
+import type { AudioContextLike, AudioNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
 
 /**
  * Gentle maximum scaling so binaural sine tones always sit softly beneath
- * ambient layers without fatigue.
+ * the harmonic pad and ambient textures without listener fatigue.
  */
-const BINAURAL_MAX_GAIN = 0.16
+const BINAURAL_MAX_GAIN = 0.13
 const MIN_FADE_SECONDS = 0.06
 const MIN_CARRIER_HZ = 60
 const MAX_CARRIER_HZ = 480
 
 export interface BinauralController {
-  update(band: BandId | null, bandGain: number, carrier: number, fadeSeconds: number): void
+  update(opts: {
+    band: BandId | null
+    bandGain: number
+    carrier: number
+    fadeSeconds: number
+    /** Optional live Iso-descent modulation rate in Hz (overrides static band.hz). */
+    overrideBeatHz?: number
+    /** Depth multiplier 0..1 from ModulationDepth (Off = 0, Subtle = 0.6, Deep = 1). */
+    scale?: number
+  }): void
   stop(fadeSeconds: number): void
   dispose(): void
 }
 
 interface ActivePair {
-  leftOsc: OscillatorNode
-  rightOsc: OscillatorNode
-  outputGain: GainNode
-  nodes: AudioNode[]
+  leftOsc: OscillatorNodeLike
+  rightOsc: OscillatorNodeLike
+  outputGain: GainNodeLike
+  nodes: AudioNodeLike[]
 }
 
 function bandHz(band: BandId): number {
   return BANDS.find((b) => b.id === band)?.hz ?? 0
 }
 
-export function createBinauralController(ctx: AudioContext, destination: AudioNode): BinauralController {
+export function createBinauralController(
+  ctx: AudioContextLike,
+  destination: AudioNodeLike,
+): BinauralController {
   let pair: ActivePair | null = null
   let stopTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -68,7 +81,7 @@ export function createBinauralController(ctx: AudioContext, destination: AudioNo
       // Optional in minimal mock contexts.
     }
 
-    const nodes: AudioNode[] = []
+    const nodes: AudioNodeLike[] = []
 
     if (typeof ctx.createChannelMerger === 'function') {
       // Discrete L/R routing (input 0 -> Left, input 1 -> Right) guarantees zero crosstalk.
@@ -112,9 +125,9 @@ export function createBinauralController(ctx: AudioContext, destination: AudioNo
   }
 
   return {
-    update(band, bandGain, carrier, fadeSeconds) {
-      const normalizedGain = clamp(bandGain, 0, 1)
-      const beat = band ? bandHz(band) : 0
+    update({ band, bandGain, carrier, fadeSeconds, overrideBeatHz, scale = 1 }) {
+      const normalizedGain = clamp(bandGain, 0, 1) * clamp(scale, 0, 1)
+      const beat = band ? (overrideBeatHz && overrideBeatHz > 0 ? overrideBeatHz : bandHz(band)) : 0
 
       if (!band || beat <= 0 || normalizedGain <= 0.001) {
         fadeOutAndTeardown(fadeSeconds)
@@ -123,7 +136,7 @@ export function createBinauralController(ctx: AudioContext, destination: AudioNo
 
       clearStopTimer()
 
-      const leftFreq = clamp(carrier || 160, MIN_CARRIER_HZ, MAX_CARRIER_HZ)
+      const leftFreq = clamp(carrier || 146.83, MIN_CARRIER_HZ, MAX_CARRIER_HZ)
       const rightFreq = leftFreq + beat
       const targetGain = normalizedGain * BINAURAL_MAX_GAIN
       const gainFade = Math.max(MIN_FADE_SECONDS, Math.max(0, fadeSeconds))
@@ -131,7 +144,7 @@ export function createBinauralController(ctx: AudioContext, destination: AudioNo
       if (!pair) {
         pair = createPair(leftFreq, rightFreq)
       } else {
-        const freqRamp = Math.max(0.08, Math.min(gainFade, 0.5))
+        const freqRamp = Math.max(0.08, Math.min(gainFade, 0.8))
         const now = ctx.currentTime
         rampParam(pair.leftOsc.frequency, leftFreq, freqRamp, now)
         rampParam(pair.rightOsc.frequency, rightFreq, freqRamp, now)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Bell, ChevronDown, ChevronUp, RotateCcw, Trash2 } from 'lucide-react-native'
 import { formatBedtime12h } from '@/core/night'
+import { DEFAULT_PRESET_ID } from '@/core/sound/catalog'
 import { clearAll } from '@/core/storage'
 import { haptics, notifications } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
@@ -67,7 +68,9 @@ export function NightSheet() {
       light: 0.3,
       followBedtime: true,
       sessionMinutes: 15,
-      sessionPreset: 'rainfall',
+      sessionPreset: DEFAULT_PRESET_ID,
+      modulationDepth: 'subtle',
+      autoDescent: true,
       sleepTimer: 30,
       sfx: true,
       haptics: true,

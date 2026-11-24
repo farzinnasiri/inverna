@@ -11,6 +11,7 @@ import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
 } from 'react-native'
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { RotateCcw, Sparkles, Undo2 } from 'lucide-react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import {
@@ -618,17 +619,11 @@ function InteractiveCard({
         },
       ]}
     >
-      <Pressable
+      <View
+        accessible
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        disabled={disabled || hidden}
         style={styles.cardPressable}
-        onPress={(event) => {
-          // React Native Web can still dispatch a click after the responder handled the pointer.
-          const { detail } = event.nativeEvent as { detail?: number }
-          if (Platform.OS === 'web' && detail) return
-          onTap(source, card)
-        }}
       >
         <CardFaceContent
           card={card}
@@ -637,7 +632,7 @@ function InteractiveCard({
           redColor={redColor}
           courtBrass={courtBrass}
         />
-      </Pressable>
+      </View>
     </Animated.View>
   )
 }
@@ -672,7 +667,12 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   const [showCompletion, setShowCompletion] = useState(() => initialSave.state.solved)
 
   const [stageDims, setStageDims] = useState<{ width: number; height: number } | null>(null)
-  const [dragPosition] = useState(() => new Animated.ValueXY())
+  // UI-thread Reanimated drag translation eliminates JS-driven frame lag and card ghost traces.
+  const dragX = useSharedValue(0)
+  const dragY = useSharedValue(0)
+  const dragOverlayStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: dragX.get() }, { translateY: dragY.get() }],
+  }))
 
   const stateRef = useRef(state)
   stateRef.current = state
@@ -695,9 +695,10 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
 
   const clearDrag = useCallback(() => {
     dragRef.current = null
-    dragPosition.stopAnimation()
+    dragX.set(0)
+    dragY.set(0)
     setDrag(null)
-  }, [dragPosition])
+  }, [dragX, dragY])
 
   const handlePauseChange = useCallback((next: boolean) => {
     if (next) clearDrag()
@@ -1094,7 +1095,8 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
         hoverTarget: null,
       }
       session.hoverTarget = findDropTargetForDrag(session, dx, dy)
-      dragPosition.setValue({ x: dx, y: dy })
+      dragX.set(dx)
+      dragY.set(dy)
       dragRef.current = session
       setDrag(session)
       clearHint()
@@ -1102,21 +1104,22 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
       cue('tap', 0.42)
       haptic('light')
     },
-    [paused, autoCompleting, findDropTargetForDrag, dragPosition, clearHint, cue, haptic],
+    [paused, autoCompleting, findDropTargetForDrag, dragX, dragY, clearHint, cue, haptic],
   )
 
   const handleDragMove = useCallback(
     (dx: number, dy: number) => {
       const session = dragRef.current
       if (!session) return
-      dragPosition.setValue({ x: dx, y: dy })
+      dragX.set(dx)
+      dragY.set(dy)
       const hoverTarget = findDropTargetForDrag(session, dx, dy)
       if (hoverTarget === session.hoverTarget) return
       const updated = { ...session, hoverTarget }
       dragRef.current = updated
       setDrag(updated)
     },
-    [dragPosition, findDropTargetForDrag],
+    [dragX, dragY, findDropTargetForDrag],
   )
 
   const handleDragEnd = useCallback(
@@ -1124,26 +1127,14 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
       const session = dragRef.current
       if (!session) return
       const target = cancelled ? null : findDropTargetForDrag(session, dx, dy)
+      clearDrag()
       if (target) {
         const current = stateRef.current
         const next = moveCards(current, session.source, target)
-        clearDrag()
         applyMoveResult(current, next, target.pile)
-      } else if (cancelled || reducedMotion) {
-        clearDrag()
-      } else {
-        dragPosition.setValue({ x: dx, y: dy })
-        Animated.spring(dragPosition, {
-          toValue: { x: 0, y: 0 },
-          speed: 28,
-          bounciness: 0,
-          useNativeDriver: false,
-        }).start(({ finished }) => {
-          if (finished && dragRef.current === session) clearDrag()
-        })
       }
     },
-    [findDropTargetForDrag, clearDrag, applyMoveResult, reducedMotion, dragPosition],
+    [findDropTargetForDrag, clearDrag, applyMoveResult],
   )
 
   /* --- Derived visual state ----------------------------------------------- */
@@ -1593,9 +1584,9 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
             })}
           </View>
 
-          {/* Floating drag stack overlay */}
+          {/* Floating UI-thread Reanimated drag stack overlay (zero ghost traces) */}
           {drag && (
-            <Animated.View
+            <Reanimated.View
               pointerEvents="none"
               style={[
                 styles.dragLayer,
@@ -1603,8 +1594,8 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                   width: cardWidth,
                   left: drag.originX,
                   top: drag.originY,
-                  transform: dragPosition.getTranslateTransform(),
                 },
+                dragOverlayStyle,
               ]}
             >
               {drag.cards.map((card, i) => (
@@ -1634,7 +1625,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                   />
                 </View>
               ))}
-            </Animated.View>
+            </Reanimated.View>
           )}
         </View>
       </View>

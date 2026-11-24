@@ -614,25 +614,25 @@ export function SettleScreen({ onExit }: GameScreenProps) {
           <View style={styles.rotateCluster}>
             <View style={styles.dropPosition}>
               <GlassPressable
-                accessibilityLabel="Hard drop"
+                accessibilityLabel="Rotate clockwise"
                 disabled={!playing}
                 hapticFeedback={false}
-                onPress={doHardDrop}
+                onPress={doRotateCW}
                 style={styles.dropButton}
               >
-                <ChevronsDown size={21} strokeWidth={1.65} color={color.ink2} />
+                <RotateCw size={22} strokeWidth={1.65} color={color.ink} />
               </GlassPressable>
             </View>
             <GlassPressable
-              accessibilityLabel="Rotate clockwise"
+              accessibilityLabel="Hard drop"
               disabled={!playing}
               hapticFeedback={false}
-              onPress={doRotateCW}
+              onPress={doHardDrop}
               variant="chrome"
               accent
               style={styles.rotateButton}
             >
-              <RotateCw size={25} strokeWidth={1.65} color={color.ink} />
+              <ChevronsDown size={25} strokeWidth={1.65} color={color.ink} />
             </GlassPressable>
           </View>
         </GlassSurface>

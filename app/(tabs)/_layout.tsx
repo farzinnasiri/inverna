@@ -1,34 +1,43 @@
-import { Tabs, useRouter } from 'expo-router'
-import { TabIsland } from '@/ui/rn/TabIsland'
-import type { Tab } from '@/ui/state/nav'
+import { NativeTabs } from 'expo-router/unstable-native-tabs'
+import { useTokenColors } from '@/ui/hooks/useTokenColors'
 
+/**
+ * Authentic native iOS 26 Liquid Glass tab bar via `NativeTabs` (UIKit UITabBar).
+ * - Gives genuine Apple hold-and-drag magnifying-lens glass physics on iOS 26.
+ * - Intentionally omits `backgroundColor` so iOS 26 Liquid Glass stays active.
+ * - Cleanly supports iOS, Android, and Web with zero stuck-tap gesture bugs.
+ */
 export default function TabsLayout() {
-  const router = useRouter()
+  const { color } = useTokenColors()
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: '#000000' },
+    <NativeTabs
+      iconColor={{ default: color.ink3, selected: color.accent }}
+      labelStyle={{
+        default: { color: color.ink3 },
+        selected: { color: color.ink },
       }}
-      tabBar={({ state }) => {
-        const routeName = state.routes[state.index]?.name
-        const activeTab: Tab = routeName === 'sounds' ? 'sounds' : 'play'
-        return (
-          <TabIsland
-            activeTab={activeTab}
-            onSelectTab={(tab) => {
-              const target = tab === 'sounds' ? 'sounds' : 'index'
-              if (routeName !== target) {
-                router.navigate(tab === 'sounds' ? '/sounds' : '/')
-              }
-            }}
-          />
-        )
-      }}
+      tintColor={color.accent}
+      minimizeBehavior="never"
     >
-      <Tabs.Screen name="index" options={{ title: 'Play' }} />
-      <Tabs.Screen name="sounds" options={{ title: 'Sounds' }} />
-    </Tabs>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Label>Play</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }}
+        />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="sounds">
+        <NativeTabs.Trigger.Label>Sounds</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="waveform" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'gearshape', selected: 'gearshape.fill' }}
+        />
+      </NativeTabs.Trigger>
+    </NativeTabs>
   )
 }

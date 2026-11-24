@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import {
+  ChevronRight,
   CloudRain,
   Flame,
-  Headphones,
   SlidersHorizontal,
   Sparkles,
   Timer,
@@ -11,9 +11,11 @@ import {
   Waves,
   Wind,
 } from 'lucide-react-native'
-import { PRESETS, presetById, SILENT_MIX } from '@/core/sound/catalog'
+import { DEFAULT_PRESET_ID, PRESETS, presetById, SILENT_MIX } from '@/core/sound/catalog'
+import { harmonicKeyMeta } from '@/core/sound/harmonics'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { AcousticEngineSheet } from '@/ui/rn/AcousticEngineSheet'
 import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { FRAME_MAX_WIDTH, PopoverMenu, Slider } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
@@ -33,7 +35,7 @@ const TIMER_OPTIONS = [
 ] as const
 
 function SoundGlyph({ id, color }: { id: string; color: string }) {
-  if (id === 'rainfall' || id === 'theta-rain') return <CloudRain size={16} strokeWidth={1.65} color={color} />
+  if (id === 'theta-rain' || id === 'rainfall') return <CloudRain size={16} strokeWidth={1.65} color={color} />
   if (id === 'low-tide') return <Waves size={16} strokeWidth={1.65} color={color} />
   if (id === 'hearth') return <Flame size={16} strokeWidth={1.65} color={color} />
   if (id === 'deep-drift') return <Sparkles size={16} strokeWidth={1.65} color={color} />
@@ -41,10 +43,10 @@ function SoundGlyph({ id, color }: { id: string; color: string }) {
 }
 
 /**
- * All-in-one Sound Sanctuary — engineered so every single control
- * (header, breathing dial, all 5 soundscapes, Volume bar, Fade timer, and Mix)
- * sits comfortably ABOVE the floating TabIsland at default scroll y = 0
- * across iPhone SE, iPhone Pro, and iPhone Pro Max.
+ * Neuroacoustic Sound Sanctuary:
+ * - Serene Watchmaker surface by default (Header, quiet telemetry pill, breathing 0.1 Hz Dial,
+ *   1 full-width flagship Theta Rain card + balanced 2x2 authored compositions, Volume, Timer, Mix).
+ * - Tapping the quiet telemetry pill opens the optional Acoustic Engine inspector sheet.
  */
 export default function SoundsScreen() {
   const { insets, isCompact, sideMargin } = useResponsiveLayout()
@@ -53,6 +55,8 @@ export default function SoundsScreen() {
   const playing = useSound((s) => s.playing)
   const activePresetId = useSound((s) => s.presetId)
   const activeMix = useSound((s) => s.mix)
+  const harmonicKey = useSound((s) => s.harmonicKey)
+  const descent = useSound((s) => s.descent)
   const volume = useSound((s) => s.volume)
   const setVolume = useSound((s) => s.setVolume)
   const playPreset = useSound((s) => s.playPreset)
@@ -63,6 +67,7 @@ export default function SoundsScreen() {
 
   const customMix = useSettings((s) => s.mix)
   const hasCustomMix = useSettings((s) => s.hasCustomMix)
+  const savedPreset = useSettings((s) => s.sessionPreset)
   const sleepTimer = useSettings((s) => s.sleepTimer)
   const hapticsOn = useSettings((s) => s.haptics)
   const setSettings = useSettings((s) => s.set)
@@ -70,8 +75,11 @@ export default function SoundsScreen() {
   const mixOpen = useNav((s) => s.mixOpen)
   const setMixOpen = useNav((s) => s.setMixOpen)
 
-  const [selectedId, setSelectedId] = useState<string>(() => activePresetId ?? PRESETS[0].id)
+  const [selectedId, setSelectedId] = useState<string>(
+    () => activePresetId ?? presetById(savedPreset)?.id ?? DEFAULT_PRESET_ID,
+  )
   const [timerOpen, setTimerOpen] = useState(false)
+  const [engineOpen, setEngineOpen] = useState(false)
 
   const items = [
     ...PRESETS.map((p) => ({
@@ -79,16 +87,29 @@ export default function SoundsScreen() {
       name: p.name,
       hint: p.hint,
       mix: p.mix,
-      binaural: Boolean(p.mix.band),
+      badge: p.badge,
+      keyLabel: harmonicKeyMeta(p.harmonicKey).label,
     })),
     ...(hasCustomMix
-      ? [{ id: 'custom', name: 'Custom', hint: 'Your layered mix', mix: customMix, binaural: Boolean(customMix.band) }]
+      ? [
+          {
+            id: 'custom',
+            name: 'Custom',
+            hint: 'Your layered composition',
+            mix: customMix,
+            badge: undefined,
+            keyLabel: harmonicKeyMeta(customMix.harmonicKey ?? harmonicKey).label,
+          },
+        ]
       : []),
   ]
 
   const currentId = activePresetId ?? selectedId
-  const currentItem = items.find((i) => i.id === currentId) ?? items[0]
+  const currentItem = items.find((i) => i.id === currentId) ?? items[0]!
+  const currentPreset = presetById(currentItem.id)
   const displayMix = playing && activeMix ? activeMix : currentItem.mix
+  const activeKeyId = displayMix.harmonicKey ?? currentPreset?.harmonicKey ?? harmonicKey
+  const keyMeta = harmonicKeyMeta(activeKeyId)
 
   const selectItem = (id: string, autoPlay = true) => {
     if (hapticsOn) haptics.play('light')
@@ -120,11 +141,15 @@ export default function SoundsScreen() {
 
   const swipePreset = (dir: -1 | 1) => {
     const idx = items.findIndex((i) => i.id === currentItem.id)
-    const next = items[(idx + dir + items.length) % items.length]
+    const next = items[(idx + dir + items.length) % items.length]!
     selectItem(next.id, playing)
   }
 
   const timerLabel = sleepTimer > 0 ? `Fades in ${sleepTimer}m` : 'No fade timer'
+  const telemetryLabel =
+    descent.depth === 'off'
+      ? `${keyMeta.label} · ${descent.phaseLabel} phase`
+      : `${descent.bandLabel} · ${descent.modHz.toFixed(1)} Hz · ${keyMeta.label}`
 
   return (
     <View style={styles.root}>
@@ -135,62 +160,78 @@ export default function SoundsScreen() {
           styles.content,
           {
             paddingHorizontal: sideMargin,
-            paddingTop: insets.top + (isCompact ? 6 : 12),
-            paddingBottom: Math.max(insets.bottom, 10) + 84,
+            paddingTop: insets.top + (isCompact ? 10 : 16),
+            paddingBottom: Platform.OS === 'ios' ? 20 : Math.max(insets.bottom, 16) + 88,
           },
         ]}
         showsVerticalScrollIndicator={false}
-        bounces={false}
       >
-        <View style={[styles.frame, { gap: isCompact ? 10 : 13 }]}>
-          {/* Compact header */}
+        <View style={[styles.frame, { gap: isCompact ? 13 : 16 }]}>
+          {/* Header + quiet tappable neuroacoustic telemetry pill */}
           <View style={styles.head}>
-            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 22 : 26 }]}>
+            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 26 : 30 }]}>
               {currentItem.name}
             </Text>
-            <Text style={[styles.sub, { color: color.ink2 }]} numberOfLines={1}>
-              {playing
-                ? sleepTimer > 0
-                  ? `Playing · fades out in ${sleepTimer}m`
-                  : 'Playing · continues in background'
-                : currentItem.hint}
-            </Text>
+            <Pressable
+              onPress={() => {
+                if (hapticsOn) haptics.play('light')
+                setEngineOpen(true)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open acoustic engine details"
+              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1, marginTop: 4 }]}
+            >
+              <GlassSurface variant="pill" radius={999} accent={playing} style={styles.telemetryPill}>
+                <View
+                  style={[
+                    styles.pulseDot,
+                    { backgroundColor: playing ? color.accent : color.ink3 },
+                  ]}
+                />
+                <Text style={[styles.telemetryText, { color: playing ? color.ink : color.ink2 }]} numberOfLines={1}>
+                  {telemetryLabel}
+                </Text>
+                <ChevronRight size={13} strokeWidth={1.7} color={color.ink3} />
+              </GlassSurface>
+            </Pressable>
           </View>
 
-          {/* Compact breathing dial */}
+          {/* Breathing 0.1 Hz Acoustic Dial */}
           <View style={styles.dialWrap}>
             <SoundField
               mix={displayMix}
               playing={playing}
               label={currentItem.name}
+              breathHz={descent.breathHz}
               onToggle={togglePlayback}
               onSwipe={swipePreset}
             />
           </View>
 
-          {/* All soundscapes visible together */}
-          <View style={[styles.grid, { gap: isCompact ? 7 : 8 }]}>
-            {items.map((item) => {
+          {/* Architectural grid: Flagship Theta Rain full-width lead + balanced 2x2 compositions */}
+          <View style={[styles.grid, { gap: isCompact ? 8 : 10 }]}>
+            {items.map((item, idx) => {
               const selected = item.id === currentItem.id
               const live = playing && selected
+              const isFlagship = idx === 0 && items.length % 2 === 1
               return (
                 <Pressable
                   key={item.id}
                   onPress={() => selectItem(item.id, true)}
                   style={({ pressed }) => [
-                    styles.cardWrap,
+                    isFlagship ? styles.cardWrapFull : styles.cardWrap,
                     {
                       opacity: pressed ? 0.85 : 1,
-                      transform: [{ scale: pressed ? 0.97 : 1 }],
+                      transform: [{ scale: pressed ? 0.98 : 1 }],
                     },
                   ]}
                 >
                   <GlassSurface
                     variant="card"
-                    radius={16}
+                    radius={18}
                     accent={live || selected}
                     interactive
-                    style={[styles.presetCard, { minHeight: isCompact ? 54 : 60 }]}
+                    style={[styles.presetCard, { minHeight: isCompact ? 62 : 68 }]}
                   >
                     <View style={styles.presetTop}>
                       <View style={styles.presetTitleRow}>
@@ -202,12 +243,14 @@ export default function SoundsScreen() {
                           {item.name}
                         </Text>
                       </View>
-                      {item.binaural ? (
-                        <Headphones size={12} strokeWidth={1.65} color={live ? color.accent : color.ink3} />
+                      {isFlagship ? (
+                        <Text style={[styles.keyBadge, { color: live || selected ? color.accent : color.ink3 }]}>
+                          {item.keyLabel}
+                        </Text>
                       ) : null}
                     </View>
                     <Text numberOfLines={1} style={[styles.presetHint, { color: color.ink3 }]}>
-                      {live ? 'Playing' : item.hint}
+                      {live ? `Playing · ${descent.phaseLabel.toLowerCase()} phase` : item.hint}
                     </Text>
                   </GlassSurface>
                 </Pressable>
@@ -215,16 +258,16 @@ export default function SoundsScreen() {
             })}
           </View>
 
-          {/* Sleek single-row inline Volume bar */}
-          <GlassSurface variant="card" radius={18} style={styles.volumeBar}>
-            <Volume2 size={15} strokeWidth={1.65} color={color.ink2} />
+          {/* Volume bar */}
+          <GlassSurface variant="card" radius={20} style={styles.volumeBar}>
+            <Volume2 size={16} strokeWidth={1.65} color={color.ink2} />
             <View style={{ flex: 1 }}>
               <Slider value={volume} onChange={setVolume} label="Soundscape volume" />
             </View>
             <Text style={[styles.volPct, { color: color.accent }]}>{Math.round(volume * 100)}%</Text>
           </GlassSurface>
 
-          {/* Timer + Mix controls cleanly positioned ABOVE TabIsland */}
+          {/* Timer + Mix controls */}
           <View style={styles.pillRow}>
             <Pressable
               onPress={() => {
@@ -233,7 +276,7 @@ export default function SoundsScreen() {
               }}
               style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.85 : 1 }]}
             >
-              <GlassSurface variant="pill" radius={20} interactive style={styles.pillBtn}>
+              <GlassSurface variant="pill" radius={22} interactive style={styles.pillBtn}>
                 <Timer size={15} strokeWidth={1.65} color={color.accent} />
                 <Text style={[styles.pillText, { color: color.ink }]} numberOfLines={1}>
                   {timerLabel}
@@ -248,7 +291,7 @@ export default function SoundsScreen() {
               }}
               style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
             >
-              <GlassSurface variant="pill" radius={20} interactive style={[styles.pillBtn, { paddingHorizontal: 20 }]}>
+              <GlassSurface variant="pill" radius={22} interactive style={[styles.pillBtn, { paddingHorizontal: 22 }]}>
                 <SlidersHorizontal size={15} strokeWidth={1.65} color={color.ink2} />
                 <Text style={[styles.pillText, { color: color.ink }]}>Mix</Text>
               </GlassSurface>
@@ -256,6 +299,13 @@ export default function SoundsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <AcousticEngineSheet
+        open={engineOpen}
+        onClose={() => setEngineOpen(false)}
+        preset={currentPreset}
+        harmonicKey={activeKeyId}
+      />
 
       <PopoverMenu
         open={timerOpen}
@@ -283,9 +333,9 @@ export default function SoundsScreen() {
           }
         }}
         onReset={() => {
-          const fallback = presetById('rainfall')?.mix ?? SILENT_MIX
+          const fallback = presetById(DEFAULT_PRESET_ID)?.mix ?? SILENT_MIX
           setSettings({ mix: SILENT_MIX, hasCustomMix: false })
-          setSelectedId('rainfall')
+          setSelectedId(DEFAULT_PRESET_ID)
           if (playing) updateMix(fallback)
         }}
       />
@@ -319,8 +369,22 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     letterSpacing: -0.6,
   },
-  sub: {
-    fontSize: 13,
+  telemetryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    height: 30,
+    paddingHorizontal: 12,
+  },
+  pulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  telemetryText: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
   },
   dialWrap: {
     alignItems: 'center',
@@ -331,13 +395,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+  cardWrapFull: {
+    width: '100%',
+  },
   cardWrap: {
     width: '48.5%',
     flexGrow: 1,
   },
   presetCard: {
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     gap: 4,
     justifyContent: 'center',
   },
@@ -350,44 +417,48 @@ const styles = StyleSheet.create({
   presetTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
     flex: 1,
   },
   presetName: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '600',
     letterSpacing: -0.15,
   },
-  presetHint: {
+  keyBadge: {
     fontSize: 11.5,
+    fontWeight: '500',
+  },
+  presetHint: {
+    fontSize: 12,
   },
   volumeBar: {
     width: '100%',
-    height: 46,
+    height: 52,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     gap: 12,
   },
   volPct: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
-    minWidth: 34,
+    minWidth: 36,
     textAlign: 'right',
   },
   pillRow: {
     width: '100%',
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   pillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    height: 40,
-    paddingHorizontal: 14,
+    height: 44,
+    paddingHorizontal: 16,
   },
   pillText: {
     fontSize: 13.5,

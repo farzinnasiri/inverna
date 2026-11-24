@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { Award, Moon, Sparkles } from 'lucide-react-native'
@@ -179,7 +179,7 @@ export default function HomeScreen() {
           {
             paddingHorizontal: sideMargin,
             paddingTop: insets.top + (isCompact ? 10 : 18),
-            paddingBottom: Math.max(insets.bottom, 16) + 104,
+            paddingBottom: Platform.OS === 'ios' ? 24 : Math.max(insets.bottom, 16) + 88,
           },
         ]}
         showsVerticalScrollIndicator={false}

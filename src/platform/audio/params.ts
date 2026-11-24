@@ -1,3 +1,5 @@
+import type { AudioParamLike } from './types'
+
 /**
  * Small Web Audio helpers for click-free parameter ramping and defensive cleanup.
  */
@@ -10,9 +12,9 @@ export function clamp(value: number, min: number, max: number): number {
 /**
  * Smoothly ramps an AudioParam from its current value to `target` without clicks.
  * Uses `cancelAndHoldAtTime` where supported, falling back to `cancelScheduledValues`
- * + `setValueAtTime` for Safari and lightweight test mocks.
+ * + `setValueAtTime` for Safari, native runtimes, and lightweight test mocks.
  */
-export function rampParam(param: AudioParam, target: number, rampSeconds: number, now: number): void {
+export function rampParam(param: AudioParamLike, target: number, rampSeconds: number, now: number): void {
   const safeNow = Number.isFinite(now) ? Math.max(0, now) : 0
   const duration = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0)
 

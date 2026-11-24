@@ -4,21 +4,18 @@ import {
   Easing,
   PanResponder,
   PixelRatio,
+  Pressable,
   StyleSheet,
   Text,
   View,
   type LayoutChangeEvent,
 } from 'react-native'
+import Reanimated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import {
   RotateCcw as _RotateCcw,
   Shuffle as _Shuffle,
   Sparkles as _Sparkles,
 } from 'lucide-react-native'
-
-type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
-const RotateCcw = _RotateCcw as unknown as LucideSvgIcon
-const Shuffle = _Shuffle as unknown as LucideSvgIcon
-const Sparkles = _Sparkles as unknown as LucideSvgIcon
 import {
   createHue,
   findHintPair,
@@ -31,10 +28,30 @@ import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { GlassSurface } from '@/ui/rn/Glass'
-import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
+import { useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
+
+type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
+const RotateCcw = _RotateCcw as unknown as LucideSvgIcon
+const Shuffle = _Shuffle as unknown as LucideSvgIcon
+const Sparkles = _Sparkles as unknown as LucideSvgIcon
+
+type HueDifficulty = 'cozy' | 'medium' | 'classic'
+
+const DIFFICULTY_CALM: Record<HueDifficulty, number> = {
+  cozy: 0.85,    // 4×4 with top & bottom rows anchored (8 movable tiles)
+  medium: 0.55,  // 4×5 with top & bottom rows anchored (12 movable tiles)
+  classic: 0.1,  // 5×6 full mosaic
+}
+
+const DIFFICULTY_OPTIONS: readonly { value: HueDifficulty; label: string }[] = [
+  { value: 'cozy', label: 'Cozy 4×4' },
+  { value: 'medium', label: 'Medium 4×5' },
+  { value: 'classic', label: 'Classic' },
+]
 
 interface HueSave {
-  version: 1
+  version: 2
+  difficulty: HueDifficulty
   state: HueState
   completed: number
 }
@@ -54,21 +71,22 @@ interface DragSession {
 
 const DRAG_THRESHOLD_PX = 7
 const HINT_DURATION_MS = 2250
-const TILE_GAP = 2
-const BEZEL_PADDING = 4
+const TILE_GAP = 3
+const BEZEL_PADDING = 5
 const BEZEL_BORDER = 1
 const BEZEL_INSET = BEZEL_PADDING + BEZEL_BORDER
 
 const HOW_TO = [
-  'Tap two tiles — or drag one onto another — to swap them until the gradient flows smoothly.',
-  'Tiles with a brass diamond are anchored in place and show where each corner belongs.',
+  'Arrange the middle tiles so each row and column flows smoothly between the anchored brass edges.',
+  'Tap two tiles — or drag one onto another — to swap them. Tap Hint anytime to highlight a pair.',
 ] as const
 
 function isValidSave(value: unknown): value is HueSave {
   if (!value || typeof value !== 'object') return false
   const v = value as Partial<HueSave>
   return (
-    v.version === 1 &&
+    v.version === 2 &&
+    (v.difficulty === 'cozy' || v.difficulty === 'medium' || v.difficulty === 'classic') &&
     !!v.state &&
     typeof v.state.cols === 'number' &&
     typeof v.state.rows === 'number' &&
@@ -81,18 +99,19 @@ function isValidSave(value: unknown): value is HueSave {
 
 export function HueScreen({ onExit }: GameScreenProps) {
   const { color } = useTokenColors()
-  const calm = useCalm()
   const reducedMotion = useReducedMotion()
   const { cue, haptic } = useFeedback()
 
   const [fallback] = useState<HueSave>(() => ({
-    version: 1,
-    state: createHue({ seed: Date.now() >>> 0, calm }),
+    version: 2,
+    difficulty: 'cozy',
+    state: createHue({ seed: Date.now() >>> 0, calm: DIFFICULTY_CALM.cozy }),
     completed: 0,
   }))
   const [rawSave, setSave] = useGameSave<HueSave>('hue', fallback)
   const save = isValidSave(rawSave) ? rawSave : fallback
   const state = save.state
+  const difficulty = save.difficulty
 
   const [paused, setPaused] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
@@ -104,15 +123,29 @@ export function HueScreen({ onExit }: GameScreenProps) {
   const stageSizeRef = useRef(stageSize)
 
   const hintPulse = useRef(new Animated.Value(0)).current
-  const dragOffset = useRef(new Animated.ValueXY()).current
   const hintAnimRef = useRef<Animated.CompositeAnimation | null>(null)
   const dragRef = useRef<DragSession | null>(null)
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // UI-thread Reanimated drag offset (zero ghosting / stale offset trace)
+  const dragX = useSharedValue(0)
+  const dragY = useSharedValue(0)
+  const liftedAnimStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: dragX.get() },
+      { translateY: dragY.get() },
+      { scale: reducedMotion ? 1 : 1.07 },
+    ],
+  }))
+
   const stateRef = useRef(state)
+  stateRef.current = state
+  const difficultyRef = useRef(difficulty)
+  difficultyRef.current = difficulty
   const pausedRef = useRef(paused)
   const selectedRef = useRef(selectedIndex)
+
   const selectTile = useCallback((index: number | null) => {
     selectedRef.current = index
     setSelectedIndex(index)
@@ -120,14 +153,19 @@ export function HueScreen({ onExit }: GameScreenProps) {
 
   const cancelDrag = useCallback(() => {
     dragRef.current = null
+    dragX.set(0)
+    dragY.set(0)
     setDragRender(null)
-  }, [])
+  }, [dragX, dragY])
 
-  const handlePauseChange = useCallback((nextPaused: boolean) => {
-    pausedRef.current = nextPaused
-    if (nextPaused) cancelDrag()
-    setPaused(nextPaused)
-  }, [cancelDrag])
+  const handlePauseChange = useCallback(
+    (nextPaused: boolean) => {
+      pausedRef.current = nextPaused
+      if (nextPaused) cancelDrag()
+      setPaused(nextPaused)
+    },
+    [cancelDrag],
+  )
 
   useEffect(() => {
     return () => {
@@ -137,7 +175,6 @@ export function HueScreen({ onExit }: GameScreenProps) {
     }
   }, [])
 
-  // Compute responsive square cell sizing that fits inside the stage without overflow.
   const metrics = useMemo(() => {
     const availW = stageSize.width - BEZEL_INSET * 2
     const availH = stageSize.height - BEZEL_INSET * 2
@@ -178,7 +215,8 @@ export function HueScreen({ onExit }: GameScreenProps) {
       stateRef.current = next
 
       setSave((prev) => ({
-        version: 1,
+        version: 2,
+        difficulty: difficultyRef.current,
         state: next,
         completed: (isValidSave(prev) ? prev.completed : 0) + (next.solved ? 1 : 0),
       }))
@@ -186,7 +224,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
       if (next.solved) {
         cue('chime', 0.9)
         haptic('success')
-        const delayMs = reducedMotion ? 180 : 620
+        const delayMs = reducedMotion ? 180 : 520
         if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
         completionTimerRef.current = setTimeout(() => {
           setShowCompletion(true)
@@ -279,7 +317,8 @@ export function HueScreen({ onExit }: GameScreenProps) {
     const next = restartPuzzle(stateRef.current)
     stateRef.current = next
     setSave((prev) => ({
-      version: 1,
+      version: 2,
+      difficulty: difficultyRef.current,
       state: next,
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
@@ -297,18 +336,49 @@ export function HueScreen({ onExit }: GameScreenProps) {
     selectTile(null)
     setFocusedIndex(null)
     setShowCompletion(false)
-    const next = nextPuzzle(stateRef.current, calm)
+    const next = nextPuzzle(stateRef.current, DIFFICULTY_CALM[difficultyRef.current])
     stateRef.current = next
     setSave((prev) => ({
-      version: 1,
+      version: 2,
+      difficulty: difficultyRef.current,
       state: next,
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('tap', 0.6)
     haptic('light')
-  }, [cancelDrag, clearHint, selectTile, setSave, calm, cue, haptic])
+  }, [cancelDrag, clearHint, selectTile, setSave, cue, haptic])
 
-  /* --- Touch hit-testing & drag-to-swap via PanResponder ------------------ */
+  const changeDifficulty = useCallback(
+    (nextDiff: HueDifficulty) => {
+      if (nextDiff === difficultyRef.current) return
+      if (completionTimerRef.current) {
+        clearTimeout(completionTimerRef.current)
+        completionTimerRef.current = null
+      }
+      clearHint()
+      cancelDrag()
+      selectTile(null)
+      setFocusedIndex(null)
+      setShowCompletion(false)
+      difficultyRef.current = nextDiff
+      const next = createHue({
+        seed: Date.now() >>> 0,
+        calm: DIFFICULTY_CALM[nextDiff],
+        puzzleNumber: stateRef.current.puzzleNumber,
+        paletteIndex: stateRef.current.paletteIndex,
+      })
+      stateRef.current = next
+      setSave((prev) => ({
+        version: 2,
+        difficulty: nextDiff,
+        state: next,
+        completed: isValidSave(prev) ? prev.completed : 0,
+      }))
+      cue('tap', 0.55)
+      haptic('light')
+    },
+    [cancelDrag, clearHint, selectTile, setSave, cue, haptic],
+  )
 
   const slotFromLocal = (x: number, y: number): number | null => {
     const { gridW, gridH, pitch, cellSize } = metricsRef.current
@@ -345,6 +415,8 @@ export function HueScreen({ onExit }: GameScreenProps) {
         }
 
         setFocusedIndex(null)
+        dragX.set(0)
+        dragY.set(0)
         dragRef.current = {
           fromIdx: idx,
           startX,
@@ -361,7 +433,8 @@ export function HueScreen({ onExit }: GameScreenProps) {
         if (!session || pausedRef.current) return
         if (!session.dragging && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return
 
-        dragOffset.setValue({ x: dx, y: dy })
+        dragX.set(dx)
+        dragY.set(dy)
         const hoverIdx = dropTarget(session, dx, dy)
         if (!session.dragging) {
           session.dragging = true
@@ -389,8 +462,6 @@ export function HueScreen({ onExit }: GameScreenProps) {
       onPanResponderTerminate: cancelDrag,
     }),
   )
-
-  /* --- Desktop Web keyboard navigation ------------------------------------ */
 
   const moveFocus = useCallback(
     (dCol: number, dRow: number) => {
@@ -431,14 +502,30 @@ export function HueScreen({ onExit }: GameScreenProps) {
     [hintIndices],
   )
 
-  const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout
-    const prev = stageSizeRef.current
-    if (width === prev.width && height === prev.height) return
-    stageSizeRef.current = { width, height }
-    cancelDrag()
-    setStageSize(stageSizeRef.current)
-  }, [cancelDrag])
+  const settledStats = useMemo(() => {
+    let movable = 0
+    let settled = 0
+    for (let i = 0; i < state.tiles.length; i++) {
+      const t = state.tiles[i]!
+      if (!t.pinned) {
+        movable++
+        if (t.id === i) settled++
+      }
+    }
+    return { settled, movable }
+  }, [state.tiles])
+
+  const handleStageLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const { width, height } = e.nativeEvent.layout
+      const prev = stageSizeRef.current
+      if (width === prev.width && height === prev.height) return
+      stageSizeRef.current = { width, height }
+      cancelDrag()
+      setStageSize(stageSizeRef.current)
+    },
+    [cancelDrag],
+  )
 
   const outerCornerRadius = radius.lg - BEZEL_INSET
   const liftedTile = dragRender ? state.tiles[dragRender.fromIdx] : null
@@ -449,7 +536,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
       score={state.moves}
       commitScore={state.solved}
       stats={[
-        { label: 'Palette', value: state.puzzleNumber },
+        { label: 'In place', value: `${settledStats.settled}/${settledStats.movable}` },
         { label: 'Moves', value: state.moves },
       ]}
       paused={paused}
@@ -459,9 +546,28 @@ export function HueScreen({ onExit }: GameScreenProps) {
       howTo={HOW_TO}
       controls={
         <View style={styles.bar}>
-          <Text style={[styles.barTitle, { color: color.ink2 }]} numberOfLines={1}>
-            {state.paletteTitle}
-          </Text>
+          <View style={styles.diffRow}>
+            {DIFFICULTY_OPTIONS.map((opt) => {
+              const active = opt.value === difficulty
+              return (
+                <Pressable
+                  key={opt.value}
+                  onPress={() => changeDifficulty(opt.value)}
+                  style={[
+                    styles.diffChip,
+                    {
+                      backgroundColor: active ? color.accentWash : 'rgba(255,255,255,0.04)',
+                      borderColor: active ? color.accent : color.line,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.diffLabel, { color: active ? color.accent : color.ink3 }]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              )
+            })}
+          </View>
           <GameControlBar>
             <GameActionButton
               label="Hint"
@@ -507,11 +613,11 @@ export function HueScreen({ onExit }: GameScreenProps) {
                   const isFocused = focusedIndex === idx
                   const isHinted = hintSet?.has(idx) ?? false
 
-                  const topLeftR = row === 0 && col === 0 ? outerCornerRadius : 3
-                  const topRightR = row === 0 && col === state.cols - 1 ? outerCornerRadius : 3
-                  const bottomLeftR = row === state.rows - 1 && col === 0 ? outerCornerRadius : 3
+                  const topLeftR = row === 0 && col === 0 ? outerCornerRadius : 6
+                  const topRightR = row === 0 && col === state.cols - 1 ? outerCornerRadius : 6
+                  const bottomLeftR = row === state.rows - 1 && col === 0 ? outerCornerRadius : 6
                   const bottomRightR =
-                    row === state.rows - 1 && col === state.cols - 1 ? outerCornerRadius : 3
+                    row === state.rows - 1 && col === state.cols - 1 ? outerCornerRadius : 6
 
                   const showRing = isSelected || isDropTarget || isFocused
                   const ringColor = isSelected || isDropTarget ? color.accent : color.ink2
@@ -534,7 +640,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
                           borderBottomRightRadius: bottomRightR,
                           borderWidth: showRing ? 2 : 0,
                           borderColor: showRing ? ringColor : 'transparent',
-                          opacity: isDragging ? 0.26 : 1,
+                          opacity: isDragging ? 0.22 : 1,
                         },
                       ]}
                     >
@@ -553,10 +659,10 @@ export function HueScreen({ onExit }: GameScreenProps) {
                             styles.hintRing,
                             {
                               borderColor: color.ink,
-                              borderTopLeftRadius: Math.max(2, topLeftR - 3),
-                              borderTopRightRadius: Math.max(2, topRightR - 3),
-                              borderBottomLeftRadius: Math.max(2, bottomLeftR - 3),
-                              borderBottomRightRadius: Math.max(2, bottomRightR - 3),
+                              borderTopLeftRadius: Math.max(3, topLeftR - 3),
+                              borderTopRightRadius: Math.max(3, topRightR - 3),
+                              borderBottomLeftRadius: Math.max(3, bottomLeftR - 3),
+                              borderBottomRightRadius: Math.max(3, bottomRightR - 3),
                               opacity: hintPulse,
                             },
                           ]}
@@ -574,7 +680,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
               </View>
             </GlassSurface>
             {dragRender && liftedTile && (
-              <Animated.View
+              <Reanimated.View
                 pointerEvents="none"
                 style={[
                   styles.liftedTile,
@@ -585,12 +691,8 @@ export function HueScreen({ onExit }: GameScreenProps) {
                     height: metrics.cellSize,
                     backgroundColor: liftedTile.color,
                     borderColor: color.accent,
-                    transform: [
-                      { translateX: dragOffset.x },
-                      { translateY: dragOffset.y },
-                      { scale: reducedMotion ? 1 : 1.07 },
-                    ],
                   },
+                  liftedAnimStyle,
                 ]}
               />
             )}
@@ -630,12 +732,12 @@ const styles = StyleSheet.create({
   liftedTile: {
     position: 'absolute',
     zIndex: 1,
-    borderRadius: radius.xs,
+    borderRadius: radius.sm,
     borderWidth: 2,
   },
   anchorClasp: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderWidth: 1,
     borderRadius: 2,
     borderCurve: 'continuous',
@@ -651,12 +753,25 @@ const styles = StyleSheet.create({
   },
   bar: {
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
   },
-  barTitle: {
-    maxWidth: '100%',
-    fontSize: 13,
+  diffRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  diffChip: {
+    height: 28,
+    paddingHorizontal: 11,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  diffLabel: {
+    fontSize: 12,
     fontWeight: '600',
-    letterSpacing: -0.2,
   },
 })

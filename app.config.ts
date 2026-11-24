@@ -13,7 +13,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/images/icon.png',
   ios: {
     bundleIdentifier: 'com.oooflabs.lull',
-    buildNumber: '1',
+    buildNumber: '2',
     supportsTablet: true,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
@@ -40,7 +40,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
-    'expo-audio',
+    [
+      'react-native-audio-api',
+      {
+        iosBackgroundMode: true,
+        iosMicrophonePermission:
+          'Lull uses its audio engine strictly for offline sleep soundscape synthesis and never accesses your microphone.',
+        androidForegroundService: true,
+        androidFSTypes: ['mediaPlayback'],
+        androidFSStopWithTask: true,
+      },
+    ],
     'expo-sqlite',
     [
       'expo-splash-screen',

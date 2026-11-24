@@ -3,7 +3,6 @@ import {
   Animated,
   Easing,
   PanResponder,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,11 +21,11 @@ import Reanimated, {
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { BlurView } from 'expo-blur'
 import { Check, Moon, Sun } from 'lucide-react-native'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSettings } from '@/ui/state/settings'
+import { GlassSurface } from './Glass'
 import { Layer } from './Layer'
 
 export const FRAME_MAX_WIDTH = 440
@@ -704,23 +703,19 @@ export function Sheet({
         <Animated.View
           {...dismissResponder.panHandlers}
           style={[
-            styles.sheetCard,
+            styles.sheetWrap,
             {
-              backgroundColor: Platform.OS === 'ios' ? 'rgba(18, 20, 26, 0.76)' : 'rgba(16, 18, 24, 0.96)',
-              borderColor: 'rgba(255, 255, 255, 0.14)',
-              borderCurve: 'continuous',
-              paddingBottom: Math.max(insets.bottom, 16) + 14,
+              paddingBottom: Math.max(insets.bottom, 10),
               transform: [{ translateY }],
             },
           ]}
         >
-          {Platform.OS === 'ios' && (
-            <BlurView intensity={60} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} />
-          )}
-          <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.24)' }]} />
-          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-            {children}
-          </ScrollView>
+          <GlassSurface variant="elevated" radius={34} style={styles.sheetCard}>
+            <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.26)' }]} />
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+              {children}
+            </ScrollView>
+          </GlassSurface>
         </Animated.View>
       </View>
     </Layer>
@@ -903,17 +898,17 @@ const styles = StyleSheet.create({
     left: 0,
     backgroundColor: 'rgba(0,0,0,0.70)',
   },
-  sheetCard: {
+  sheetWrap: {
     width: '100%',
     maxWidth: FRAME_MAX_WIDTH,
-    maxHeight: '86%',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    borderWidth: 1,
-    marginBottom: -1,
-    overflow: 'hidden',
+    maxHeight: '88%',
+    paddingHorizontal: 8,
+  },
+  sheetCard: {
+    width: '100%',
     paddingTop: 10,
-    paddingHorizontal: 22,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
   },
   sheetGrab: {
     width: 36,

@@ -10,12 +10,15 @@ export function SoundField({
   mix,
   playing,
   label,
+  breathHz = 0.1,
   onToggle,
   onSwipe,
 }: {
   mix: Mix
   playing: boolean
   label: string
+  /** Live cardiorespiratory swell frequency in Hz (~0.10 Hz = 10s cycle). */
+  breathHz?: number
   onToggle: () => void
   onSwipe?: (dir: -1 | 1) => void
 }) {
@@ -29,11 +32,12 @@ export function SoundField({
 
   useEffect(() => {
     if (reduced) return
+    const stepRad = Math.PI * 2 * Math.max(0.06, breathHz) * 0.045
     const id = setInterval(() => {
-      setPhase((p) => p + (playing ? 0.055 : 0.015))
+      setPhase((p) => p + (playing ? stepRad : 0.012))
     }, 45)
     return () => clearInterval(id)
-  }, [playing, reduced])
+  }, [playing, reduced, breathHz])
 
   const panResponder = useRef(
     PanResponder.create({
@@ -48,7 +52,7 @@ export function SoundField({
   ).current
 
   const { width, height } = useWindowDimensions()
-  const size = Math.min(156, Math.max(118, Math.round(Math.min(width - 180, height * 0.19))))
+  const size = Math.min(176, Math.max(142, Math.round(Math.min(width - 154, height * 0.21))))
   const vb = 248
   const c = vb / 2
   const l = mix.layers
@@ -60,19 +64,21 @@ export function SoundField({
     (l.brown ?? 0) +
     (l.pink ?? 0) +
     (l.white ?? 0) +
+    (mix.padGain ?? 0) * 0.8 +
     (mix.band ? mix.bandGain : 0)
-  const norm = Math.min(1, activeEnergy / 2.2)
+  const norm = Math.min(1, activeEnergy / 2.4)
+  const breathWave = Math.sin(phase)
 
-  // Generate 3 organic watchmaker wave rings inside the circular field
+  // Generate 3 organic watchmaker acoustic rings breathing in sync with the 0.1 Hz resonance swell
   const rings = [0, 1, 2].map((idx) => {
-    const baseR = 46 + idx * 24 + (playing ? Math.sin(phase * 0.9 - idx) * 3.5 : 0)
+    const baseR = 45 + idx * 24 + (playing ? Math.sin(phase - idx * 0.65) * 4.2 : 0)
     const pts: string[] = []
     const steps = 48
     for (let i = 0; i <= steps; i++) {
       const a = (i / steps) * Math.PI * 2
       const wobble =
-        Math.sin(a * (3 + idx) + phase * (1.1 + idx * 0.25)) * (3 + norm * 5.5) * (playing ? 1 : 0.35) +
-        Math.cos(a * 5 - phase * 0.7) * (1.6 + (l.waves ?? 0) * 4)
+        Math.sin(a * (3 + idx) + phase * (1.5 + idx * 0.3)) * (2.6 + norm * 5.2) * (playing ? 1 : 0.32) +
+        Math.cos(a * 5 - phase * 0.9) * (1.4 + (l.waves ?? 0) * 3.8 + (mix.padGain ?? 0) * 1.6)
       const r = baseR + wobble
       const x = c + Math.cos(a) * r
       const y = c + Math.sin(a) * r
@@ -133,17 +139,17 @@ export function SoundField({
                 d={d}
                 fill="none"
                 stroke={i === 1 ? color.accent : color.ink2}
-                strokeWidth={i === 1 ? 1.4 : 1}
-                strokeOpacity={playing ? 0.65 - i * 0.14 : 0.25 - i * 0.05}
+                strokeWidth={i === 1 ? 1.45 : 1}
+                strokeOpacity={playing ? 0.68 - i * 0.14 : 0.25 - i * 0.05}
               />
             ))}
 
             <Circle
               cx={c}
               cy={c}
-              r={playing ? 12 + Math.sin(phase * 1.4) * 1.8 : 9}
+              r={playing ? 11.5 + breathWave * 2.2 : 9}
               fill={playing ? color.accent : color.surface3}
-              fillOpacity={playing ? 0.9 : 1}
+              fillOpacity={playing ? 0.92 : 1}
             />
           </Svg>
 

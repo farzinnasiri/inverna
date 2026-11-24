@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import Animated, {
   Easing,
-  FadeIn,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
@@ -10,8 +9,17 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
-import Svg, { Circle, Defs, RadialGradient, Stop } from 'react-native-svg'
-import { CloudRain, Flame, Headphones, Sparkles, Volume2, VolumeX, Waves, Wind } from 'lucide-react-native'
+import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
+import {
+  CloudRain,
+  Flame,
+  Gamepad2,
+  Moon,
+  Sparkles,
+  Volume2,
+  Waves,
+  Wind,
+} from 'lucide-react-native'
 import { PRESETS } from '@/core/sound/catalog'
 import { haptics, sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
@@ -26,9 +34,6 @@ import { GlassSurface } from './Glass'
 import { useReducedMotion, useResponsiveLayout } from './hooks'
 import { Layer } from './Layer'
 
-const HERO_ART = require('../../../assets/images/onboarding-hero.png')
-const SOUND_ART = require('../../../assets/images/sound-sanctuary.png')
-
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 
 function lightStageLabel(light: number): string {
@@ -39,7 +44,7 @@ function lightStageLabel(light: number): string {
 }
 
 function PresetGlyph({ id, color }: { id: string; color: string }) {
-  if (id === 'rainfall' || id === 'theta-rain') return <CloudRain size={17} strokeWidth={1.65} color={color} />
+  if (id === 'theta-rain' || id === 'rainfall') return <CloudRain size={17} strokeWidth={1.65} color={color} />
   if (id === 'low-tide') return <Waves size={17} strokeWidth={1.65} color={color} />
   if (id === 'hearth') return <Flame size={17} strokeWidth={1.65} color={color} />
   if (id === 'deep-drift') return <Sparkles size={17} strokeWidth={1.65} color={color} />
@@ -47,178 +52,84 @@ function PresetGlyph({ id, color }: { id: string; color: string }) {
 }
 
 /**
- * Animated Watchmaker Orbital Hero — floating obsidian-brass rings with
- * dual counter-rotating celestial arcs and soft breathing moonlight aura.
+ * Minimal Watchmaker crescent-and-horizon emblem drawn cleanly in vector SVG
+ * so Onboarding Step 1 shares Lull's exact nocturnal obsidian & brass language.
  */
-function HeroSculpture({ size, reduced }: { size: number; reduced: boolean }) {
+function WatchmakerEmblem({ size, reduced }: { size: number; reduced: boolean }) {
   const { color } = useTokenColors()
-  const floatSV = useSharedValue(0)
-  const orbitA = useSharedValue(0)
-  const orbitB = useSharedValue(0)
+  const breathe = useSharedValue(0)
 
   useEffect(() => {
     if (reduced) return
-    floatSV.set(
+    breathe.set(
       withRepeat(
-        withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
+        withTiming(1, {
+          duration: 5400,
+          easing: Easing.inOut(Easing.sin),
+          reduceMotion: ReduceMotion.System,
+        }),
         -1,
         true,
       ),
     )
-    orbitA.set(
-      withRepeat(
-        withTiming(360, { duration: 28000, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
-        -1,
-        false,
-      ),
-    )
-    orbitB.set(
-      withRepeat(
-        withTiming(-360, { duration: 38000, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
-        -1,
-        false,
-      ),
-    )
-  }, [reduced, floatSV, orbitA, orbitB])
+  }, [reduced, breathe])
 
-  const artStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: (floatSV.get() - 0.5) * 10 },
-      { scale: 0.98 + floatSV.get() * 0.035 },
-    ],
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: 0.72 + breathe.get() * 0.28,
+    transform: [{ scale: 0.97 + breathe.get() * 0.05 }],
   }))
-
-  const ringAStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${orbitA.get()}deg` }],
-  }))
-
-  const ringBStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${orbitB.get()}deg` }],
-  }))
-
-  const auraSize = size + 72
 
   return (
-    <View style={[styles.heroStage, { width: auraSize, height: auraSize }]}>
-      {/* Soft radial nocturnal aura */}
-      <Svg width={auraSize} height={auraSize} style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Defs>
-          <RadialGradient id="obHeroAura" cx="50%" cy="50%" r="50%">
-            <Stop offset="0%" stopColor={color.accent} stopOpacity="0.24" />
-            <Stop offset="55%" stopColor="#324B73" stopOpacity="0.12" />
-            <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
-        <Circle cx={auraSize / 2} cy={auraSize / 2} r={auraSize / 2} fill="url(#obHeroAura)" />
-      </Svg>
-
-      {/* Outer slowly orbiting watchmaker ring */}
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.centerAbs, ringAStyle]}>
-        <Svg width={auraSize} height={auraSize}>
-          <Circle
-            cx={auraSize / 2}
-            cy={auraSize / 2}
-            r={size / 2 + 24}
-            fill="none"
-            stroke="rgba(255,255,255,0.12)"
-            strokeWidth={1}
-            strokeDasharray="6 10"
-          />
-          <Circle cx={auraSize / 2} cy={auraSize / 2 - (size / 2 + 24)} r={2.6} fill={color.accent} />
+    <View style={[styles.emblemWrap, { width: size, height: size }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, glowStyle]}>
+        <Svg width={size} height={size} viewBox="0 0 160 160">
+          <Defs>
+            <RadialGradient id="lullEmblemGlow" cx="50%" cy="46%" r="50%">
+              <Stop offset="0%" stopColor={color.accent} stopOpacity="0.28" />
+              <Stop offset="55%" stopColor="#264A7A" stopOpacity="0.12" />
+              <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Circle cx={80} cy={80} r={76} fill="url(#lullEmblemGlow)" />
         </Svg>
       </Animated.View>
 
-      {/* Inner counter-rotating fine brass orbital arc */}
-      <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.centerAbs, ringBStyle]}>
-        <Svg width={auraSize} height={auraSize}>
+      <GlassSurface variant="elevated" radius={size * 0.32} style={[styles.emblemTile, { width: size * 0.72, height: size * 0.72 }]}>
+        <Svg width={size * 0.54} height={size * 0.54} viewBox="0 0 96 96">
+          {/* Fine outer watchmaker bezel */}
+          <Circle cx={48} cy={48} r={41} fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth={1} />
           <Circle
-            cx={auraSize / 2}
-            cy={auraSize / 2}
-            r={size / 2 + 12}
+            cx={48}
+            cy={48}
+            r={34}
             fill="none"
             stroke={color.accent}
             strokeOpacity={0.34}
-            strokeWidth={1}
-            strokeDasharray="52 180"
+            strokeWidth={0.9}
+            strokeDasharray="3 6"
+          />
+          {/* Clean crescent moon */}
+          <Path
+            d="M55.5 29.5A20 20 0 1 0 67.5 60.5 15.5 15.5 0 0 1 55.5 29.5Z"
+            fill={color.accent}
+            fillOpacity={0.92}
+          />
+          {/* Quiet horizon line */}
+          <Line
+            x1={24}
+            y1={68}
+            x2={72}
+            y2={68}
+            stroke="rgba(255,255,255,0.22)"
+            strokeWidth={1.1}
             strokeLinecap="round"
           />
         </Svg>
-      </Animated.View>
-
-      <Animated.View style={artStyle}>
-        <Image
-          source={HERO_ART}
-          style={{ width: size, height: size, borderRadius: size / 2 }}
-          resizeMode="contain"
-        />
-      </Animated.View>
+      </GlassSurface>
     </View>
   )
 }
 
-/**
- * Acoustic sound-wave pulse rings around the Step 4 sound sculpture when playing live.
- */
-function SoundPulseMedallion({ size, playing, reduced }: { size: number; playing: boolean; reduced: boolean }) {
-  const { color } = useTokenColors()
-  const pulse = useSharedValue(0)
-
-  useEffect(() => {
-    if (!playing || reduced) {
-      pulse.set(withTiming(0, { duration: 300 }))
-      return
-    }
-    pulse.set(0)
-    pulse.set(
-      withRepeat(
-        withTiming(1, { duration: 2400, easing: Easing.out(Easing.cubic), reduceMotion: ReduceMotion.System }),
-        -1,
-        false,
-      ),
-    )
-  }, [playing, reduced, pulse])
-
-  const wave1 = useAnimatedStyle(() => ({
-    opacity: playing ? (1 - pulse.get()) * 0.55 : 0,
-    transform: [{ scale: 1 + pulse.get() * 0.55 }],
-  }))
-
-  const wave2 = useAnimatedStyle(() => {
-    const p2 = (pulse.get() + 0.5) % 1
-    return {
-      opacity: playing ? (1 - p2) * 0.42 : 0,
-      transform: [{ scale: 1 + p2 * 0.55 }],
-    }
-  })
-
-  return (
-    <View style={[styles.medallionWrap, { width: size + 40, height: size + 40 }]}>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.waveRing,
-          { width: size, height: size, borderRadius: size / 2, borderColor: color.accent },
-          wave1,
-        ]}
-      />
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.waveRing,
-          { width: size, height: size, borderRadius: size / 2, borderColor: 'rgba(255,255,255,0.4)' },
-          wave2,
-        ]}
-      />
-      <Image
-        source={SOUND_ART}
-        style={{ width: size, height: size, borderRadius: size / 2 }}
-        resizeMode="contain"
-      />
-    </View>
-  )
-}
-
-/** Animated progress indicator dot that springs into a pill when active. */
 function StepDot({ active, accentColor }: { active: boolean; accentColor: string }) {
   const w = useSharedValue(active ? 22 : 6)
   useEffect(() => {
@@ -238,8 +149,9 @@ function StepDot({ active, accentColor }: { active: boolean; accentColor: string
 }
 
 /**
- * 4-step Liquid Glass Onboarding with live ambient welcome audio, delicate chime cues,
- * orbital watchmaker hero motion, directional step choreography, and live sound waves.
+ * Cohesive 4-step Onboarding matching Lull's Watchmaker Ink & Brass aesthetic:
+ * - Zero unprompted auto-play audio; sound only starts when explicitly tapped on Step 4.
+ * - Fixed-height volume bar slot on Step 4 so choosing a sound NEVER shifts the layout.
  */
 export function Onboarding() {
   const { color } = useTokenColors()
@@ -265,28 +177,22 @@ export function Onboarding() {
 
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0)
   const [dir, setDir] = useState<1 | -1>(1)
-  const [introMuted, setIntroMuted] = useState(false)
-  const startedIntroAudioRef = useRef(false)
   const visible = !onboarded || replay
 
-  // Smooth directional slide + fade whenever step changes
   const stepX = useSharedValue(0)
   const stepOpacity = useSharedValue(1)
 
   useEffect(() => {
-    if (!visible) {
-      startedIntroAudioRef.current = false
-      return
-    }
+    if (!visible) return
     if (reduced) {
       stepX.set(0)
       stepOpacity.set(1)
       return
     }
-    stepX.set(dir * 26)
+    stepX.set(dir * 22)
     stepOpacity.set(0)
-    stepX.set(withTiming(0, { duration: 280, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
-    stepOpacity.set(withTiming(1, { duration: 240, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
+    stepX.set(withTiming(0, { duration: 260, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
+    stepOpacity.set(withTiming(1, { duration: 220, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
   }, [step, dir, visible, reduced, stepX, stepOpacity])
 
   const stepAnimStyle = useAnimatedStyle(() => ({
@@ -294,37 +200,15 @@ export function Onboarding() {
     transform: [{ translateX: stepX.get() }],
   }))
 
-  const playCue = (name: 'tap' | 'place' | 'chime', vol = 0.45) => {
-    if (!sfxOn || introMuted) return
+  const playCue = (name: 'tap' | 'place' | 'chime', vol = 0.35) => {
+    if (!sfxOn) return
     void sound.unlock()
     sound.cue(name, vol)
   }
 
-  const startWelcomeAtmosphere = () => {
-    if (introMuted || startedIntroAudioRef.current || playing) return
-    startedIntroAudioRef.current = true
-    // Soft ambient nocturnal bed so the user feels Lull's sonic sanctuary immediately
-    setVolume(0.42)
-    playPreset('rainfall', 30)
-  }
-
-  const toggleIntroMute = () => {
-    if (hapticsOn) haptics.play('light')
-    setIntroMuted((m) => {
-      const next = !m
-      if (next && playing) {
-        stopSound(0.5)
-      } else if (!next && !playing) {
-        setVolume(0.45)
-        playPreset(presetId ?? 'rainfall', 30)
-      }
-      return next
-    })
-  }
-
   const finish = () => {
     if (hapticsOn) haptics.play('medium')
-    playCue('chime', 0.65)
+    playCue('chime', 0.45)
     set({ onboarded: true })
     setReplay(false)
     setStep(0)
@@ -332,24 +216,17 @@ export function Onboarding() {
 
   const nextStep = () => {
     if (hapticsOn) haptics.play('light')
-    if (step === 0) {
-      startWelcomeAtmosphere()
-      playCue('chime', 0.45)
-    } else {
-      playCue('place', 0.4)
-    }
+    playCue('tap', 0.3)
     setDir(1)
     setStep((s) => Math.min(3, s + 1) as 0 | 1 | 2 | 3)
   }
 
   const prevStep = () => {
     if (hapticsOn) haptics.play('light')
-    playCue('tap', 0.35)
+    playCue('tap', 0.25)
     setDir(-1)
     setStep((s) => Math.max(0, s - 1) as 0 | 1 | 2 | 3)
   }
-
-  const artSize = isCompact ? 148 : 186
 
   return (
     <Layer visible={visible} onRequestClose={finish} label="Setup Lull">
@@ -371,23 +248,9 @@ export function Onboarding() {
                 <StepDot key={i} active={i === step} accentColor={color.accent} />
               ))}
             </View>
-            <View style={styles.topRight}>
-              <Pressable
-                onPress={toggleIntroMute}
-                accessibilityRole="button"
-                accessibilityLabel={introMuted ? 'Unmute intro audio' : 'Mute intro audio'}
-                style={styles.audioToggle}
-              >
-                {introMuted || !playing ? (
-                  <VolumeX size={17} strokeWidth={1.65} color={color.ink3} />
-                ) : (
-                  <Volume2 size={17} strokeWidth={1.65} color={color.accent} />
-                )}
-              </Pressable>
-              <Button variant="ghost" size="sm" onPress={finish}>
-                Skip
-              </Button>
-            </View>
+            <Button variant="ghost" size="sm" onPress={finish}>
+              Skip
+            </Button>
           </View>
 
           <ScrollView
@@ -399,25 +262,42 @@ export function Onboarding() {
             <Animated.View style={[styles.stepHost, stepAnimStyle]}>
               {step === 0 && (
                 <View style={styles.stepWrap}>
-                  <HeroSculpture size={artSize} reduced={reduced} />
-                  <Animated.View
-                    entering={reduced ? undefined : FadeIn.delay(80).duration(320)}
-                    style={styles.copyStack}
-                  >
-                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 28 : 34 }]}>
+                  <WatchmakerEmblem size={isCompact ? 132 : 156} reduced={reduced} />
+
+                  <View style={styles.copyStack}>
+                    <Text style={[styles.eyebrow, { color: color.accent }]}>LULL</Text>
+                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 30 : 36 }]}>
                       Put down the feed
                     </Text>
                     <Text style={[styles.subtitle, { color: color.ink2 }]}>
-                      Pick up something quiet. Calm tactile puzzles, nocturnal soundscapes, and a gentle wind-down curtain built for late nights.
+                      Quiet classic puzzles, nocturnal soundscapes, and a gentle light built for the last hour of your night.
                     </Text>
-                  </Animated.View>
+                  </View>
+
+                  <View style={styles.pillars}>
+                    {[
+                      { icon: Gamepad2, title: '13 quiet games', note: 'In-key audio, zero timers or streaks' },
+                      { icon: Waves, title: 'Neuroacoustic sound', note: 'On-device Theta & Delta descent before bed' },
+                      { icon: Moon, title: 'True OLED night', note: 'Pure black ground that warms before bed' },
+                    ].map(({ icon: Icon, title, note }) => (
+                      <GlassSurface key={title} variant="card" radius={18} style={styles.pillarRow}>
+                        <View style={styles.pillarIcon}>
+                          <Icon size={17} strokeWidth={1.65} color={color.accent} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.pillarTitle, { color: color.ink }]}>{title}</Text>
+                          <Text style={[styles.pillarNote, { color: color.ink3 }]}>{note}</Text>
+                        </View>
+                      </GlassSurface>
+                    ))}
+                  </View>
                 </View>
               )}
 
               {step === 1 && (
                 <View style={styles.stepWrap}>
                   <View style={styles.copyStack}>
-                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 25 : 30 }]}>
+                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 26 : 31 }]}>
                       When do you turn in?
                     </Text>
                     <Text style={[styles.subtitle, { color: color.ink2 }]}>
@@ -429,7 +309,7 @@ export function Onboarding() {
                     compact={isCompact}
                     value={schedule.bedtime}
                     onChange={(bedtime) => {
-                      playCue('tap', 0.25)
+                      playCue('tap', 0.22)
                       setSchedule({ bedtime })
                     }}
                   />
@@ -448,7 +328,7 @@ export function Onboarding() {
                           style={styles.chipPress}
                           onPress={() => {
                             if (hapticsOn) haptics.play('light')
-                            playCue('place', 0.35)
+                            playCue('place', 0.3)
                             setSchedule({ bedtime: t.val })
                           }}
                         >
@@ -472,7 +352,7 @@ export function Onboarding() {
               {step === 2 && (
                 <View style={styles.stepWrap}>
                   <View style={styles.copyStack}>
-                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 25 : 30 }]}>
+                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 26 : 31 }]}>
                       Tune tonight&apos;s light
                     </Text>
                     <Text style={[styles.subtitle, { color: color.ink2 }]}>
@@ -498,15 +378,12 @@ export function Onboarding() {
 
               {step === 3 && (
                 <View style={styles.stepWrap}>
-                  {!isCompact && (
-                    <SoundPulseMedallion size={86} playing={playing} reduced={reduced} />
-                  )}
                   <View style={styles.copyStack}>
-                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 23 : 28 }]}>
+                    <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 26 : 30 }]}>
                       Choose a night sound
                     </Text>
                     <Text style={[styles.subtitle, { color: color.ink2 }]}>
-                      Tap to preview live. Headphones recommended for binaural waves.
+                      Tap any soundscape to preview live. Nothing plays until you ask.
                     </Text>
                   </View>
 
@@ -521,10 +398,8 @@ export function Onboarding() {
                             if (active) {
                               stopSound(0.6)
                             } else {
-                              setIntroMuted(false)
                               set({ sessionPreset: p.id })
                               playPreset(p.id, 30)
-                              playCue('place', 0.3)
                             }
                           }}
                         >
@@ -551,8 +426,27 @@ export function Onboarding() {
                                 </Text>
                               </View>
                             </View>
-                            {p.mix.band ? (
-                              <Headphones size={15} strokeWidth={1.6} color={active ? color.accent : color.ink4} />
+                            {p.badge ? (
+                              <View
+                                style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 999,
+                                  borderWidth: 1,
+                                  borderColor: active ? color.accentDim : 'rgba(255,255,255,0.12)',
+                                  backgroundColor: active ? color.accentWash : 'rgba(255,255,255,0.04)',
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 10.5,
+                                    fontWeight: '600',
+                                    color: active ? color.accent : color.ink3,
+                                  }}
+                                >
+                                  Default
+                                </Text>
+                              </View>
                             ) : null}
                           </GlassSurface>
                         </Pressable>
@@ -560,14 +454,20 @@ export function Onboarding() {
                     })}
                   </View>
 
-                  {playing && (
-                    <View style={styles.volRow}>
-                      <Text style={[styles.volLabel, { color: color.ink3 }]}>Volume</Text>
-                      <View style={{ flex: 1 }}>
-                        <Slider value={volume} onChange={setVolume} label="Preview volume" />
-                      </View>
+                  {/* Fixed-slot volume bar — always occupies its exact height so selecting a sound NEVER jumps the layout */}
+                  <GlassSurface
+                    variant="card"
+                    radius={18}
+                    style={[styles.volBar, { opacity: playing ? 1 : 0.34 }]}
+                  >
+                    <Volume2 size={15} strokeWidth={1.65} color={playing ? color.accent : color.ink3} />
+                    <View style={{ flex: 1 }} pointerEvents={playing ? 'auto' : 'none'}>
+                      <Slider value={volume} onChange={setVolume} label="Preview volume" />
                     </View>
-                  )}
+                    <Text style={[styles.volPct, { color: playing ? color.accent : color.ink3 }]}>
+                      {Math.round(volume * 100)}%
+                    </Text>
+                  </GlassSurface>
                 </View>
               )}
             </Animated.View>
@@ -618,18 +518,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     height: 44,
   },
-  topRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  audioToggle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   dots: {
     flexDirection: 'row',
     gap: 6,
@@ -645,31 +533,29 @@ const styles = StyleSheet.create({
   center: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   stepHost: {
     width: '100%',
   },
   stepWrap: {
     alignItems: 'center',
-    gap: 18,
+    gap: 20,
     width: '100%',
   },
-  heroStage: {
+  emblemWrap: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerAbs: {
+  emblemTile: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  medallionWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  waveRing: {
-    position: 'absolute',
-    borderWidth: 1,
+  eyebrow: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 3.2,
+    marginBottom: 2,
   },
   copyStack: {
     alignItems: 'center',
@@ -677,14 +563,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   heading: {
-    fontWeight: '400',
-    letterSpacing: -0.7,
+    fontWeight: '300',
+    letterSpacing: -0.8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
     textAlign: 'center',
+  },
+  pillars: {
+    width: '100%',
+    gap: 9,
+  },
+  pillarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 13,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
+  },
+  pillarIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: 'rgba(194, 161, 95, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillarTitle: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    letterSpacing: -0.15,
+  },
+  pillarNote: {
+    fontSize: 12.5,
+    marginTop: 2,
   },
   quickRow: {
     width: '100%',
@@ -729,14 +643,14 @@ const styles = StyleSheet.create({
   },
   soundList: {
     width: '100%',
-    gap: 7,
+    gap: 8,
   },
   soundRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     gap: 10,
   },
   soundRowLeft: {
@@ -746,30 +660,34 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   soundIconWrap: {
-    width: 34,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   soundName: {
     fontSize: 14.5,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   soundHint: {
     fontSize: 12,
     marginTop: 1,
   },
-  volRow: {
+  volBar: {
     width: '100%',
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 15,
     gap: 12,
-    paddingHorizontal: 4,
   },
-  volLabel: {
-    fontSize: 13,
-    fontWeight: '500',
+  volPct: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    minWidth: 34,
+    textAlign: 'right',
   },
   footer: {
     flexDirection: 'row',

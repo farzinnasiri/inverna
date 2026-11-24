@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { PRESETS } from '@/core/sound/catalog'
+import { DEFAULT_PRESET_ID, PRESETS } from '@/core/sound/catalog'
+import { harmonicKeyMeta } from '@/core/sound/harmonics'
 import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSettings } from '@/ui/state/settings'
@@ -10,6 +11,7 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
   const { color } = useTokenColors()
   const playing = useSound((s) => s.playing)
   const presetId = useSound((s) => s.presetId)
+  const harmonicKey = useSound((s) => s.harmonicKey)
   const volume = useSound((s) => s.volume)
   const playPreset = useSound((s) => s.playPreset)
   const setVolume = useSound((s) => s.setVolume)
@@ -20,9 +22,10 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
   const sfx = useSettings((s) => s.sfx)
   const haptics = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
+  const keyLabel = harmonicKeyMeta(harmonicKey).label
 
   const toggleAmbient = (on: boolean) => {
-    if (on) playPreset(presetId ?? sessionPreset ?? 'rainfall', sleepTimer)
+    if (on) playPreset(presetId ?? sessionPreset ?? DEFAULT_PRESET_ID, sleepTimer)
     else stop(0.8)
   }
 
@@ -65,7 +68,10 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
       </View>
 
       <View style={[styles.row, { borderBottomColor: color.line }]}>
-        <Text style={[styles.rowLabel, { color: color.ink }]}>Game cues</Text>
+        <View>
+          <Text style={[styles.rowLabel, { color: color.ink }]}>Game cues</Text>
+          <Text style={[styles.caption, { color: color.ink3 }]}>Tuned to {keyLabel}</Text>
+        </View>
         <Toggle
           checked={sfx}
           onChange={(v) => {

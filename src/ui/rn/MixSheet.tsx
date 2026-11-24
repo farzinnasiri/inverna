@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { PanResponder, StyleSheet, Text, View } from 'react-native'
 import { LAYERS, normalizeBand, type LayerId, type Mix, type SleepBandId } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Button, Segmented, Sheet } from './controls'
+import { Button, Segmented, Sheet, Slider } from './controls'
 
 const TONE_OPTIONS: { value: SleepBandId | 'off'; label: string }[] = [
   { value: 'off', label: 'Off' },
@@ -21,7 +21,7 @@ function VerticalFader({
   onChange: (v: number) => void
 }) {
   const { color } = useTokenColors()
-  const heightRef = useRef(132)
+  const heightRef = useRef(126)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
@@ -94,16 +94,21 @@ export function MixSheet({
   const { color } = useTokenColors()
   const activeBand = normalizeBand(mix.band)
   const toneValue: SleepBandId | 'off' = activeBand && mix.bandGain > 0.02 ? activeBand : 'off'
+  const padGain = mix.padGain ?? 0
 
   const setLayer = (id: LayerId, v: number) => {
     onChange({ ...mix, layers: { ...mix.layers, [id]: v } })
+  }
+
+  const setPad = (v: number) => {
+    onChange({ ...mix, padGain: v })
   }
 
   const setTone = (next: SleepBandId | 'off') => {
     if (next === 'off') {
       onChange({ ...mix, band: null })
     } else {
-      onChange({ ...mix, band: next, bandGain: mix.bandGain > 0.02 ? mix.bandGain : 0.35 })
+      onChange({ ...mix, band: next, bandGain: mix.bandGain > 0.02 ? mix.bandGain : 0.42 })
     }
   }
 
@@ -112,7 +117,7 @@ export function MixSheet({
       <View style={styles.head}>
         <Text style={[styles.title, { color: color.ink }]}>Mix</Text>
         <Button size="sm" variant="ghost" onPress={onReset}>
-          Clear
+          Reset
         </Button>
       </View>
 
@@ -127,10 +132,20 @@ export function MixSheet({
         ))}
       </View>
 
+      <View style={styles.padSection}>
+        <View style={styles.sectionHead}>
+          <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Harmonic pad</Text>
+          <Text style={[styles.pctText, { color: padGain > 0.02 ? color.accent : color.ink4 }]}>
+            {Math.round(padGain * 100)}%
+          </Text>
+        </View>
+        <Slider value={padGain} onChange={setPad} label="Harmonic pad level" />
+      </View>
+
       <View style={styles.toneSection}>
-        <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Binaural tone</Text>
+        <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Neural modulation band</Text>
         <Segmented
-          label="Binaural tone"
+          label="Neural modulation band"
           options={TONE_OPTIONS}
           value={toneValue}
           onChange={setTone}
@@ -145,7 +160,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   title: {
     fontSize: 20,
@@ -164,7 +179,7 @@ const styles = StyleSheet.create({
   },
   faderTrack: {
     width: '100%',
-    height: 136,
+    height: 126,
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
@@ -177,8 +192,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
   },
+  padSection: {
+    marginTop: 18,
+    gap: 4,
+  },
+  sectionHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pctText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
   toneSection: {
-    marginTop: 20,
+    marginTop: 14,
     gap: 8,
   },
   sectionLabel: {

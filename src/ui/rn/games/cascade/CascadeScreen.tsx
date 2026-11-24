@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type ComponentType } from 'react'
 import { PanResponder, Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
-import Svg, { Circle, ClipPath, Defs, G, Path, Rect } from 'react-native-svg'
+import Svg, { Circle, ClipPath, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg'
 import { RefreshCw as _RefreshCw, Undo2 as _Undo2 } from 'lucide-react-native'
 import {
   WOBBLE_DURATION_MS,
@@ -64,9 +64,26 @@ const HOW_TO = [
 ] as const
 
 const CANVAS_BOTTOM_OVERFLOW = 96
-const BEZEL_RADIUS = 16
-const TILE_GAP = 1.5
-const TILE_RADIUS = 3
+const BEZEL_RADIUS = 18
+const TILE_GAP = 3
+const TILE_RADIUS = 7
+
+interface JewelStop {
+  top: string
+  bottom: string
+  rim: string
+  sheen: string
+}
+
+const JEWEL_STONES: Record<string, JewelStop> = {
+  clay: { top: '#5B8EC0', bottom: '#2B4C70', rim: '#8BB8E6', sheen: 'rgba(205, 232, 255, 0.34)' },     // Sapphire
+  ochre: { top: '#E0BA6E', bottom: '#96712E', rim: '#F2D69A', sheen: 'rgba(255, 245, 212, 0.38)' },    // Burnished Gold
+  straw: { top: '#5CA586', bottom: '#2B5F4B', rim: '#8CD1B4', sheen: 'rgba(210, 250, 232, 0.32)' },    // Emerald
+  sage: { top: '#C45E6A', bottom: '#782F39', rim: '#E38D97', sheen: 'rgba(255, 215, 220, 0.30)' },     // Garnet
+  rosewood: { top: '#8B7EC2', bottom: '#4D4278', rim: '#B4A9E6', sheen: 'rgba(228, 222, 255, 0.32)' }, // Amethyst
+  stone: { top: '#6D93A3', bottom: '#3B5866', rim: '#9BBCCB', sheen: 'rgba(215, 240, 250, 0.30)' },    // Moon Teal
+  bone: { top: '#CFD7E3', bottom: '#8792A3', rim: '#EDF2FA', sheen: 'rgba(255, 255, 255, 0.42)' },     // Pearl Silver
+}
 
 function isValidCascadeState(v: unknown): v is CascadeState {
   if (!v || typeof v !== 'object') return false
@@ -105,14 +122,13 @@ function extractMeta(state: CascadeState): UiMeta {
 function computeBoardLayout(stageW: number, stageH: number, rows: number, cols: number, bezelPad: number): BoardLayout {
   const innerW = stageW - bezelPad * 2
   const innerH = stageH - bezelPad * 2
-  const cellW = Math.max(0, Math.floor(Math.min(innerW / cols, innerH / rows)))
-  // A slightly taller mosaic uses the portrait stage while retaining compact cells.
-  const cellH = Math.max(0, Math.floor(Math.min(innerH / rows, cellW * 1.32)))
-  const boardW = cellW * cols
-  const boardH = cellH * rows
+  // Crisp square jewel stones so tiles never look stretched or low-quality.
+  const cell = Math.max(0, Math.floor(Math.min(innerW / cols, innerH / rows)))
+  const boardW = cell * cols
+  const boardH = cell * rows
   const boardX = Math.round((stageW - boardW) * 0.5)
   const boardY = Math.round((stageH - boardH) * 0.5)
-  return { boardX, boardY, boardW, boardH, cellW, cellH }
+  return { boardX, boardY, boardW, boardH, cellW: cell, cellH: cell }
 }
 
 function buildPerimeterPath(
@@ -162,7 +178,6 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   const reduceMotion = useReducedMotion()
   const tokens = useTokenColors()
   const { color } = tokens
-  const pieces = { ...tokens.pieces, bone: '#797C82', stone: '#5B6370' }
   const [saved, setSaved] = useGameSave<CascadeSave>('cascade', DEFAULT_SAVE)
 
   const initialStateRef = useRef<CascadeState | null>(null)
@@ -542,12 +557,23 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                       y={boardY - 1}
                       width={boardW + 2}
                       height={boardH + 2}
-                      rx={Math.max(4, BEZEL_RADIUS - bezelPad)}
+                      rx={Math.max(6, BEZEL_RADIUS - bezelPad)}
                     />
                   </ClipPath>
+                  {Object.entries(JEWEL_STONES).map(([k, j]) => (
+                    <LinearGradient key={k} id={`jewel-${k}`} x1="0.15" y1="0" x2="0.85" y2="1">
+                      <Stop offset="0%" stopColor={j.top} />
+                      <Stop offset="100%" stopColor={j.bottom} />
+                    </LinearGradient>
+                  ))}
+                  <LinearGradient id="jewel-sheen" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30" />
+                    <Stop offset="48%" stopColor="#FFFFFF" stopOpacity="0.06" />
+                    <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+                  </LinearGradient>
                 </Defs>
 
-                  {/* Layer 2: Carved-out grid dots + standing Watchmaker mosaic */}
+                  {/* Layer 2: Subtle carved grid dots + luminous faceted jewel stones */}
                   <G clipPath="url(#cascade-board-clip)">
                     {cur.board.map((row, r) =>
                       row.map((cell, c) => {
@@ -557,9 +583,9 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                             key={`dot-${r}-${c}`}
                             cx={boardX + (c + 0.5) * cellW}
                             cy={boardY + (r + 0.5) * cellH}
-                            r={0.9}
+                            r={1}
                             fill={color.ink4}
-                            fillOpacity={0.16}
+                            fillOpacity={0.18}
                           />
                         )
                       }),
@@ -578,16 +604,39 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                         const ty = boardY + tile.y * cellH + inset
                         const key = r * cur.cols + c
                         const inPreview = previewKeys.has(key)
+                        const jewel = JEWEL_STONES[tile.color] ?? JEWEL_STONES.clay
 
                         return (
                           <G key={tile.id}>
+                            {/* Jewel body gradient */}
                             <Rect
                               x={tx}
                               y={ty}
                               width={tileW}
                               height={tileH}
                               rx={TILE_RADIUS}
-                              fill={pieces[tile.color]}
+                              fill={`url(#jewel-${tile.color})`}
+                            />
+                            {/* Soft glass top specular sheen */}
+                            <Rect
+                              x={tx + 1.5}
+                              y={ty + 1.2}
+                              width={Math.max(2, tileW - 3)}
+                              height={Math.max(2, tileH * 0.44)}
+                              rx={Math.max(2, TILE_RADIUS - 1.5)}
+                              fill="url(#jewel-sheen)"
+                            />
+                            {/* Crisp subtle inner rim */}
+                            <Rect
+                              x={tx + 0.6}
+                              y={ty + 0.6}
+                              width={Math.max(1, tileW - 1.2)}
+                              height={Math.max(1, tileH - 1.2)}
+                              rx={Math.max(2, TILE_RADIUS - 0.6)}
+                              fill="none"
+                              stroke={jewel.rim}
+                              strokeOpacity={inPreview ? 0.85 : 0.34}
+                              strokeWidth={inPreview ? 1.3 : 0.85}
                             />
                             {inPreview ? (
                               <Rect
@@ -597,20 +646,9 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                                 height={tileH}
                                 rx={TILE_RADIUS}
                                 fill="#FFFFFF"
-                                fillOpacity={0.085}
+                                fillOpacity={0.14}
                               />
                             ) : null}
-                            <Rect
-                              x={tx + 0.5}
-                              y={ty + 0.5}
-                              width={Math.max(1, tileW - 1)}
-                              height={Math.max(1, tileH - 1)}
-                              rx={Math.max(1, TILE_RADIUS - 0.5)}
-                              fill="none"
-                              stroke="#000000"
-                              strokeOpacity={0.24}
-                              strokeWidth={1}
-                            />
                           </G>
                         )
                       }),
@@ -621,15 +659,15 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                       <Path
                         d={perimeterPath}
                         fill="none"
-                        stroke={color.ink}
-                        strokeOpacity={0.58}
-                        strokeWidth={1.5}
+                        stroke={color.accent}
+                        strokeOpacity={0.9}
+                        strokeWidth={1.8}
                         strokeLinecap="round"
                       />
                     ) : null}
                   </G>
 
-                  {/* Layer 3: Tumbling 2D rigid-body detached tiles (unclipped past bottom bezel) */}
+                  {/* Layer 3: Tumbling 2D rigid-body detached jewel tiles */}
                   {cur.falling.map((f) => {
                     if (f.alpha <= 0.005) return null
                     const cx = boardX + (f.x + 0.5) * cellW
@@ -641,6 +679,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                       ? Math.max(0, f.alpha - Math.max(0, (f.y - cur.rows * 0.2) * 0.06))
                       : f.alpha
                     if (drawAlpha <= 0.005) return null
+                    const jewel = JEWEL_STONES[f.color] ?? JEWEL_STONES.clay
 
                     return (
                       <G
@@ -654,28 +693,26 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                           width={tileW}
                           height={tileH}
                           rx={TILE_RADIUS}
-                          fill={pieces[f.color]}
+                          fill={`url(#jewel-${f.color})`}
                         />
                         <Rect
-                          x={-halfW + 0.5}
-                          y={-halfH + 0.5}
-                          width={Math.max(1, tileW - 1)}
-                          height={Math.max(1, tileH - 1)}
-                          rx={Math.max(1, TILE_RADIUS - 0.5)}
-                          fill="none"
-                          stroke="#000000"
-                          strokeOpacity={0.24}
-                          strokeWidth={1}
+                          x={-halfW + 1.5}
+                          y={-halfH + 1.2}
+                          width={Math.max(2, tileW - 3)}
+                          height={Math.max(2, tileH * 0.44)}
+                          rx={Math.max(2, TILE_RADIUS - 1.5)}
+                          fill="url(#jewel-sheen)"
                         />
                         <Rect
-                          x={-halfW - 0.5}
-                          y={-halfH - 0.5}
-                          width={tileW + 1}
-                          height={tileH + 1}
-                          rx={TILE_RADIUS + 0.5}
+                          x={-halfW + 0.6}
+                          y={-halfH + 0.6}
+                          width={Math.max(1, tileW - 1.2)}
+                          height={Math.max(1, tileH - 1.2)}
+                          rx={Math.max(2, TILE_RADIUS - 0.6)}
                           fill="none"
-                          stroke="#000000"
-                          strokeWidth={1.15}
+                          stroke={jewel.rim}
+                          strokeOpacity={0.45}
+                          strokeWidth={0.9}
                         />
                       </G>
                     )

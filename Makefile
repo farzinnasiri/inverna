@@ -50,11 +50,12 @@ build-ios-preview: ## Cloud-build standalone ad-hoc preview IPA on GitHub Action
 build-ios-testflight: ## Cloud-build signed App Store / TestFlight IPA on GitHub Actions
 	rnd build --platform ios --profile production
 
-submit-testflight: ## Download latest production IPA and submit to TestFlight via asc
-	rnd build:download --platform ios
-	@IPA=$$(ls -t build/*.ipa 2>/dev/null | head -n 1); \
-	if [ -z "$$IPA" ]; then (cd build && unzip -o *.zip); IPA=$$(ls -t build/*.ipa | head -n 1); fi; \
-	rnd submit --platform ios --profile production --path "$$IPA"
+submit-testflight: ## Download latest finished production IPA and submit to TestFlight via asc
+	@BUILD_ID=$$(rnd build:list --platform ios --profile production --status FINISHED --limit 1 --json | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')); const b = Array.isArray(d) ? d[0] : d?.builds?.[0]; console.log(b?.id ?? '');"); \
+	if [ -z "$$BUILD_ID" ]; then echo "No finished production iOS build found"; exit 1; fi; \
+	rm -rf build && mkdir -p build && \
+	rnd build:download --build-id "$$BUILD_ID" --output build/lull.ipa && \
+	rnd submit --platform ios --profile production --path build/lull.ipa
 
 builds: ## List recent React Native Deploy builds
 	rnd build:list
