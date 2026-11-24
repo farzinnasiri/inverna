@@ -48,7 +48,7 @@ export function SoundField({
   ).current
 
   const { width, height } = useWindowDimensions()
-  const size = Math.min(204, Math.max(148, Math.round(Math.min(width - 144, height * 0.24))))
+  const size = Math.min(156, Math.max(118, Math.round(Math.min(width - 180, height * 0.19))))
   const vb = 248
   const c = vb / 2
   const l = mix.layers
@@ -171,12 +171,12 @@ const styles = StyleSheet.create({
   },
   caption: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 14,
     alignItems: 'center',
   },
   stateText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 10.5,
+    fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },

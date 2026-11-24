@@ -32,43 +32,29 @@ export function useNightFilterMetrics(): { warmth: number; dimOpacity: number } 
     applyTokens({ warmth: combined.warmth })
   }, [combined.warmth])
 
-  // Real perceptible dimming across the full slider range (0%..58% black veil) + warm amber wash.
-  const dimOpacity = Math.min(0.62, Math.max(0, combined.dim * 0.88))
+  // Pure black dim veil (0..58%): darkens cleanly without muddy yellow/brown tint.
+  const dimOpacity = Math.min(0.60, Math.max(0, combined.dim * 0.85))
   return { warmth: combined.warmth, dimOpacity }
 }
 
 /**
- * Pure black dim curtain + subtle candlelight warmth veil + OKLab token updater.
- * Rendered inside root AND inside Layer portals so dragging the Light slider inside
- * Onboarding or NightSheet IMMEDIATELY dims and warms the entire visible interface live!
+ * Pure black OLED dim curtain + OKLab token warmth updater.
+ * Ground and Liquid Glass stay pure obsidian (never stained yellow-brown),
+ * while dragging the Night Light slider visibly dims the entire interface live.
  */
 export function NightFilterOverlay() {
-  const { warmth, dimOpacity } = useNightFilterMetrics()
-  const warmVeilOpacity = Math.min(0.14, Math.max(0, warmth * 0.12))
-
-  if (dimOpacity <= 0.005 && warmVeilOpacity <= 0.005) return null
+  const { dimOpacity } = useNightFilterMetrics()
+  if (dimOpacity <= 0.005) return null
 
   return (
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.curtain]}>
-      {warmVeilOpacity > 0.005 ? (
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: '#5C330A', opacity: warmVeilOpacity },
-          ]}
-        />
-      ) : null}
-      {dimOpacity > 0.005 ? (
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: '#000000', opacity: dimOpacity },
-          ]}
-        />
-      ) : null}
-    </View>
+    <View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        styles.curtain,
+        { backgroundColor: '#000000', opacity: dimOpacity },
+      ]}
+    />
   )
 }
 

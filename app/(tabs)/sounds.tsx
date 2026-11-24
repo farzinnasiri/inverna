@@ -33,18 +33,18 @@ const TIMER_OPTIONS = [
 ] as const
 
 function SoundGlyph({ id, color }: { id: string; color: string }) {
-  if (id === 'rainfall' || id === 'theta-rain') return <CloudRain size={17} strokeWidth={1.65} color={color} />
-  if (id === 'low-tide') return <Waves size={17} strokeWidth={1.65} color={color} />
-  if (id === 'hearth') return <Flame size={17} strokeWidth={1.65} color={color} />
-  if (id === 'deep-drift') return <Sparkles size={17} strokeWidth={1.65} color={color} />
-  return <Wind size={17} strokeWidth={1.65} color={color} />
+  if (id === 'rainfall' || id === 'theta-rain') return <CloudRain size={16} strokeWidth={1.65} color={color} />
+  if (id === 'low-tide') return <Waves size={16} strokeWidth={1.65} color={color} />
+  if (id === 'hearth') return <Flame size={16} strokeWidth={1.65} color={color} />
+  if (id === 'deep-drift') return <Sparkles size={16} strokeWidth={1.65} color={color} />
+  return <Wind size={16} strokeWidth={1.65} color={color} />
 }
 
 /**
- * All-in-one Sound Sanctuary:
- * - Zero horizontal clipping strip: all 5 soundscapes (+ Custom when created) are visible at once.
- * - Live breathing SoundField orb for play/pause.
- * - Always-visible Master Volume slider + clear fade-out timer + Mix studio.
+ * All-in-one Sound Sanctuary — engineered so every single control
+ * (header, breathing dial, all 5 soundscapes, Volume bar, Fade timer, and Mix)
+ * sits comfortably ABOVE the floating TabIsland at default scroll y = 0
+ * across iPhone SE, iPhone Pro, and iPhone Pro Max.
  */
 export default function SoundsScreen() {
   const { insets, isCompact, sideMargin } = useResponsiveLayout()
@@ -135,19 +135,20 @@ export default function SoundsScreen() {
           styles.content,
           {
             paddingHorizontal: sideMargin,
-            paddingTop: insets.top + (isCompact ? 8 : 16),
-            paddingBottom: Math.max(insets.bottom, 16) + 104,
+            paddingTop: insets.top + (isCompact ? 6 : 12),
+            paddingBottom: Math.max(insets.bottom, 10) + 84,
           },
         ]}
         showsVerticalScrollIndicator={false}
+        bounces={false}
       >
-        <View style={[styles.frame, { gap: isCompact ? 14 : 18 }]}>
-          {/* Header */}
+        <View style={[styles.frame, { gap: isCompact ? 10 : 13 }]}>
+          {/* Compact header */}
           <View style={styles.head}>
-            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 24 : 28 }]}>
+            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 22 : 26 }]}>
               {currentItem.name}
             </Text>
-            <Text style={[styles.sub, { color: color.ink2 }]}>
+            <Text style={[styles.sub, { color: color.ink2 }]} numberOfLines={1}>
               {playing
                 ? sleepTimer > 0
                   ? `Playing · fades out in ${sleepTimer}m`
@@ -156,7 +157,7 @@ export default function SoundsScreen() {
             </Text>
           </View>
 
-          {/* Compact tactile breathing dial */}
+          {/* Compact breathing dial */}
           <View style={styles.dialWrap}>
             <SoundField
               mix={displayMix}
@@ -167,8 +168,8 @@ export default function SoundsScreen() {
             />
           </View>
 
-          {/* All soundscapes visible together — zero horizontal clipping */}
-          <View style={styles.grid}>
+          {/* All soundscapes visible together */}
+          <View style={[styles.grid, { gap: isCompact ? 7 : 8 }]}>
             {items.map((item) => {
               const selected = item.id === currentItem.id
               const live = playing && selected
@@ -186,46 +187,44 @@ export default function SoundsScreen() {
                 >
                   <GlassSurface
                     variant="card"
-                    radius={18}
+                    radius={16}
                     accent={live || selected}
                     interactive
-                    style={styles.presetCard}
+                    style={[styles.presetCard, { minHeight: isCompact ? 54 : 60 }]}
                   >
                     <View style={styles.presetTop}>
-                      <SoundGlyph id={item.id} color={live || selected ? color.accent : color.ink2} />
+                      <View style={styles.presetTitleRow}>
+                        <SoundGlyph id={item.id} color={live || selected ? color.accent : color.ink2} />
+                        <Text
+                          numberOfLines={1}
+                          style={[styles.presetName, { color: live || selected ? color.ink : color.ink2 }]}
+                        >
+                          {item.name}
+                        </Text>
+                      </View>
                       {item.binaural ? (
-                        <Headphones size={13} strokeWidth={1.65} color={live ? color.accent : color.ink3} />
+                        <Headphones size={12} strokeWidth={1.65} color={live ? color.accent : color.ink3} />
                       ) : null}
                     </View>
-                    <View>
-                      <Text
-                        numberOfLines={1}
-                        style={[styles.presetName, { color: live || selected ? color.ink : color.ink2 }]}
-                      >
-                        {item.name}
-                      </Text>
-                      <Text numberOfLines={2} style={[styles.presetHint, { color: color.ink3 }]}>
-                        {live ? 'Playing' : item.hint}
-                      </Text>
-                    </View>
+                    <Text numberOfLines={1} style={[styles.presetHint, { color: color.ink3 }]}>
+                      {live ? 'Playing' : item.hint}
+                    </Text>
                   </GlassSurface>
                 </Pressable>
               )
             })}
           </View>
 
-          {/* Always-visible Volume slider + Timer & Mix controls */}
-          <GlassSurface variant="card" radius={20} style={styles.volumeCard}>
-            <View style={styles.volHead}>
-              <View style={styles.volTitleRow}>
-                <Volume2 size={15} strokeWidth={1.65} color={color.ink2} />
-                <Text style={[styles.volLabel, { color: color.ink2 }]}>Volume</Text>
-              </View>
-              <Text style={[styles.volPct, { color: color.accent }]}>{Math.round(volume * 100)}%</Text>
+          {/* Sleek single-row inline Volume bar */}
+          <GlassSurface variant="card" radius={18} style={styles.volumeBar}>
+            <Volume2 size={15} strokeWidth={1.65} color={color.ink2} />
+            <View style={{ flex: 1 }}>
+              <Slider value={volume} onChange={setVolume} label="Soundscape volume" />
             </View>
-            <Slider value={volume} onChange={setVolume} label="Soundscape volume" />
+            <Text style={[styles.volPct, { color: color.accent }]}>{Math.round(volume * 100)}%</Text>
           </GlassSurface>
 
+          {/* Timer + Mix controls cleanly positioned ABOVE TabIsland */}
           <View style={styles.pillRow}>
             <Pressable
               onPress={() => {
@@ -234,7 +233,7 @@ export default function SoundsScreen() {
               }}
               style={({ pressed }) => [{ flex: 1, opacity: pressed ? 0.85 : 1 }]}
             >
-              <GlassSurface variant="pill" radius={21} interactive style={styles.pillBtn}>
+              <GlassSurface variant="pill" radius={20} interactive style={styles.pillBtn}>
                 <Timer size={15} strokeWidth={1.65} color={color.accent} />
                 <Text style={[styles.pillText, { color: color.ink }]} numberOfLines={1}>
                   {timerLabel}
@@ -249,7 +248,7 @@ export default function SoundsScreen() {
               }}
               style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
             >
-              <GlassSurface variant="pill" radius={21} interactive style={[styles.pillBtn, { paddingHorizontal: 20 }]}>
+              <GlassSurface variant="pill" radius={20} interactive style={[styles.pillBtn, { paddingHorizontal: 20 }]}>
                 <SlidersHorizontal size={15} strokeWidth={1.65} color={color.ink2} />
                 <Text style={[styles.pillText, { color: color.ink }]}>Mix</Text>
               </GlassSurface>
@@ -305,6 +304,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   frame: {
     width: '100%',
@@ -313,92 +313,84 @@ const styles = StyleSheet.create({
   },
   head: {
     alignItems: 'center',
-    gap: 3,
+    gap: 2,
   },
   heading: {
     fontWeight: '400',
-    letterSpacing: -0.7,
+    letterSpacing: -0.6,
   },
   sub: {
-    fontSize: 13.5,
+    fontSize: 13,
   },
   dialWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginVertical: 2,
   },
   grid: {
     width: '100%',
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 9,
   },
   cardWrap: {
     width: '48.5%',
     flexGrow: 1,
   },
   presetCard: {
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-    gap: 8,
-    minHeight: 74,
-    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 4,
+    justifyContent: 'center',
   },
   presetTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 6,
+  },
+  presetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flex: 1,
   },
   presetName: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '600',
     letterSpacing: -0.15,
   },
   presetHint: {
     fontSize: 11.5,
-    marginTop: 1,
   },
-  volumeCard: {
+  volumeBar: {
     width: '100%',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-    gap: 2,
-  },
-  volHead: {
+    height: 46,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  volTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  volLabel: {
-    fontSize: 13,
-    fontWeight: '500',
+    paddingHorizontal: 14,
+    gap: 12,
   },
   volPct: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
+    minWidth: 34,
+    textAlign: 'right',
   },
   pillRow: {
     width: '100%',
     flexDirection: 'row',
-    gap: 9,
+    gap: 8,
   },
   pillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    height: 44,
-    paddingHorizontal: 16,
+    height: 40,
+    paddingHorizontal: 14,
   },
   pillText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '500',
   },
 })

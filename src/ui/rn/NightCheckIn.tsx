@@ -147,7 +147,7 @@ export function NightCheckIn() {
         <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} accessibilityLabel="Dismiss check-in" />
 
         <Animated.View style={[styles.wrap, cardAnimStyle]}>
-          <GlassSurface variant="elevated" radius={28} accent style={styles.card}>
+          <GlassSurface variant="elevated" radius={28} style={styles.card}>
             <View style={styles.stepDots}>
               {[0, 1].map((idx) => (
                 <View

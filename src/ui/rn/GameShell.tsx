@@ -259,7 +259,7 @@ export function GameShell({
                 accessibilityLabel={`Begin ${meta.name}`}
                 style={StyleSheet.absoluteFill}
               />
-              <GlassSurface variant="elevated" radius={26} accent style={styles.readyCard}>
+              <GlassSurface variant="elevated" radius={26} style={styles.readyCard}>
                 <Text style={[styles.readyTitle, { color: color.ink }]}>{meta.name}</Text>
                 <Text style={[styles.readySub, { color: color.ink2 }]}>
                   {readyHint ?? howTo[0] ?? meta.classic}

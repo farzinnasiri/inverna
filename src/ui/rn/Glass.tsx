@@ -29,7 +29,7 @@ let cachedBinding: NativeGlassBinding | null | undefined
  * Safely detects whether Apple's native iOS 26 Liquid Glass module (`expo-glass-effect`)
  * is compiled into the current native binary AND supported by the OS.
  */
-function getNativeGlassBinding(): NativeGlassBinding | null {
+export function getNativeGlassBinding(): NativeGlassBinding | null {
   if (cachedBinding !== undefined) return cachedBinding
   if (Platform.OS !== 'ios') {
     cachedBinding = null
@@ -61,8 +61,8 @@ function getNativeGlassBinding(): NativeGlassBinding | null {
 }
 
 /**
- * Calibrated translucent obsidian glass values so luminous AmbientBackdrop blooms
- * subtly refract through cards & floating chrome instead of reading as muddy opaque gray.
+ * Pure obsidian-silver Liquid Glass surfaces — zero muddy yellow/brown tint.
+ * Antique brass accent lives cleanly on crisp borders, icons, and typography only.
  */
 const VARIANT_CONFIG: Record<
   GlassVariant,
@@ -78,41 +78,38 @@ const VARIANT_CONFIG: Record<
   chrome: {
     iosIntensity: 48,
     iosBg: 'rgba(18, 20, 26, 0.44)',
-    webBg: 'rgba(16, 18, 24, 0.72)',
-    nativeTint: 'rgba(18, 20, 26, 0.28)',
+    webBg: 'rgba(16, 18, 24, 0.74)',
+    nativeTint: 'rgba(18, 20, 26, 0.24)',
     nativeStyle: 'regular',
     border: 'rgba(255, 255, 255, 0.14)',
   },
   card: {
     iosIntensity: 26,
-    iosBg: 'rgba(15, 17, 23, 0.52)',
-    webBg: 'rgba(14, 16, 22, 0.68)',
-    nativeTint: 'rgba(16, 18, 24, 0.36)',
+    iosBg: 'rgba(15, 17, 23, 0.54)',
+    webBg: 'rgba(14, 16, 22, 0.70)',
+    nativeTint: 'rgba(16, 18, 24, 0.34)',
     nativeStyle: 'clear',
     border: 'rgba(255, 255, 255, 0.10)',
   },
   elevated: {
     iosIntensity: 58,
-    iosBg: 'rgba(20, 22, 29, 0.68)',
-    webBg: 'rgba(18, 20, 27, 0.88)',
-    nativeTint: 'rgba(22, 24, 32, 0.48)',
+    iosBg: 'rgba(18, 20, 26, 0.76)',
+    webBg: 'rgba(16, 18, 24, 0.90)',
+    nativeTint: 'rgba(18, 20, 26, 0.52)',
     nativeStyle: 'regular',
-    border: 'rgba(255, 255, 255, 0.16)',
+    border: 'rgba(255, 255, 255, 0.15)',
   },
   pill: {
     iosIntensity: 38,
     iosBg: 'rgba(20, 22, 29, 0.48)',
-    webBg: 'rgba(18, 20, 27, 0.74)',
-    nativeTint: 'rgba(20, 22, 29, 0.32)',
+    webBg: 'rgba(18, 20, 27, 0.76)',
+    nativeTint: 'rgba(20, 22, 29, 0.30)',
     nativeStyle: 'regular',
     border: 'rgba(255, 255, 255, 0.13)',
   },
 }
 
-const ACCENT_BORDER = 'rgba(194, 161, 95, 0.56)'
-const ACCENT_TINT = 'rgba(194, 161, 95, 0.16)'
-const ACCENT_BG_IOS = 'rgba(34, 28, 18, 0.58)'
-const ACCENT_BG_WEB = 'rgba(32, 26, 17, 0.74)'
+const ACCENT_BORDER = 'rgba(194, 161, 95, 0.46)'
 
 const WEB_GLASS_STYLE =
   Platform.OS === 'web'
@@ -171,7 +168,7 @@ export function GlassSurface({
         glassEffectStyle={cfg.nativeStyle}
         colorScheme="dark"
         isInteractive={interactive}
-        tintColor={accent ? ACCENT_TINT : cfg.nativeTint}
+        tintColor={cfg.nativeTint}
         style={[
           styles.nativeBase,
           {
@@ -196,13 +193,7 @@ export function GlassSurface({
         {
           borderRadius: radius,
           borderCurve: 'continuous',
-          backgroundColor: accent
-            ? Platform.OS === 'ios'
-              ? ACCENT_BG_IOS
-              : ACCENT_BG_WEB
-            : Platform.OS === 'ios'
-              ? cfg.iosBg
-              : cfg.webBg,
+          backgroundColor: Platform.OS === 'ios' ? cfg.iosBg : cfg.webBg,
           borderColor: accent ? ACCENT_BORDER : cfg.border,
         },
         style,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Animated,
   Easing,
@@ -13,6 +13,14 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import Reanimated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import { Check, Moon, Sun } from 'lucide-react-native'
@@ -185,7 +193,7 @@ export function HoldButton({ label, onConfirm }: { label: string; onConfirm: () 
   )
 }
 
-/* --- Tactile Liquid Glass LightSlider (with physical thumb & readout) --- */
+/* --- Continuous 120fps Reanimated LightSlider ---------------------------- */
 
 function lightMoodLabel(light: number): string {
   if (light < 0.2) return 'Clear'
@@ -193,6 +201,9 @@ function lightMoodLabel(light: number): string {
   if (light < 0.78) return 'Candlelight'
   return 'Deep ember'
 }
+
+const LIGHT_THUMB_W = 24
+const LIGHT_PAD = 6
 
 export function LightSlider({
   value,
@@ -205,108 +216,170 @@ export function LightSlider({
 }) {
   const { color } = useTokenColors()
   const hapticsOn = useSettings((s) => s.haptics)
-  const [trackW, setTrackW] = useState(300)
-  const widthRef = useRef(300)
-  const lastStepRef = useRef(Math.round((1 - value) * 10))
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const hapticsRef = useRef(hapticsOn)
   hapticsRef.current = hapticsOn
+  const lastEmitMsRef = useRef(0)
+  const lastHapticTickRef = useRef(Math.round((1 - value) * 10))
 
-  const brightness = Math.min(1, Math.max(0, 1 - value))
-  const pct = Math.round(brightness * 100)
-  const thumbW = 24
-  const pad = 6
-  const usableW = Math.max(1, trackW - pad * 2 - thumbW)
-  const thumbX = pad + brightness * usableW
+  const brightnessSV = useSharedValue(Math.min(1, Math.max(0, 1 - value)))
+  const trackWidthSV = useSharedValue(300)
+  const draggingSV = useSharedValue(0)
+  const [liveBrightness, setLiveBrightness] = useState(() => Math.min(1, Math.max(0, 1 - value)))
 
-  const updateFromX = (x: number) => {
-    const w = Math.max(1, widthRef.current - pad * 2)
-    const b = Math.min(1, Math.max(0, (x - pad) / w))
-    const nextLight = Math.round((1 - b) * 50) / 50
-    const step10 = Math.round(b * 10)
-    if (step10 !== lastStepRef.current) {
-      lastStepRef.current = step10
+  useEffect(() => {
+    const nextB = Math.min(1, Math.max(0, 1 - value))
+    if (draggingSV.get() === 0) {
+      brightnessSV.set(nextB)
+      setLiveBrightness(nextB)
+    }
+  }, [value, brightnessSV, draggingSV])
+
+  const emitChange = (nextB: number, force: boolean) => {
+    const now = Date.now()
+    const clampedB = Math.min(1, Math.max(0, nextB))
+    const tick10 = Math.round(clampedB * 10)
+    if (tick10 !== lastHapticTickRef.current) {
+      lastHapticTickRef.current = tick10
       if (hapticsRef.current) haptics.play('light')
     }
-    onChangeRef.current(nextLight)
+    if (!force && now - lastEmitMsRef.current < 28) return
+    lastEmitMsRef.current = now
+    setLiveBrightness(clampedB)
+    // Smooth 1% resolution (100 steps) — zero janky stepping.
+    onChangeRef.current(Math.round((1 - clampedB) * 100) / 100)
   }
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => updateFromX(e.nativeEvent.locationX),
-      onPanResponderMove: (e) => updateFromX(e.nativeEvent.locationX),
-    }),
-  ).current
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(0)
+        .onBegin((e) => {
+          'worklet'
+          draggingSV.set(1)
+          const usable = Math.max(1, trackWidthSV.get() - LIGHT_PAD * 2 - LIGHT_THUMB_W)
+          const nextB = Math.min(1, Math.max(0, (e.x - LIGHT_PAD - LIGHT_THUMB_W * 0.5) / usable))
+          brightnessSV.set(nextB)
+          scheduleOnRN(emitChange, nextB, true)
+        })
+        .onUpdate((e) => {
+          'worklet'
+          const usable = Math.max(1, trackWidthSV.get() - LIGHT_PAD * 2 - LIGHT_THUMB_W)
+          const nextB = Math.min(1, Math.max(0, (e.x - LIGHT_PAD - LIGHT_THUMB_W * 0.5) / usable))
+          brightnessSV.set(nextB)
+          scheduleOnRN(emitChange, nextB, false)
+        })
+        .onFinalize(() => {
+          'worklet'
+          const finalB = brightnessSV.get()
+          draggingSV.set(0)
+          scheduleOnRN(emitChange, finalB, true)
+        }),
+    [brightnessSV, draggingSV, trackWidthSV],
+  )
+
+  const fillStyle = useAnimatedStyle(() => {
+    const usable = Math.max(1, trackWidthSV.get() - LIGHT_PAD * 2 - LIGHT_THUMB_W)
+    const x = LIGHT_PAD + brightnessSV.get() * usable
+    return {
+      width: Math.max(LIGHT_THUMB_W + LIGHT_PAD * 2, x + LIGHT_THUMB_W + LIGHT_PAD),
+    }
+  })
+
+  const thumbStyle = useAnimatedStyle(() => {
+    const usable = Math.max(1, trackWidthSV.get() - LIGHT_PAD * 2 - LIGHT_THUMB_W)
+    const x = LIGHT_PAD + brightnessSV.get() * usable
+    const active = draggingSV.get() === 1
+    return {
+      transform: [
+        { translateX: x },
+        {
+          scale: withSpring(active ? 1.08 : 1, {
+            duration: 180,
+            dampingRatio: 0.8,
+            reduceMotion: ReduceMotion.System,
+          }),
+        },
+      ],
+    }
+  })
+
+  const pct = Math.round(liveBrightness * 100)
+  const liveLight = 1 - liveBrightness
 
   return (
     <View style={styles.lightOuter}>
-      <View
-        {...panResponder.panHandlers}
-        onLayout={(e: LayoutChangeEvent) => {
-          widthRef.current = e.nativeEvent.layout.width
-          setTrackW(e.nativeEvent.layout.width)
-        }}
-        accessibilityRole="adjustable"
-        accessibilityLabel={`${label}, ${pct} percent`}
-        style={[
-          styles.lightSlider,
-          {
-            backgroundColor: 'rgba(18, 20, 26, 0.86)',
-            borderColor: 'rgba(255, 255, 255, 0.14)',
-            borderCurve: 'continuous',
-          },
-        ]}
-      >
-        {/* Warm golden-brass luminous fill */}
+      <GestureDetector gesture={panGesture}>
         <View
-          pointerEvents="none"
+          onLayout={(e: LayoutChangeEvent) => {
+            trackWidthSV.set(Math.max(1, e.nativeEvent.layout.width))
+          }}
+          accessibilityRole="adjustable"
+          accessibilityLabel={`${label}, ${pct} percent`}
           style={[
-            styles.lightSliderFill,
+            styles.lightSlider,
             {
-              width: Math.max(thumbW + pad * 2, thumbX + thumbW + pad),
-              backgroundColor: 'rgba(194, 161, 95, 0.24)',
-              borderCurve: 'continuous',
-            },
-          ]}
-        />
-
-        {/* End icons */}
-        <View pointerEvents="none" style={styles.lightEndLeft}>
-          <Moon size={16} strokeWidth={1.65} color={color.ink3} />
-        </View>
-        <View pointerEvents="none" style={styles.lightEndRight}>
-          <Sun size={17} strokeWidth={1.65} color={color.accent} style={{ opacity: 0.45 + brightness * 0.55 }} />
-        </View>
-
-        {/* Tactile brass-rimmed thumb */}
-        <View
-          pointerEvents="none"
-          style={[
-            styles.lightThumb,
-            {
-              left: thumbX,
-              backgroundColor: color.accent,
-              borderColor: 'rgba(255, 245, 224, 0.45)',
+              backgroundColor: 'rgba(16, 18, 24, 0.88)',
+              borderColor: 'rgba(255, 255, 255, 0.14)',
               borderCurve: 'continuous',
             },
           ]}
         >
-          <View style={styles.lightThumbGrip} />
+          {/* Smooth UI-thread luminous fill */}
+          <Reanimated.View
+            pointerEvents="none"
+            style={[
+              styles.lightSliderFill,
+              {
+                backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                borderCurve: 'continuous',
+              },
+              fillStyle,
+            ]}
+          />
+
+          <View pointerEvents="none" style={styles.lightEndLeft}>
+            <Moon size={16} strokeWidth={1.65} color={color.ink3} />
+          </View>
+          <View pointerEvents="none" style={styles.lightEndRight}>
+            <Sun
+              size={17}
+              strokeWidth={1.65}
+              color={color.accent}
+              style={{ opacity: 0.4 + liveBrightness * 0.6 }}
+            />
+          </View>
+
+          {/* Smooth 120fps UI-thread physical thumb */}
+          <Reanimated.View
+            pointerEvents="none"
+            style={[
+              styles.lightThumb,
+              {
+                backgroundColor: color.ink,
+                borderColor: 'rgba(255, 255, 255, 0.45)',
+                borderCurve: 'continuous',
+              },
+              thumbStyle,
+            ]}
+          >
+            <View style={styles.lightThumbGrip} />
+          </Reanimated.View>
         </View>
-      </View>
+      </GestureDetector>
 
       <View style={styles.lightMetaRow}>
-        <Text style={[styles.lightMetaStage, { color: color.ink2 }]}>{lightMoodLabel(value)}</Text>
+        <Text style={[styles.lightMetaStage, { color: color.ink2 }]}>{lightMoodLabel(liveLight)}</Text>
         <Text style={[styles.lightMetaPct, { color: color.accent }]}>{pct}% in-app light</Text>
       </View>
     </View>
   )
 }
 
-/* --- Horizontal Slider --------------------------------------------------- */
+/* --- Continuous 120fps Reanimated Horizontal Slider ---------------------- */
+
+const SLIDER_THUMB = 20
 
 export function Slider({
   value,
@@ -320,63 +393,111 @@ export function Slider({
   dimmed?: boolean
 }) {
   const { color } = useTokenColors()
-  const [trackW, setTrackW] = useState(260)
-  const widthRef = useRef(260)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const lastEmitMsRef = useRef(0)
 
-  const clamped = Math.min(1, Math.max(0, value))
+  const valSV = useSharedValue(Math.min(1, Math.max(0, value)))
+  const widthSV = useSharedValue(240)
+  const draggingSV = useSharedValue(0)
 
-  const updateFromX = (x: number) => {
-    const w = Math.max(1, widthRef.current)
-    const next = Math.round(Math.min(1, Math.max(0, x / w)) * 100) / 100
-    onChangeRef.current(next)
+  useEffect(() => {
+    if (draggingSV.get() === 0) {
+      valSV.set(Math.min(1, Math.max(0, value)))
+    }
+  }, [value, valSV, draggingSV])
+
+  const emitVal = (next: number, force: boolean) => {
+    const now = Date.now()
+    if (!force && now - lastEmitMsRef.current < 24) return
+    lastEmitMsRef.current = now
+    onChangeRef.current(Math.round(Math.min(1, Math.max(0, next)) * 100) / 100)
   }
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => updateFromX(e.nativeEvent.locationX),
-      onPanResponderMove: (e) => updateFromX(e.nativeEvent.locationX),
-    }),
-  ).current
+  const pan = useMemo(
+    () =>
+      Gesture.Pan()
+        .minDistance(0)
+        .onBegin((e) => {
+          'worklet'
+          draggingSV.set(1)
+          const usable = Math.max(1, widthSV.get() - SLIDER_THUMB)
+          const next = Math.min(1, Math.max(0, (e.x - SLIDER_THUMB * 0.5) / usable))
+          valSV.set(next)
+          scheduleOnRN(emitVal, next, true)
+        })
+        .onUpdate((e) => {
+          'worklet'
+          const usable = Math.max(1, widthSV.get() - SLIDER_THUMB)
+          const next = Math.min(1, Math.max(0, (e.x - SLIDER_THUMB * 0.5) / usable))
+          valSV.set(next)
+          scheduleOnRN(emitVal, next, false)
+        })
+        .onFinalize(() => {
+          'worklet'
+          const finalV = valSV.get()
+          draggingSV.set(0)
+          scheduleOnRN(emitVal, finalV, true)
+        }),
+    [valSV, widthSV, draggingSV],
+  )
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: Math.max(0, valSV.get() * widthSV.get()),
+  }))
+
+  const thumbStyle = useAnimatedStyle(() => {
+    const usable = Math.max(0, widthSV.get() - SLIDER_THUMB)
+    const active = draggingSV.get() === 1
+    return {
+      transform: [
+        { translateX: valSV.get() * usable },
+        {
+          scale: withSpring(active ? 1.15 : 1, {
+            duration: 160,
+            dampingRatio: 0.78,
+            reduceMotion: ReduceMotion.System,
+          }),
+        },
+      ],
+    }
+  })
 
   return (
-    <View
-      {...panResponder.panHandlers}
-      onLayout={(e) => {
-        widthRef.current = e.nativeEvent.layout.width
-        setTrackW(e.nativeEvent.layout.width)
-      }}
-      accessibilityRole="adjustable"
-      accessibilityLabel={label}
-      style={styles.sliderWrap}
-    >
-      <View pointerEvents="none" style={[styles.sliderTrack, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
-        <View
+    <GestureDetector gesture={pan}>
+      <View
+        onLayout={(e) => {
+          widthSV.set(Math.max(1, e.nativeEvent.layout.width))
+        }}
+        accessibilityRole="adjustable"
+        accessibilityLabel={label}
+        style={styles.sliderWrap}
+      >
+        <View pointerEvents="none" style={[styles.sliderTrack, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
+          <Reanimated.View
+            style={[
+              styles.sliderFill,
+              {
+                backgroundColor: color.accent,
+                opacity: dimmed ? 0.3 : 1,
+              },
+              fillStyle,
+            ]}
+          />
+        </View>
+        <Reanimated.View
+          pointerEvents="none"
           style={[
-            styles.sliderFill,
+            styles.sliderThumb,
             {
-              backgroundColor: color.accent,
-              width: `${clamped * 100}%`,
-              opacity: dimmed ? 0.3 : 1,
+              backgroundColor: color.ink,
+              borderColor: 'rgba(0,0,0,0.28)',
             },
+            thumbStyle,
           ]}
         />
       </View>
-      <View
-        pointerEvents="none"
-        style={[
-          styles.sliderThumb,
-          {
-            backgroundColor: color.ink,
-            borderColor: 'rgba(0,0,0,0.28)',
-            transform: [{ translateX: Math.max(0, Math.min(trackW - 22, clamped * (trackW - 22))) }],
-          },
-        ]}
-      />
-    </View>
+    </GestureDetector>
   )
 }
 
@@ -419,15 +540,15 @@ export function Segmented<T extends string | number>({
               styles.segOpt,
               active
                 ? {
-                    backgroundColor: 'rgba(194, 161, 95, 0.18)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(194, 161, 95, 0.45)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                    borderWidth: StyleSheet.hairlineWidth,
+                    borderColor: 'rgba(255, 255, 255, 0.22)',
                     borderCurve: 'continuous',
                   }
                 : null,
             ]}
           >
-            <Text style={[styles.segText, { color: active ? color.accent : color.ink3 }]}>{o.label}</Text>
+            <Text style={[styles.segText, { color: active ? color.ink : color.ink3 }]}>{o.label}</Text>
           </Pressable>
         )
       })}
@@ -559,7 +680,7 @@ export function Sheet({
   const dismissResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 12 && Math.abs(g.dy) > Math.abs(g.dx),
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 14 && Math.abs(g.dy) > Math.abs(g.dx) * 1.3,
       onPanResponderMove: (_, g) => {
         if (g.dy > 0) translateY.setValue(g.dy)
       },
@@ -668,7 +789,8 @@ const styles = StyleSheet.create({
   },
   lightThumb: {
     position: 'absolute',
-    width: 24,
+    left: 0,
+    width: LIGHT_THUMB_W,
     height: 36,
     borderRadius: 10,
     borderWidth: 1,
@@ -697,12 +819,12 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   sliderWrap: {
-    height: 36,
+    height: 32,
     width: '100%',
     justifyContent: 'center',
   },
   sliderTrack: {
-    height: 5,
+    height: 4,
     width: '100%',
     borderRadius: 99,
     overflow: 'hidden',
@@ -713,9 +835,9 @@ const styles = StyleSheet.create({
   sliderThumb: {
     position: 'absolute',
     left: 0,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: SLIDER_THUMB,
+    height: SLIDER_THUMB,
+    borderRadius: SLIDER_THUMB / 2,
     borderWidth: 1,
   },
   seg: {
