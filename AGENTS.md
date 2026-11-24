@@ -7,7 +7,7 @@ Read `docs/ARCHITECTURE.md`, `docs/DESIGN.md`, and `docs/REDESIGN_V2.md` before 
 ## Commands
 
 ```bash
-make dev          # Expo Metro web server on http://localhost:8081
+make dev          # Run Lull through Portless (named local URL + LAN Metro)
 make start        # Expo Metro for Expo Go / phone over LAN
 make check        # pnpm typecheck (app + zero-DOM src/core) + pnpm test (vitest)
 make build-web    # export static Expo web PWA into dist/

@@ -8,8 +8,8 @@ No backend, no accounts, no ads, no streaks, no leaderboards. Everything lives o
 
 ```bash
 make install      # pnpm install
-make dev          # Expo Metro web server on http://localhost:8081 (LAN-reachable)
-make start        # Expo Metro for Expo Go / iPhone over LAN
+make dev          # Run Lull through Portless (named local URL + LAN Metro for Expo Go)
+make start        # Expo Metro directly for Expo Go / iPhone over LAN
 make ios          # Launch on iOS Simulator
 make android      # Launch on Android Emulator
 ```

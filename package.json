@@ -7,7 +7,8 @@
   "packageManager": "pnpm@12.16.1",
   "scripts": {
     "start": "expo start --lan",
-    "dev": "expo start --web --lan",
+    "dev": "node scripts/dev-portless.mjs",
+    "dev:portless": "node scripts/dev-portless.mjs",
     "web": "expo start --web --lan",
     "ios": "expo start --ios",
     "android": "expo start --android",

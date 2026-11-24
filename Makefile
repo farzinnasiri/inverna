@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 PORT ?= 8081
 
-.PHONY: help install dev web start expo ios android check typecheck test sounds build-web deploy doctor
+.PHONY: help install dev dev-portless web start expo ios android check typecheck test sounds build-web deploy doctor
 
 help: ## List available commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "make %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -13,12 +13,15 @@ install: ## Install dependencies with pnpm
 
 # --- Develop --------------------------------------------------------------
 
-dev: web ## Start Expo Metro web server on :8081 (reachable on LAN too)
+dev: dev-portless ## Run Lull through Portless (named local URL + LAN Metro for Expo Go)
 
-web: ## Start Expo web dev server (http://localhost:8081)
+dev-portless: ## Run Lull through Portless (auto-picks a free Metro port, works alongside other apps)
+	node scripts/dev-portless.mjs
+
+web: ## Start Expo web dev server directly on PORT (default 8081)
 	pnpm exec expo start --web --lan --port $(PORT)
 
-start: ## Start Metro for Expo Go / phone over LAN
+start: ## Start Metro directly for Expo Go / phone over LAN
 	pnpm exec expo start --lan --port $(PORT)
 
 expo: start ## Alias for make start
@@ -36,7 +39,7 @@ check: typecheck test ## Run typechecks (app + zero-DOM core) and all Vitest sui
 typecheck: ## Type check Expo app + pure zero-DOM src/core
 	pnpm run typecheck
 
-test: ## Run all unit tests (13 game engines + sound + night + session)
+test: ## Run all unit tests (13 game engines + highscores + sound + night + session)
 	pnpm test
 
 doctor: ## Check Expo SDK & dependency health
