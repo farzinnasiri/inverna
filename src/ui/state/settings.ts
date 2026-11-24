@@ -16,6 +16,9 @@ export const kvStorage = createJSONStorage(() => ({
   removeItem: (k: string) => kv().removeItem(NAMESPACE + k),
 }))
 
+export type DayFeeling = 'heavy' | 'restless' | 'steady' | 'bright'
+export type NightIntent = 'melt' | 'focus' | 'light'
+
 export interface SettingsState {
   /** Single unified night light level, 0 = normal, 1 = lowest. */
   light: number
@@ -32,10 +35,16 @@ export interface SettingsState {
   hasCustomMix: boolean
   /** Sleep timer for ambient sound, minutes (0 = until stopped). */
   sleepTimer: number
-  /** Whether the 3-step initial tuning has been completed/skipped. */
+  /** Whether the initial tuning has been completed/skipped. */
   onboarded: boolean
   /** Most recently opened game (gets the 2-wide Continue tile on Home). */
   lastGame: GameId | null
+  /** Nightly check-in date stamp (YYYY-MM-DD) so it asks gently once per night. */
+  lastCheckInDate: string | null
+  tonightDay: DayFeeling | null
+  tonightIntent: NightIntent | null
+  /** Quiet non-streak reflection: formatted time of last completed wind-down. */
+  lastLightsOut: string | null
   set: (patch: Partial<Omit<SettingsState, 'set' | 'setSchedule'>>) => void
   setSchedule: (patch: Partial<Schedule>) => void
 }
@@ -55,6 +64,10 @@ export const useSettings = create<SettingsState>()(
       sleepTimer: 30,
       onboarded: false,
       lastGame: null,
+      lastCheckInDate: null,
+      tonightDay: null,
+      tonightIntent: null,
+      lastLightsOut: null,
       set: (patch) => set(patch),
       setSchedule: (patch) => set((s) => ({ schedule: { ...s.schedule, ...patch } })),
     }),

@@ -131,10 +131,10 @@ export function Onboarding() {
                 />
                 <View style={styles.copyStack}>
                   <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 28 : 34 }]}>
-                    Quiet nights start here
+                    Put down the feed
                   </Text>
                   <Text style={[styles.subtitle, { color: color.ink2 }]}>
-                    Thirteen calm classic games, nocturnal soundscapes, and a low-blue light designed to replace late-night scrolling.
+                    Pick up something quiet. Calm tactile puzzles, nocturnal soundscapes, and a gentle wind-down curtain built for late nights.
                   </Text>
                 </View>
               </View>
@@ -146,8 +146,8 @@ export function Onboarding() {
                   <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 25 : 30 }]}>
                     When do you turn in?
                   </Text>
-                  <Text style={[styles.subtitle, { color: color.ink3 }]}>
-                    Lull warms its palette and slows game pace 45 minutes before bed.
+                  <Text style={[styles.subtitle, { color: color.ink2 }]}>
+                    Lull warms its palette and slows game pace 45 minutes before bed. You can adjust this anytime.
                   </Text>
                 </View>
 
@@ -197,17 +197,17 @@ export function Onboarding() {
                   <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 25 : 30 }]}>
                     Tune tonight&apos;s light
                   </Text>
-                  <Text style={[styles.subtitle, { color: color.ink3 }]}>
-                    True OLED black stays pitch dark while inks warm gently.
+                  <Text style={[styles.subtitle, { color: color.ink2 }]}>
+                    Slide below to dim and warm Lull&apos;s in-app palette live while keeping true OLED black.
                   </Text>
                 </View>
 
-                <GlassSurface variant="card" radius={26} style={styles.lightPreviewCard}>
-                  <ContinuePreview id="kindle" demo size={isCompact ? 96 : 114} />
+                <GlassSurface variant="card" radius={24} style={styles.lightPreviewCard}>
+                  <ContinuePreview id="kindle" demo size={isCompact ? 88 : 104} />
                   <View style={styles.lightMeta}>
                     <Text style={[styles.lightStage, { color: color.ink }]}>{lightStageLabel(light)}</Text>
-                    <Text style={[styles.lightPct, { color: color.accent }]}>
-                      {Math.round((1 - light) * 100)}% in-app light
+                    <Text style={[styles.lightSub, { color: color.ink3 }]}>
+                      Adjusts Lull&apos;s own inks &amp; glow
                     </Text>
                   </View>
                 </GlassSurface>
@@ -220,17 +220,19 @@ export function Onboarding() {
 
             {step === 3 && (
               <View style={styles.stepWrap}>
-                <Image
-                  source={SOUND_ART}
-                  style={{ width: isCompact ? 96 : 124, height: isCompact ? 96 : 124, borderRadius: 62 }}
-                  resizeMode="contain"
-                />
+                {!isCompact && (
+                  <Image
+                    source={SOUND_ART}
+                    style={{ width: 96, height: 96, borderRadius: 48 }}
+                    resizeMode="contain"
+                  />
+                )}
                 <View style={styles.copyStack}>
-                  <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 24 : 28 }]}>
+                  <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 23 : 28 }]}>
                     Choose a night sound
                   </Text>
-                  <Text style={[styles.subtitle, { color: color.ink3 }]}>
-                    Tap any soundscape to preview it live.
+                  <Text style={[styles.subtitle, { color: color.ink2 }]}>
+                    Tap to preview live. Headphones recommended for binaural waves.
                   </Text>
                 </View>
 
@@ -413,10 +415,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: -0.3,
   },
-  lightPct: {
-    fontSize: 13.5,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
+  lightSub: {
+    fontSize: 13,
+    lineHeight: 18,
   },
   soundList: {
     width: '100%',

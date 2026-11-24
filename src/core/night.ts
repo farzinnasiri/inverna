@@ -41,11 +41,19 @@ export function formatHHMM(h: number, m: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
-/** Human-friendly 12h or 24h clock without leading zero clutter ("11:00"). */
+/** Human-friendly 12h clock without leading zero clutter ("11:00"). */
 export function formatBedtimeShort(value: string): string {
   const { h, m } = parseHHMM(value)
   const h12 = h % 12 || 12
   return `${h12}:${String(m).padStart(2, '0')}`
+}
+
+/** Explicit 12h clock with AM/PM ("11:00 PM", "12:30 AM"). */
+export function formatBedtime12h(value: string): string {
+  const { h, m } = parseHHMM(value)
+  const h12 = h % 12 || 12
+  const period = h < 12 ? 'AM' : 'PM'
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`
 }
 
 /**

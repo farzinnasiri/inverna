@@ -95,16 +95,15 @@ function prevScore(state: KindleState | undefined): number {
 function tilePalette(
   value: number,
   ink: string,
-  ink2: string,
   accentInk: string,
 ): { bg: string; fg: string; border: string } {
   const darkBorder = 'rgba(220, 226, 235, 0.08)'
   const lightBorder = 'rgba(18, 16, 11, 0.12)'
   switch (value) {
     case 2:
-      return { bg: '#171A20', fg: ink2, border: darkBorder }
+      return { bg: '#262731', fg: ink, border: '#454450' }
     case 4:
-      return { bg: '#20252E', fg: ink2, border: darkBorder }
+      return { bg: '#373037', fg: ink, border: '#574B52' }
     case 8:
       return { bg: '#2A3442', fg: ink, border: darkBorder }
     case 16:
@@ -316,7 +315,7 @@ function KindleTileView({
     }
   }, [tile.kind, reduceMotion, opacity, scale])
 
-  const palette = tilePalette(tile.value, color.ink, color.ink2, color.accentInk)
+  const palette = tilePalette(tile.value, color.ink, color.accentInk)
   const typography = tileFontSize(tile.value, boardSize)
   const zIndex =
     tile.kind === 'merged' ? 3 : tile.kind === 'source' || tile.kind === 'extinguished' ? 1 : 2
@@ -658,7 +657,7 @@ export function KindleScreen({ onExit }: GameScreenProps) {
               {...panResponder.panHandlers}
               collapsable={false}
               accessible
-              accessibilityLabel={`Kindle 4 by 4 board, score ${state.score}, highest tile ${state.bestTile}${state.stuck ? ', no moves left' : ''}`}
+              accessibilityLabel={`Ember 4 by 4 board, score ${state.score}, highest tile ${state.bestTile}${state.stuck ? ', no moves left' : ''}`}
               style={[styles.board, { width: trackSize, height: trackSize }]}
             >
               {SLOTS.map((slot) => {

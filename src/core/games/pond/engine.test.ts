@@ -5,7 +5,6 @@ import {
   GATHER_RADIUS,
   LEAF_COUNT,
   MAX_RIPPLES,
-  MOTE_COUNT,
   setTarget,
   SPINE_SEGMENTS,
   SPINE_SPACING,
@@ -27,12 +26,13 @@ function stepFor(state: PondState, totalMs: number, calm = 0, stepMs = 16): Pond
 }
 
 describe('pond engine', () => {
-  it('initialises spine, motes, leaves, and clean counters deterministically', () => {
+  it('initialises spine, lotus buds, leaves, and clean counters deterministically', () => {
     const a = createPond({ seed: 42, calm: 0 })
     const b = createPond({ seed: 42, calm: 0 })
     expect(a).toEqual(b)
     expect(a.koi.spine).toHaveLength(SPINE_SEGMENTS)
-    expect(a.motes).toHaveLength(MOTE_COUNT)
+    expect(a.buds.length).toBeGreaterThanOrEqual(3)
+    expect(a.buds.length).toBeLessThanOrEqual(5)
     expect(a.leaves).toHaveLength(LEAF_COUNT)
     expect(a.gathered).toBe(0)
     expect(a.gatherEventId).toBe(0)
@@ -102,38 +102,34 @@ describe('pond engine', () => {
     expect(state.target).toBeNull()
   })
 
-  it('gathers a glowing mote, increments counters, respawns away from head, and spawns a ripple', () => {
-    const base = createPond({ seed: 55, calm: 0 })
-    const head = base.koi.spine[0]!
-    const heading = base.koi.heading
-    // Place mote #0 right in front of the koi head within gather reach
-    const targetMote = {
-      ...base.motes[0]!,
+  it('opens only the guided active bud and washes the pond after the last bloom', () => {
+    let state = createPond({ seed: 55, calm: 0 })
+    const head = state.koi.spine[0]!
+    const heading = state.koi.heading
+    const nearHead = {
       x: head.x + Math.cos(heading) * (GATHER_RADIUS * 0.45),
       y: head.y + Math.sin(heading) * (GATHER_RADIUS * 0.45),
     }
-    const staged: PondState = {
-      ...base,
-      motes: [targetMote, ...base.motes.slice(1)],
+    const staged = (index: number): PondState => ({
+      ...state,
+      buds: state.buds.map((bud, i) => i === index ? { ...bud, ...nearHead } : bud),
+    })
+
+    expect(tickPond(setTarget(staged(1), nearHead.x, nearHead.y), 16, 0).nextBud).toBe(0)
+    expect(tickPond(staged(0), 16, 0).nextBud).toBe(0)
+    const budCount = state.buds.length
+    for (let index = 0; index < budCount; index++) {
+      state = tickPond(setTarget(staged(index), nearHead.x, nearHead.y), 16, 0)
+      expect(state.nextBud).toBe(index + 1)
+      expect(state.buds[index]!.openedAt).not.toBeNull()
+      expect(state.ripples.some((ripple) => ripple.kind === 'gather')).toBe(true)
     }
-
-    const after = tickPond(staged, 40, 0)
-    expect(after.gathered).toBe(1)
-    expect(after.gatherEventId).toBe(1)
-    expect(after.lastGatherColor).toBe(targetMote.color)
-    expect(after.motes).toHaveLength(MOTE_COUNT)
-
-    // Replaced mote has a fresh id, starts fading in, and spawns away from koi head
-    const respawned = after.motes[0]!
-    expect(respawned.id).not.toBe(targetMote.id)
-    expect(respawned.fadeIn).toBe(0)
-    const afterHead = after.koi.spine[0]!
-    expect(Math.hypot(respawned.x - afterHead.x, respawned.y - afterHead.y)).toBeGreaterThan(0.2)
-
-    // Gather ripple was created at mote location
-    const gatherRipple = after.ripples.find((r) => r.kind === 'gather')
-    expect(gatherRipple).toBeDefined()
-    expect(gatherRipple?.color).toBe(targetMote.color)
+    expect(state.blooms).toBe(1)
+    expect(state.ripples.some((ripple) => ripple.kind === 'wash')).toBe(true)
+    const previousIds = state.buds.map((bud) => bud.id)
+    state = stepFor(clearTarget(state), 2300)
+    expect(state.nextBud).toBe(0)
+    expect(state.buds.every((bud) => bud.openedAt === null && !previousIds.includes(bud.id))).toBe(true)
   })
 
   it('creates ripples on tap, caps active ripples, and expires them after their lifetime', () => {

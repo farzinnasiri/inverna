@@ -9,8 +9,8 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
-import Svg, { Rect } from 'react-native-svg'
-import { ArrowDownToLine as _ArrowDownToLine, RotateCw as _RotateCw } from 'lucide-react-native'
+import Svg, { Line, Rect } from 'react-native-svg'
+import { ChevronsDown as _ChevronsDown, RotateCw as _RotateCw } from 'lucide-react-native'
 import {
   BOARD_COLS,
   BOARD_ROWS,
@@ -33,16 +33,18 @@ import {
   tickSettle,
   type PieceColor,
   type SettleState,
+  type SettleMode,
   type TetrominoType,
 } from '@/core/games/settle/engine'
 import { legacyPieceMap, type ResolvedTokens } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { Segmented } from '@/ui/rn/controls'
+import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { GlassPressable, GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
 
 type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
-const ArrowDownToLine = _ArrowDownToLine as unknown as LucideSvgIcon
+const ChevronsDown = _ChevronsDown as unknown as LucideSvgIcon
 const RotateCw = _RotateCw as unknown as LucideSvgIcon
 
 interface SettleSave {
@@ -61,8 +63,13 @@ const HOW_TO = [
   'Fit falling stones into full rows. The pace stays steady and slows gently during a wind-down.',
   'Use the left pads to move and lower stones. Rotate and hard drop are on the right.',
   'On the board, tap to turn, drag to slide, swipe down to drop, or swipe up to hold.',
-  'If the stack reaches the top, the bottom rows fade away to make room.',
+  'Endless makes room at the top by dissolving bottom rows. Classic ends when a new stone cannot fit.',
 ] as const
+
+const MODE_OPTIONS: readonly { value: SettleMode; label: string }[] = [
+  { value: 'endless', label: 'Endless' },
+  { value: 'classic', label: 'Classic' },
+]
 
 const CELL_PITCH = 20
 const CELL_GAP = 2
@@ -214,14 +221,14 @@ export function SettleScreen({ onExit }: GameScreenProps) {
 
   const [state, setState] = useState<SettleState>(() => {
     if (isValidSettleState(saved.state)) {
-      return saved.state
+      return { ...saved.state, mode: saved.state.mode ?? 'endless', gameOver: saved.state.gameOver ?? false }
     }
     return createSettle({ seed: Date.now() >>> 0, calm })
   })
   const [paused, setPaused] = useState(false)
   const [started, setStarted] = useState(false)
   const [arenaSize, setArenaSize] = useState({ w: 0, h: 0 })
-  const playing = started && !paused
+  const playing = started && !paused && !state.gameOver
 
   const stateRef = useRef(state)
   stateRef.current = state
@@ -272,7 +279,7 @@ export function SettleScreen({ onExit }: GameScreenProps) {
       haptic('light')
     }
 
-    if (piecesChanged || linesChanged || dissolveChanged) {
+    if (piecesChanged || linesChanged || dissolveChanged || state.gameOver) {
       persistState(state)
     }
 
@@ -338,18 +345,27 @@ export function SettleScreen({ onExit }: GameScreenProps) {
   const actionsRef = useRef({ doLeft, doRight, doHardDrop, doRotateCW, doHold })
   actionsRef.current = { doLeft, doRight, doHardDrop, doRotateCW, doHold }
 
-  const handleRestart = useCallback(() => {
+  const resetBoard = useCallback((fresh: SettleState, incrementPlays: boolean) => {
     playingRef.current = false
     setStarted(false)
-    const fresh = restart(stateRef.current, Date.now() >>> 0)
+    setPaused(false)
     prevPiecesRef.current = 0
     prevLinesRef.current = 0
     prevClearIdRef.current = 0
     prevDissolveRef.current = 0
     stateRef.current = fresh
     setState(fresh)
-    persistState(fresh, true)
+    persistState(fresh, incrementPlays)
   }, [persistState])
+
+  const handleRestart = useCallback(() => {
+    resetBoard(restart(stateRef.current, Date.now() >>> 0), true)
+  }, [resetBoard])
+
+  const changeMode = useCallback((mode: SettleMode) => {
+    if (stateRef.current.mode === mode) return
+    resetBoard(createSettle({ seed: Date.now() >>> 0, mode }), false)
+  }, [resetBoard])
 
   const handleExit = useCallback(() => {
     persistState(stateRef.current)
@@ -566,7 +582,11 @@ export function SettleScreen({ onExit }: GameScreenProps) {
       commitScore={started}
       ready={started}
       readyHint="Move and lower stones with your left thumb, then rotate and drop with your right."
-      onReady={() => setStarted(true)}
+      readyExtra={<Segmented label="Mode" options={MODE_OPTIONS} value={state.mode} onChange={changeMode} />}
+      onReady={() => {
+        if (stateRef.current.gameOver) handleRestart()
+        setStarted(true)
+      }}
       paused={paused}
       onPauseChange={changePaused}
       onRestart={handleRestart}
@@ -591,16 +611,6 @@ export function SettleScreen({ onExit }: GameScreenProps) {
             </GlassSurface>
           </View>
 
-          <GlassPressable
-            accessibilityLabel="Hold piece"
-            disabled={!playing || !state.canHold}
-            hapticFeedback={false}
-            onPress={doHold}
-            style={styles.holdPill}
-          >
-            <Text style={[styles.labelText, { color: color.ink2 }]}>Hold</Text>
-          </GlassPressable>
-
           <View style={styles.rotateCluster}>
             <View style={styles.dropPosition}>
               <GlassPressable
@@ -610,7 +620,7 @@ export function SettleScreen({ onExit }: GameScreenProps) {
                 onPress={doHardDrop}
                 style={styles.dropButton}
               >
-                <ArrowDownToLine size={21} strokeWidth={1.65} color={color.ink2} />
+                <ChevronsDown size={21} strokeWidth={1.65} color={color.ink2} />
               </GlassPressable>
             </View>
             <GlassPressable
@@ -635,29 +645,19 @@ export function SettleScreen({ onExit }: GameScreenProps) {
               {...panResponder.panHandlers}
               style={[
                 styles.well,
-                { width: wellW, height: wellH, backgroundColor: color.bg, borderColor: color.line },
+                { width: wellW, height: wellH, backgroundColor: 'rgba(10, 12, 16, 0.94)', borderColor: color.line },
               ]}
             >
               <Svg width={svgW} height={svgH} viewBox={`0 0 ${VB_W} ${VB_H}`} pointerEvents="none">
-                <Rect x={0} y={0} width={VB_W} height={VB_H} fill={color.bg} />
+                {Array.from({ length: BOARD_COLS - 1 }, (_, index) => {
+                  const x = (index + 1) * CELL_PITCH
+                  return <Line key={index} x1={x} y1={0} x2={x} y2={VB_H} stroke={color.ink4} strokeOpacity={0.17} strokeWidth={0.5} />
+                })}
 
                 {cells.map((cell) => {
+                  if (cell.kind === 'empty') return null
                   const x = cell.col * CELL_PITCH + CELL_GAP * 0.5
                   const y = cell.row * CELL_PITCH + CELL_GAP * 0.5
-
-                  if (cell.kind === 'empty') {
-                    return (
-                      <Rect
-                        key={cell.key}
-                        x={x}
-                        y={y}
-                        width={CELL_SIZE}
-                        height={CELL_SIZE}
-                        rx={3.2}
-                        fill={color.surface1}
-                      />
-                    )
-                  }
 
                   if (cell.kind === 'ghost') {
                     return (
@@ -825,6 +825,17 @@ export function SettleScreen({ onExit }: GameScreenProps) {
           </View>
         )}
       </View>
+      <Completion
+        open={started && state.gameOver}
+        gameId="settle"
+        title="Board full"
+        line={`${state.lines} ${state.lines === 1 ? 'line' : 'lines'} cleared`}
+        actionLabel="Play again"
+        onAction={() => {
+          handleRestart()
+          setStarted(true)
+        }}
+      />
     </GameShell>
   )
 }
@@ -926,12 +937,6 @@ const styles = StyleSheet.create({
   },
   softDrop: {
     minWidth: 58,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  holdPill: {
-    minWidth: 48,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',

@@ -7,6 +7,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { applyTokens } from '@/design/tokens'
+import { NightCheckIn } from '@/ui/rn/NightCheckIn'
 import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
 import { NightSheet } from '@/ui/rn/NightSheet'
 import { Onboarding } from '@/ui/rn/Onboarding'
@@ -65,6 +66,7 @@ export default function RootLayout() {
 
           <WindDownSheet />
           <NightSheet />
+          <NightCheckIn />
           <Onboarding />
           <SessionCurtain />
           <NightFilterOverlay />

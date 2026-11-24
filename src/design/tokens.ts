@@ -14,10 +14,10 @@ export const color = {
   line: 'rgb(220 226 235 / 0.08)',
   lineStrong: 'rgb(220 226 235 / 0.15)',
 
-  ink: '#DCE0E6',
-  ink2: '#9BA2AD',
-  ink3: '#6C737E',
-  ink4: '#41464F',
+  ink: '#E2E6EC',
+  ink2: '#A8B0BC',
+  ink3: '#808896',
+  ink4: '#545B68',
 
   accent: '#C2A15F',
   accentInk: '#12100B',
@@ -27,17 +27,17 @@ export const color = {
 
 /**
  * Seven architectural nocturnal tones — Watchmaker Ink & Brass.
- * Rich, crisp, zero concealer-beige / makeup blush.
+ * Rich, crisp, zero concealer-beige / makeup blush, glare-capped for OLED.
  * Kept under the 7 stone keys so all engines & CSS stay compatible.
  */
 export const pieces = {
-  clay: '#3D5A73',      // Deep Navy Slate
-  ochre: '#B89450',     // Antique Brass
-  straw: '#497362',     // Pine Verdigris
-  sage: '#8F434A',      // Oxblood
-  rosewood: '#5B567D',  // Smoky Indigo
-  stone: '#6F7782',     // Titanium Pewter
-  bone: '#CBD0D8',      // Moon Ivory
+  clay: '#446582',      // Deep Navy Slate
+  ochre: '#BE9A56',     // Antique Brass
+  straw: '#4E7C69',     // Pine Verdigris
+  sage: '#9A4C53',      // Oxblood
+  rosewood: '#67608C',  // Smoky Indigo
+  stone: '#767E8A',     // Titanium Pewter
+  bone: '#A6AEBA',      // Glare-capped Moon Silver
 } as const
 
 export type PieceStone = keyof typeof pieces
@@ -53,14 +53,14 @@ export const legacyPieceMap = {
   sand: 'bone',
 } as const satisfies Record<string, PieceStone>
 
-/** Warm twins at warmth = 1 (lower blue emission, gently softer lightness). */
+/** Warm twins at warmth = 1 (noticeably warmer candlelight palette, zero blue glare). */
 const warmInkTargets = {
-  ink: '#DBD0BE',
-  ink2: '#9E9382',
-  ink3: '#736B5E',
-  ink4: '#47423A',
-  accent: '#C2964F',
-  accentDim: '#785E33',
+  ink: '#E6CEA8',
+  ink2: '#B09978',
+  ink3: '#86745B',
+  ink4: '#594D3D',
+  accent: '#C99546',
+  accentDim: '#805E2D',
 } as const
 
 const WARM_AMBER_TARGET = '#BA8D4B'

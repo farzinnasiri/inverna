@@ -23,7 +23,7 @@ export const PADDLE_WIDTH_MIN = 0.22
 export const PADDLE_WIDTH_MAX = 0.28
 
 export const BALL_RADIUS = 0.016
-export const BASE_BALL_SPEED = 0.62
+export const BASE_BALL_SPEED = 0.54
 export const CALM_SPEED_FACTOR = 0.72
 
 /** Minimum angle from horizontal (radians) so the ball can never loop horizontally. */

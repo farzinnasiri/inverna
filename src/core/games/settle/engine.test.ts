@@ -247,6 +247,34 @@ describe('settle engine', () => {
     expect(state.dissolving).toBeNull()
   })
 
+  it('ends Classic when the next piece cannot spawn and preserves the stack', () => {
+    const board = createEmptyBoard()
+    for (let col = 3; col <= 6; col++) board[0]![col] = 'clay'
+    board[BOARD_ROWS - 1]![0] = 'honey'
+    const state = stateWithActive('O', { board, mode: 'classic' }, { x: 8, y: 0, rotation: 0 })
+    const toppedOut = hardDrop(state)
+
+    expect(toppedOut.gameOver).toBe(true)
+    expect(toppedOut.active).toBeNull()
+    expect(toppedOut.dissolveCount).toBe(0)
+    expect(toppedOut.board[0]![3]).toBe('clay')
+    expect(toppedOut.board[BOARD_ROWS - 1]![0]).toBe('honey')
+    expect(tickSettle(toppedOut, 10_000, 0)).toBe(toppedOut)
+    expect(restart(toppedOut, 123)).toMatchObject({ mode: 'classic', gameOver: false })
+  })
+
+  it('also ends Classic when a piece brought in from Hold cannot spawn', () => {
+    const board = createEmptyBoard()
+    for (let col = 3; col <= 6; col++) board[0]![col] = 'clay'
+    const state = stateWithActive('O', { board, mode: 'classic', hold: 'I' }, { x: 8, y: 0 })
+    const toppedOut = hold(state)
+
+    expect(toppedOut.gameOver).toBe(true)
+    expect(toppedOut.active).toBeNull()
+    expect(toppedOut.board).toEqual(board)
+    expect(toppedOut.dissolving).toBeNull()
+  })
+
   it('handles 4-line clears accurately and reports lastClearCount = 4', () => {
     const board = createEmptyBoard()
     for (let r = 16; r < BOARD_ROWS; r++) {

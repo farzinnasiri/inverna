@@ -19,11 +19,13 @@ import {
   selectCell,
   toggleNotesMode,
   undoNine,
+  type NineDifficulty,
   type NineState,
 } from '@/core/games/nine/engine'
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { Segmented } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
 
@@ -33,7 +35,19 @@ interface NineSave {
   completed: number
 }
 
-const KEYPAD_ROWS = [[1, 2, 3, 4, 5], [6, 7, 8, 9]] as const
+const KEYPAD_ROWS = [[1, 2, 3], [4, 5, 6], [7, 8, 9]] as const
+const DIFFICULTIES = [
+  { value: 'easy', label: 'Easy' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'hard', label: 'Hard' },
+  { value: 'expert', label: 'Expert' },
+] as const
+
+function selectEmpty(state: NineState): NineState {
+  const index = state.values.indexOf(0)
+  return selectCell(state, index < 0 ? null : index)
+}
+
 const ROWS = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const
 const COLS = [0, 1, 2, 3, 4, 5, 6, 7, 8] as const
 const NOTE_ROWS = [
@@ -118,14 +132,18 @@ export function NineScreen({ onExit }: GameScreenProps) {
 
   const [fallback] = useState<NineSave>(() => ({
     version: 1,
-    state: createNine({ seed: Date.now() >>> 0, calm }),
+    state: createNine({ seed: Date.now() >>> 0, calm, difficulty: 'medium' }),
     completed: 0,
   }))
   const [rawSave, setSave] = useGameSave<NineSave>('nine', fallback)
   const save = isValidSave(rawSave) ? rawSave : fallback
   const state = save.state
 
-  const [paused, setPaused] = useState(false)
+  const [started, setStarted] = useState(false)
+  const [newPuzzle, setNewPuzzle] = useState(false)
+  const [difficulty, setDifficulty] = useState<NineDifficulty>(state.difficulty ?? 'medium')
+  const [isPaused, setPaused] = useState(false)
+  const paused = isPaused || !started
   const [showCompletion, setShowCompletion] = useState(state.solved)
   const [stageSize, setStageSize] = useState(0)
 
@@ -243,7 +261,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
   const handleRestart = useCallback(() => {
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
     setShowCompletion(false)
-    const next = restartPuzzle(stateRef.current)
+    const next = selectEmpty(restartPuzzle(stateRef.current))
     stateRef.current = next
     setSave((prev) => ({
       version: 1,
@@ -256,7 +274,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
   const handleNext = useCallback(() => {
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
     setShowCompletion(false)
-    const next = nextPuzzle(stateRef.current, calm)
+    const next = selectEmpty(nextPuzzle(stateRef.current, calm))
     stateRef.current = next
     setSave((prev) => ({
       version: 1,
@@ -265,6 +283,25 @@ export function NineScreen({ onExit }: GameScreenProps) {
     }))
     cue('tap', 0.6)
   }, [setSave, calm, cue])
+
+  const handleBegin = useCallback(() => {
+    const current = stateRef.current
+    const replace = newPuzzle || difficulty !== (current.difficulty ?? 'medium')
+    const puzzle = replace ? nextPuzzle(current, calm, difficulty) : current
+    const next = selectEmpty(puzzle)
+    stateRef.current = next
+    setSave((prev) => ({ version: 1, state: next, completed: isValidSave(prev) ? prev.completed : 0 }))
+    setShowCompletion(next.solved)
+    setNewPuzzle(false)
+    setStarted(true)
+  }, [newPuzzle, difficulty, calm, setSave])
+
+  const chooseNewPuzzle = useCallback(() => {
+    if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
+    setShowCompletion(false)
+    setNewPuzzle(true)
+    setStarted(false)
+  }, [])
 
   const moveSelection = useCallback(
     (dRow: number, dCol: number) => {
@@ -342,12 +379,15 @@ export function NineScreen({ onExit }: GameScreenProps) {
         { label: 'Puzzle', value: state.puzzleNumber },
         { label: 'Left', value: remaining },
       ]}
-      paused={paused}
+      ready={started}
+      readyExtra={<Segmented label="Difficulty" options={DIFFICULTIES} value={difficulty} onChange={setDifficulty} />}
+      onReady={handleBegin}
+      paused={isPaused}
       onPauseChange={setPaused}
       onRestart={handleRestart}
       onExit={onExit}
       howTo={HOW_TO}
-      controls={
+      controls={started && (
         <View style={[styles.controlsWrap, { gap: isCompact ? 4 : 6, maxWidth: contentWidth }]}>
           <View style={styles.keyRow}>
             <KeypadButton
@@ -391,6 +431,9 @@ export function NineScreen({ onExit }: GameScreenProps) {
             </KeypadButton>
           </View>
 
+          <Pressable accessibilityRole="button" onPress={chooseNewPuzzle} disabled={isPaused} style={styles.newPuzzle}>
+            <Text style={[styles.actionBtnText, { color: color.ink2 }]}>New Puzzle</Text>
+          </Pressable>
           {KEYPAD_ROWS.map((digits) => (
             <View key={digits[0]} style={styles.keyRow}>
               {digits.map((digit) => {
@@ -398,7 +441,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
                 return (
                   <KeypadButton
                     key={digit}
-                    label={`${state.notesMode ? 'Note' : 'Place'} ${digit}${done ? ', all nine placed' : ''}`}
+                    label={`${state.notesMode ? 'Note' : 'Place'} ${digit}, ${Math.max(0, 9 - digitCounts[digit]!)} left`}
                     minHeight={keyHeight}
                     dimmed={done}
                     disabled={paused || state.solved}
@@ -413,13 +456,16 @@ export function NineScreen({ onExit }: GameScreenProps) {
                     >
                       {digit}
                     </Text>
+                    <Text style={{ color: color.ink3, fontSize: 10 }}>
+                      {Math.max(0, 9 - digitCounts[digit]!)} left
+                    </Text>
                   </KeypadButton>
                 )
               })}
             </View>
           ))}
         </View>
-      }
+      )}
     >
       <View style={styles.stage} onLayout={handleStageLayout}>
         {cellSize > 0 && (
@@ -468,14 +514,14 @@ export function NineScreen({ onExit }: GameScreenProps) {
                           width: cellSize,
                           height: cellSize,
                           backgroundColor: cellBg,
-                          borderRightWidth: col === 8 ? 0 : isBoxRight ? 1.5 : 1,
-                          borderBottomWidth: row === 8 ? 0 : isBoxBottom ? 1.5 : 1,
+                          borderRightWidth: col === 8 ? 0 : isBoxRight ? 2 : 1,
+                          borderBottomWidth: row === 8 ? 0 : isBoxBottom ? 2 : 1,
                           borderRightColor: isBoxRight
-                            ? 'rgba(255, 255, 255, 0.28)'
-                            : 'rgba(255, 255, 255, 0.09)',
+                            ? 'rgba(255, 255, 255, 0.36)'
+                            : 'rgba(255, 255, 255, 0.10)',
                           borderBottomColor: isBoxBottom
-                            ? 'rgba(255, 255, 255, 0.28)'
-                            : 'rgba(255, 255, 255, 0.09)',
+                            ? 'rgba(255, 255, 255, 0.36)'
+                            : 'rgba(255, 255, 255, 0.10)',
                         },
                       ]}
                     >
@@ -549,7 +595,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
       </View>
 
       <Completion
-        open={showCompletion}
+        open={started && showCompletion}
         gameId="nine"
         title="Solved"
         line={`Puzzle ${state.puzzleNumber} complete`}
@@ -616,6 +662,11 @@ const styles = StyleSheet.create({
   controlsWrap: {
     width: '100%',
     alignSelf: 'center',
+  },
+  newPuzzle: {
+    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
   keyRow: {
     flexDirection: 'row',

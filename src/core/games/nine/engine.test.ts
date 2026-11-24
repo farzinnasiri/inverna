@@ -228,3 +228,20 @@ describe('Nine (Sudoku) pure engine', () => {
     expect(nextPuzzle(revived, 0.8)).toEqual(nextPuzzle(state, 0.8))
   })
 })
+
+describe('Nine difficulty', () => {
+  it.each([
+    ['easy', 46],
+    ['medium', 39],
+    ['hard', 33],
+    ['expert', 29],
+  ] as const)('creates a unique %s puzzle with %i clues', (difficulty, clues) => {
+    for (const seed of [1, 17, 92, 31415]) {
+      const state = createNine({ seed, difficulty })
+      expect(state.givens.filter(Boolean)).toHaveLength(clues)
+      expect(countSolutions(state.values)).toBe(1)
+      expect(isValidSolution(state.solution)).toBe(true)
+      expect(state.values.every((digit, index) => digit === 0 || digit === state.solution[index])).toBe(true)
+    }
+  })
+})

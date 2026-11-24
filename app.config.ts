@@ -18,6 +18,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       UIBackgroundModes: ['audio'],
+      CADisableMinimumFrameDurationOnPhone: true,
     },
   },
   android: {

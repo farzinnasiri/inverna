@@ -10,6 +10,7 @@ interface NavState {
   windDownOpen: boolean
   nightOpen: boolean
   mixOpen: boolean
+  checkInOpen: boolean
   onboardingReplay: boolean
   setTab: (tab: Tab) => void
   openGame: (id: GameId) => void
@@ -17,6 +18,7 @@ interface NavState {
   setWindDownOpen: (open: boolean) => void
   setNightOpen: (open: boolean) => void
   setMixOpen: (open: boolean) => void
+  setCheckInOpen: (open: boolean) => void
   setOnboardingReplay: (open: boolean) => void
 }
 
@@ -26,6 +28,7 @@ export const useNav = create<NavState>()((set) => ({
   windDownOpen: false,
   nightOpen: false,
   mixOpen: false,
+  checkInOpen: false,
   onboardingReplay: false,
   setTab: (tab) => set({ tab }),
   openGame: (game) => {
@@ -36,5 +39,6 @@ export const useNav = create<NavState>()((set) => ({
   setWindDownOpen: (windDownOpen) => set({ windDownOpen }),
   setNightOpen: (nightOpen) => set({ nightOpen }),
   setMixOpen: (mixOpen) => set({ mixOpen }),
+  setCheckInOpen: (checkInOpen) => set({ checkInOpen }),
   setOnboardingReplay: (onboardingReplay) => set({ onboardingReplay }),
 }))

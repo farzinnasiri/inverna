@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Bell, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react-native'
-import { formatBedtimeShort } from '@/core/night'
+import { Bell, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react-native'
+import { formatBedtime12h } from '@/core/night'
 import { kv } from '@/core/storage'
 import { notifications } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
@@ -11,8 +11,15 @@ import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
 import { BedtimeWheel } from './BedtimeWheel'
-import { Button, HoldButton, IconButton, LightSlider, Sheet, Toggle } from './controls'
+import { Button, HoldButton, LightSlider, Segmented, Sheet, Toggle } from './controls'
 import { GlassSurface } from './Glass'
+
+const WIND_DURATIONS = [
+  { value: 10, label: '10m' },
+  { value: 15, label: '15m' },
+  { value: 20, label: '20m' },
+  { value: 30, label: '30m' },
+] as const
 
 export function NightSheet() {
   const { color } = useTokenColors()
@@ -23,21 +30,22 @@ export function NightSheet() {
   const light = useSettings((s) => s.light)
   const followBedtime = useSettings((s) => s.followBedtime)
   const schedule = useSettings((s) => s.schedule)
+  const sessionMinutes = useSettings((s) => s.sessionMinutes)
   const sfx = useSettings((s) => s.sfx)
   const haptics = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const setSchedule = useSettings((s) => s.setSchedule)
 
-  const [page, setPage] = useState<'main' | 'more'>('main')
   const [editingBedtime, setEditingBedtime] = useState(false)
   const [reminderStatus, setReminderStatus] = useState<string | null>(null)
+  const [showReset, setShowReset] = useState(false)
 
   const close = () => {
     setOpen(false)
     setTimeout(() => {
-      setPage('main')
       setEditingBedtime(false)
       setReminderStatus(null)
+      setShowReset(false)
     }, 240)
   }
 
@@ -79,6 +87,9 @@ export function NightSheet() {
       haptics: true,
       hasCustomMix: false,
       lastGame: null,
+      lastCheckInDate: null,
+      tonightDay: null,
+      tonightIntent: null,
       onboarded: false,
     })
     close()
@@ -86,105 +97,105 @@ export function NightSheet() {
 
   return (
     <Sheet open={open} onClose={close} label="Night">
-      {page === 'main' ? (
-        <View style={styles.body}>
-          <Text style={[styles.title, { color: color.ink }]}>Night</Text>
+      <View style={styles.body}>
+        <Text style={[styles.title, { color: color.ink }]}>Night</Text>
 
-          <View style={styles.block}>
-            <Text style={[styles.label, { color: color.ink3 }]}>Night light</Text>
-            <LightSlider value={light} onChange={(v) => set({ light: v })} />
-          </View>
+        {/* Live in-app night light slider */}
+        <View style={styles.block}>
+          <Text style={[styles.label, { color: color.ink3 }]}>In-app night light</Text>
+          <LightSlider value={light} onChange={(v) => set({ light: v })} />
+        </View>
 
-          <GlassSurface variant="card" radius={20} style={styles.card}>
-            <Pressable
-              onPress={() => setEditingBedtime((e) => !e)}
-              style={styles.row}
-              accessibilityRole="button"
-              accessibilityLabel="Bedtime"
-            >
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Bedtime</Text>
-              <View style={styles.bedRight}>
-                <Text style={[styles.bedValue, { color: color.accent }]}>
-                  {formatBedtimeShort(schedule.bedtime)}
-                </Text>
-                {editingBedtime ? (
-                  <ChevronUp size={16} strokeWidth={1.65} color={color.ink3} />
-                ) : (
-                  <ChevronDown size={16} strokeWidth={1.65} color={color.ink3} />
-                )}
-              </View>
-            </Pressable>
+        {/* Wind-down default duration right on the main sheet */}
+        <View style={styles.block}>
+          <Text style={[styles.label, { color: color.ink3 }]}>Wind down length</Text>
+          <Segmented
+            label="Wind down length"
+            options={WIND_DURATIONS}
+            value={sessionMinutes}
+            onChange={(v) => set({ sessionMinutes: v })}
+          />
+        </View>
 
-            {editingBedtime && (
-              <View style={[styles.wheelWrap, { borderTopColor: color.line }]}>
-                <BedtimeWheel
-                  compact
-                  value={schedule.bedtime}
-                  onChange={(bedtime) => setSchedule({ bedtime })}
-                />
-              </View>
-            )}
+        {/* Bedtime + toggles unified cleanly without a hidden More drawer */}
+        <GlassSurface variant="card" radius={20} style={styles.card}>
+          <Pressable
+            onPress={() => setEditingBedtime((e) => !e)}
+            style={styles.row}
+            accessibilityRole="button"
+            accessibilityLabel="Bedtime"
+          >
+            <Text style={[styles.rowLabel, { color: color.ink }]}>Bedtime</Text>
+            <View style={styles.bedRight}>
+              <Text style={[styles.bedValue, { color: color.accent }]}>
+                {formatBedtime12h(schedule.bedtime)}
+              </Text>
+              {editingBedtime ? (
+                <ChevronUp size={16} strokeWidth={1.65} color={color.ink3} />
+              ) : (
+                <ChevronDown size={16} strokeWidth={1.65} color={color.ink3} />
+              )}
+            </View>
+          </Pressable>
 
-            <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Dim before bed</Text>
-              <Toggle
-                label="Dim before bed"
-                checked={followBedtime}
-                onChange={(v) => set({ followBedtime: v })}
+          {editingBedtime && (
+            <View style={[styles.wheelWrap, { borderTopColor: color.line }]}>
+              <BedtimeWheel
+                compact
+                value={schedule.bedtime}
+                onChange={(bedtime) => setSchedule({ bedtime })}
               />
             </View>
-          </GlassSurface>
+          )}
 
-          <Pressable
-            onPress={() => setPage('more')}
-            style={({ pressed }) => [{ opacity: pressed ? 0.84 : 1 }]}
-          >
-            <GlassSurface variant="card" radius={18} style={styles.moreRow}>
-              <Text style={[styles.rowLabel, { color: color.ink }]}>More</Text>
-              <ChevronRight size={18} strokeWidth={1.65} color={color.ink3} />
-            </GlassSurface>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.body}>
-          <View style={styles.moreHead}>
-            <IconButton label="Back to Night" onPress={() => setPage('main')} style={{ marginLeft: -10 }}>
-              <ChevronLeft size={20} strokeWidth={1.65} color={color.ink2} />
-            </IconButton>
-            <Text style={[styles.title, { color: color.ink }]}>More</Text>
+          <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
+            <Text style={[styles.rowLabel, { color: color.ink }]}>Warm 45m before bed</Text>
+            <Toggle
+              label="Warm 45 minutes before bed"
+              checked={followBedtime}
+              onChange={(v) => set({ followBedtime: v })}
+            />
           </View>
 
-          <GlassSurface variant="card" radius={20} style={styles.card}>
-            <View style={styles.row}>
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Game sounds</Text>
-              <Toggle label="Game sounds" checked={sfx} onChange={(v) => set({ sfx: v })} />
-            </View>
-            <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Haptics</Text>
-              <Toggle label="Haptics" checked={haptics} onChange={(v) => set({ haptics: v })} />
-            </View>
-          </GlassSurface>
+          <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
+            <Text style={[styles.rowLabel, { color: color.ink }]}>Game cues</Text>
+            <Toggle label="Game cues" checked={sfx} onChange={(v) => set({ sfx: v })} />
+          </View>
 
-          <Button block onPress={() => void handleReminder()}>
-            <Bell size={16} strokeWidth={1.65} color={color.ink2} />
-            <Text style={[styles.btnInlineText, { color: color.ink }]}>
-              {reminderStatus ?? 'Bedtime reminder'}
+          <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
+            <Text style={[styles.rowLabel, { color: color.ink }]}>Haptics</Text>
+            <Toggle label="Haptics" checked={haptics} onChange={(v) => set({ haptics: v })} />
+          </View>
+        </GlassSurface>
+
+        <View style={styles.utilityRow}>
+          <Button size="sm" onPress={() => void handleReminder()} style={{ flex: 1 }}>
+            <Bell size={15} strokeWidth={1.65} color={color.ink2} />
+            <Text style={[styles.utilText, { color: color.ink }]} numberOfLines={1}>
+              {reminderStatus ?? 'Reminder'}
             </Text>
           </Button>
-
           <Button
-            block
+            size="sm"
             onPress={() => {
               close()
               setOnboardingReplay(true)
             }}
+            style={{ flex: 1 }}
           >
-            Re-tune Lull
+            <RotateCcw size={15} strokeWidth={1.65} color={color.ink2} />
+            <Text style={[styles.utilText, { color: color.ink }]}>Re-tune</Text>
           </Button>
-
-          <HoldButton label="Hold to erase local data" onConfirm={eraseAll} />
         </View>
-      )}
+
+        {showReset ? (
+          <HoldButton label="Hold to erase local data" onConfirm={eraseAll} />
+        ) : (
+          <Button variant="ghost" size="sm" block onPress={() => setShowReset(true)}>
+            Erase local data
+          </Button>
+        )}
+      </View>
     </Sheet>
   )
 }
@@ -202,7 +213,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '500',
   },
   card: {
@@ -213,13 +224,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 54,
+    height: 52,
   },
   rowDiv: {
     borderTopWidth: 1,
   },
   rowLabel: {
-    fontSize: 15.5,
+    fontSize: 15,
     fontWeight: '500',
   },
   bedRight: {
@@ -228,7 +239,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bedValue: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
@@ -236,20 +247,12 @@ const styles = StyleSheet.create({
     padding: 12,
     borderTopWidth: 1,
   },
-  moreRow: {
+  utilityRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    height: 54,
+    gap: 8,
   },
-  moreHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  btnInlineText: {
-    fontSize: 15.5,
+  utilText: {
+    fontSize: 14,
     fontWeight: '500',
   },
 })

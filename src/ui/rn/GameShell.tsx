@@ -1,13 +1,15 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { Award, ChevronLeft, CircleHelp, Pause, Play, Volume2, VolumeX } from 'lucide-react-native'
 import { gameMeta, type GameId } from '@/core/games/catalog'
 import { formatScoreValue, HIGH_SCORE_SPECS } from '@/core/highscores'
+import { presetById } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useHighScores } from '@/ui/state/highscores'
+import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
-import { AmbientBackdrop } from './AmbientBackdrop'
 import { GameAudioSheet } from './GameAudioSheet'
 import { Button, FRAME_MAX_WIDTH, IconButton, Sheet } from './controls'
 import { GlassSurface } from './Glass'
@@ -22,20 +24,24 @@ export interface Stat {
   value: string | number
 }
 
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
+
 /**
- * Shared Liquid Glass Watchmaker frame for all 13 games.
- * - Identical floating Liquid Glass top capsules (Back + ? | Title | Sound + Pause)
- * - Identical Telemetry & Personal Best rail
- * - Smooth calm entry transition (never jarring)
- * - Optional forgiving `ready` gate so kinetic games wait until the player is ready
+ * Shared slimmed Liquid Glass Watchmaker frame for all 13 games.
+ * - Clean OLED #000000 stage (zero background rain noise behind boards)
+ * - Compact floating Liquid Glass top bar with live audio indicator
+ * - Inline minimal telemetry bar that hides "Best" until a record exists (or when hideBest is set)
+ * - Forgiving Ready Gate with optional mode/difficulty picker (`readyExtra`)
  */
 export function GameShell({
   gameId,
   stats,
   score,
   commitScore = true,
+  hideBest = false,
   ready = true,
   readyHint,
+  readyExtra,
   onReady,
   paused,
   onPauseChange,
@@ -49,9 +55,13 @@ export function GameShell({
   stats?: Stat[]
   score?: number | null
   commitScore?: boolean
-  /** Set false on kinetic games so pieces/balls wait calmly until the player taps in. */
+  /** Hide personal-best pill/records (e.g. calm non-competitive Pond). */
+  hideBest?: boolean
+  /** Set false on games that show a forgiving pre-game start/difficulty card. */
   ready?: boolean
   readyHint?: string
+  /** Optional selector rendered inside the Ready card (e.g. difficulty or Classic/Endless). */
+  readyExtra?: ReactNode
   onReady?: () => void
   paused: boolean
   onPauseChange: (paused: boolean) => void
@@ -70,43 +80,54 @@ export function GameShell({
   const [audioOpen, setAudioOpen] = useState(false)
 
   const ambientPlaying = useSound((s) => s.playing)
+  const activePresetId = useSound((s) => s.presetId)
+  const session = useSession((s) => s.session)
   const sfx = useSettings((s) => s.sfx)
   const allMuted = !ambientPlaying && !sfx
 
-  const { best, formattedBest, isNewBest } = useHighScore(gameId, score, commitScore)
+  const activeSoundName = ambientPlaying
+    ? (activePresetId ? presetById(activePresetId)?.name : 'Custom mix') ?? 'Playing'
+    : null
+
+  const { best, formattedBest, isNewBest } = useHighScore(
+    gameId,
+    hideBest ? null : score,
+    !hideBest && commitScore,
+  )
   const clearGameBest = useHighScores((s) => s.clearGame)
   const [pulseBest, setPulseBest] = useState(false)
 
-  // Calm fade + gentle scale arrival so picking a game never feels abrupt.
-  const entryOpacity = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current
-  const entryScale = useRef(new Animated.Value(reducedMotion ? 1 : 0.975)).current
+  // UI-thread Reanimated arrival (scale 0.97 -> 1, opacity 0 -> 1, 220ms EASE_OUT).
+  const entryOpacity = useSharedValue(reducedMotion ? 1 : 0)
+  const entryScale = useSharedValue(reducedMotion ? 1 : 0.97)
 
   useEffect(() => {
-    if (reducedMotion) return
-    Animated.parallel([
-      Animated.timing(entryOpacity, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.timing(entryScale, {
-        toValue: 1,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start()
+    if (reducedMotion) {
+      entryOpacity.set(1)
+      entryScale.set(1)
+      return
+    }
+    entryOpacity.set(withTiming(1, { duration: 200, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
+    entryScale.set(withTiming(1, { duration: 240, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
   }, [entryOpacity, entryScale, reducedMotion])
 
+  const frameAnimStyle = useAnimatedStyle(() => ({
+    opacity: entryOpacity.get(),
+    transform: [{ scale: entryScale.get() }],
+  }))
+
   useEffect(() => {
-    if (!isNewBest) return
+    if (!isNewBest || hideBest) return
     setPulseBest(true)
     const t = setTimeout(() => setPulseBest(false), 3200)
     return () => clearTimeout(t)
-  }, [isNewBest, best])
+  }, [isNewBest, best, hideBest])
 
   useBackgroundPause(() => onPauseChange(true))
+
+  const showBestPill = !hideBest && Boolean(formattedBest)
+  const hasStats = Boolean(stats && stats.length > 0)
+  const showTelemetryRow = hasStats || showBestPill || Boolean(activeSoundName)
 
   return (
     <View
@@ -114,62 +135,62 @@ export function GameShell({
         styles.root,
         {
           paddingTop: insets.top + (isCompact ? 2 : 6),
-          paddingBottom: Math.max(insets.bottom, isCompact ? 8 : 12),
+          paddingBottom: Math.max(insets.bottom, isCompact ? 6 : 10),
         },
       ]}
     >
-      <AmbientBackdrop />
-      <Animated.View
-        style={[
-          styles.frame,
-          {
-            opacity: entryOpacity,
-            transform: [{ scale: entryScale }],
-          },
-        ]}
-      >
-        {/* Identical Liquid Glass Top Chrome across all 13 games */}
+      <Animated.View style={[styles.frame, frameAnimStyle]}>
+        {/* Slim Liquid Glass Top Bar */}
         <View style={[styles.top, { paddingHorizontal: sideMargin }]}>
-          <GlassSurface variant="chrome" radius={22} style={styles.capsule}>
+          <GlassSurface variant="chrome" radius={21} style={styles.capsule}>
             <IconButton label="Back" onPress={onExit} style={styles.capBtn}>
-              <ChevronLeft size={21} strokeWidth={1.65} color={color.ink} />
+              <ChevronLeft size={20} strokeWidth={1.65} color={color.ink} />
             </IconButton>
-            <View style={[styles.capDiv, { backgroundColor: 'rgba(255,255,255,0.10)' }]} />
+            <View style={styles.capDiv} />
             <IconButton label="How to play" onPress={() => setHelpOpen(true)} style={styles.capBtn}>
-              <CircleHelp size={18} strokeWidth={1.65} color={color.ink2} />
+              <CircleHelp size={17} strokeWidth={1.65} color={color.ink2} />
             </IconButton>
           </GlassSurface>
 
-          <Text style={[styles.title, { color: color.ink }]} numberOfLines={1}>
-            {meta.name}
-          </Text>
+          <View style={styles.titleStack}>
+            <Text style={[styles.title, { color: color.ink }]} numberOfLines={1}>
+              {meta.name}
+            </Text>
+            {session ? (
+              <Text style={[styles.sessionMini, { color: color.accent }]} numberOfLines={1}>
+                winding down
+              </Text>
+            ) : null}
+          </View>
 
-          <GlassSurface variant="chrome" radius={22} style={styles.capsule}>
+          <GlassSurface variant="chrome" radius={21} style={styles.capsule}>
             <IconButton label="Sound" onPress={() => setAudioOpen(true)} lit={ambientPlaying} style={styles.capBtn}>
-              {allMuted ? (
-                <VolumeX size={18} strokeWidth={1.65} color={color.ink3} />
-              ) : (
-                <Volume2 size={18} strokeWidth={1.65} color={ambientPlaying ? color.accent : color.ink2} />
-              )}
+              <View style={styles.soundIconWrap}>
+                {allMuted ? (
+                  <VolumeX size={17} strokeWidth={1.65} color={color.ink3} />
+                ) : (
+                  <Volume2 size={17} strokeWidth={1.65} color={ambientPlaying ? color.accent : color.ink2} />
+                )}
+                {ambientPlaying ? (
+                  <View style={[styles.liveDot, { backgroundColor: color.accent }]} />
+                ) : null}
+              </View>
             </IconButton>
-            <View style={[styles.capDiv, { backgroundColor: 'rgba(255,255,255,0.10)' }]} />
+            <View style={styles.capDiv} />
             <IconButton label="Pause" onPress={() => onPauseChange(true)} style={styles.capBtn}>
-              <Pause size={18} strokeWidth={1.65} color={color.ink2} />
+              <Pause size={17} strokeWidth={1.65} color={color.ink2} />
             </IconButton>
           </GlassSurface>
         </View>
 
-        {/* Identical Liquid Glass Telemetry & Personal Best Rail */}
-        {(formattedBest !== null || (stats && stats.length > 0)) && (
-          <GlassSurface
-            variant="card"
-            radius={14}
+        {/* Ultra-slim inline telemetry strip (never adds bulky card chrome; hides "No best") */}
+        {showTelemetryRow && (
+          <View
             style={[
               styles.telemetry,
               {
-                marginHorizontal: sideMargin,
-                marginTop: isCompact ? 6 : 10,
-                height: isCompact ? 34 : 38,
+                paddingHorizontal: sideMargin + 4,
+                marginTop: isCompact ? 4 : 6,
               },
             ]}
           >
@@ -185,37 +206,51 @@ export function GameShell({
               ))}
             </View>
 
-            <View
-              style={[
-                styles.bestPill,
-                {
-                  backgroundColor: pulseBest ? color.accentWash : 'rgba(255,255,255,0.05)',
-                  borderColor: pulseBest ? color.accent : 'rgba(255,255,255,0.09)',
-                },
-              ]}
-            >
-              <Award size={13} strokeWidth={1.7} color={formattedBest ? color.accent : color.ink4} />
-              <Text
-                style={[
-                  styles.bestText,
-                  { color: pulseBest ? color.accent : formattedBest ? color.ink2 : color.ink4 },
-                ]}
-                numberOfLines={1}
-              >
-                {pulseBest
-                  ? `New ${formattedBest}`
-                  : formattedBest
-                    ? `Best ${formattedBest}`
-                    : 'No best'}
-              </Text>
+            <View style={styles.telemetryRight}>
+              {activeSoundName ? (
+                <Pressable
+                  onPress={() => setAudioOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Now playing ${activeSoundName}`}
+                  style={[styles.nowPlayingPill, { borderColor: 'rgba(194, 161, 95, 0.28)' }]}
+                >
+                  <View style={[styles.nowDot, { backgroundColor: color.accent }]} />
+                  <Text style={[styles.nowText, { color: color.ink2 }]} numberOfLines={1}>
+                    {activeSoundName}
+                  </Text>
+                </Pressable>
+              ) : null}
+
+              {showBestPill ? (
+                <View
+                  style={[
+                    styles.bestPill,
+                    {
+                      backgroundColor: pulseBest ? color.accentWash : 'rgba(255,255,255,0.05)',
+                      borderColor: pulseBest ? color.accent : 'rgba(255,255,255,0.10)',
+                    },
+                  ]}
+                >
+                  <Award size={12} strokeWidth={1.7} color={color.accent} />
+                  <Text
+                    style={[
+                      styles.bestText,
+                      { color: pulseBest ? color.accent : color.ink2 },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {pulseBest ? `New ${formattedBest}` : `Best ${formattedBest}`}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-          </GlassSurface>
+          </View>
         )}
 
         <View style={[styles.stage, { paddingHorizontal: sideMargin }]}>
           {children}
 
-          {/* Forgiving Ready Gate for kinetic games so nothing ambushes on tap */}
+          {/* Forgiving Ready Gate for games with start/mode/difficulty choice */}
           {!ready && onReady && (
             <View style={styles.readyOverlay}>
               <Pressable
@@ -229,6 +264,7 @@ export function GameShell({
                 <Text style={[styles.readySub, { color: color.ink2 }]}>
                   {readyHint ?? howTo[0] ?? meta.classic}
                 </Text>
+                {readyExtra ? <View style={styles.readyExtraWrap}>{readyExtra}</View> : null}
                 <View style={styles.readyActions}>
                   <Button variant="primary" block onPress={onReady}>
                     <Play size={15} strokeWidth={2} color={color.accentInk} />
@@ -249,8 +285,8 @@ export function GameShell({
               styles.controls,
               {
                 paddingHorizontal: sideMargin,
-                paddingTop: isCompact ? 4 : 8,
-                paddingBottom: isCompact ? 6 : 12,
+                paddingTop: isCompact ? 4 : 6,
+                paddingBottom: isCompact ? 4 : 10,
               },
             ]}
           >
@@ -262,19 +298,19 @@ export function GameShell({
       {/* Identical Audio Sheet across all 13 games */}
       <GameAudioSheet open={audioOpen} onClose={() => setAudioOpen(false)} />
 
-      {/* Identical How-to-Play Tooltip / Guide Sheet across all 13 games */}
+      {/* Identical How-to-Play Guide Sheet across all 13 games */}
       <Sheet open={helpOpen} onClose={() => setHelpOpen(false)} label={`How to play ${meta.name}`}>
         <View style={styles.guideHeader}>
           <View>
             <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
             <Text style={[styles.sheetSub, { color: color.ink3 }]}>{meta.classic}</Text>
           </View>
-          <GlassSurface variant="card" radius={14} accent={Boolean(formattedBest)} style={styles.guideBestBox}>
-            <Text style={[styles.guideBestLabel, { color: color.ink3 }]}>{spec.label}</Text>
-            <Text style={[styles.guideBestVal, { color: formattedBest ? color.accent : color.ink4 }]}>
-              {formattedBest ?? 'None yet'}
-            </Text>
-          </GlassSurface>
+          {showBestPill ? (
+            <GlassSurface variant="card" radius={14} accent style={styles.guideBestBox}>
+              <Text style={[styles.guideBestLabel, { color: color.ink3 }]}>{spec.label}</Text>
+              <Text style={[styles.guideBestVal, { color: color.accent }]}>{formattedBest}</Text>
+            </GlassSurface>
+          ) : null}
         </View>
 
         <GlassSurface variant="card" radius={18} style={styles.howtoBox}>
@@ -286,15 +322,11 @@ export function GameShell({
           ))}
         </GlassSurface>
 
-        <Text style={[styles.guideNote, { color: color.ink3 }]}>
-          Sound, this guide, and pause stay in the top bar on every game.
-        </Text>
-
         <View style={styles.sheetActions}>
           <Button variant="primary" block onPress={() => setHelpOpen(false)}>
             Got it
           </Button>
-          {formattedBest && (
+          {showBestPill && (
             <Button variant="ghost" size="sm" block onPress={() => clearGameBest(gameId)}>
               Reset personal best
             </Button>
@@ -309,12 +341,12 @@ export function GameShell({
             <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
             <Text style={[styles.sheetSub, { color: color.ink3 }]}>{meta.classic}</Text>
           </View>
-          {formattedBest && (
+          {showBestPill ? (
             <GlassSurface variant="card" radius={14} style={styles.guideBestBox}>
               <Text style={[styles.guideBestLabel, { color: color.ink3 }]}>{spec.label}</Text>
               <Text style={[styles.guideBestVal, { color: color.accent }]}>{formattedBest}</Text>
             </GlassSurface>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.sheetActions}>
@@ -328,7 +360,7 @@ export function GameShell({
               setAudioOpen(true)
             }}
           >
-            Sound
+            {activeSoundName ? `Sound (${activeSoundName})` : 'Sound'}
           </Button>
           <Button
             block
@@ -393,7 +425,7 @@ export function GameActionButton({
         },
       ]}
     >
-      <GlassSurface variant="pill" radius={16} accent={active} style={styles.actionBtn}>
+      <GlassSurface variant="pill" radius={16} accent={active} interactive style={styles.actionBtn}>
         {icon}
         <Text style={[styles.actionBtnText, { color: active ? color.accent : color.ink }]}>{label}</Text>
       </GlassSurface>
@@ -469,44 +501,65 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 50,
+    height: 46,
     gap: 10,
   },
   capsule: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 44,
+    height: 42,
   },
   capBtn: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 0,
   },
   capDiv: {
     width: 1,
-    height: 18,
+    height: 16,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  titleStack: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    flex: 1,
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '600',
     letterSpacing: -0.3,
   },
+  sessionMini: {
+    fontSize: 10.5,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    marginTop: 1,
+  },
+  soundIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  liveDot: {
+    position: 'absolute',
+    top: -3,
+    right: -4,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
   telemetry: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
-    paddingLeft: 14,
-    paddingRight: 8,
+    minHeight: 26,
     gap: 8,
   },
   statsGroup: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 9,
     overflow: 'hidden',
   },
   statPair: {
@@ -528,17 +581,42 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
   },
-  bestPill: {
+  telemetryRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  nowPlayingPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    height: 24,
-    paddingHorizontal: 9,
+    height: 22,
+    paddingHorizontal: 8,
+    borderRadius: 11,
+    borderWidth: 1,
+    backgroundColor: 'rgba(194, 161, 95, 0.08)',
+    maxWidth: 110,
+  },
+  nowDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  nowText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  bestPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 22,
+    paddingHorizontal: 8,
     borderRadius: 8,
     borderWidth: 1,
   },
   bestText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
@@ -546,7 +624,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   readyOverlay: {
     position: 'absolute',
@@ -555,17 +633,17 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     zIndex: 25,
-    backgroundColor: 'rgba(0, 0, 0, 0.56)',
+    backgroundColor: 'rgba(0, 0, 0, 0.62)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: 20,
   },
   readyCard: {
     width: '100%',
-    maxWidth: 300,
+    maxWidth: 320,
     padding: 22,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   readyTitle: {
     fontSize: 22,
@@ -576,12 +654,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
-    marginBottom: 8,
+  },
+  readyExtraWrap: {
+    width: '100%',
+    marginTop: 2,
+    marginBottom: 4,
   },
   readyActions: {
     width: '100%',
     gap: 6,
     alignItems: 'center',
+    marginTop: 4,
   },
   readyBtnText: {
     fontSize: 16,
@@ -660,11 +743,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14.5,
     lineHeight: 21,
-  },
-  guideNote: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    marginTop: 12,
   },
   sheetActions: {
     gap: 8,

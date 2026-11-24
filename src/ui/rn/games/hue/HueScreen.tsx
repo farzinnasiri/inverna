@@ -22,7 +22,6 @@ const Sparkles = _Sparkles as unknown as LucideSvgIcon
 import {
   createHue,
   findHintPair,
-  hexToOklab,
   nextPuzzle,
   restartPuzzle,
   swapTiles,
@@ -62,7 +61,7 @@ const BEZEL_INSET = BEZEL_PADDING + BEZEL_BORDER
 
 const HOW_TO = [
   'Tap two tiles — or drag one onto another — to swap them until the gradient flows smoothly.',
-  'Tiles with a small dot are anchored in place and show where each corner belongs.',
+  'Tiles with a brass diamond are anchored in place and show where each corner belongs.',
 ] as const
 
 function isValidSave(value: unknown): value is HueSave {
@@ -137,17 +136,6 @@ export function HueScreen({ onExit }: GameScreenProps) {
       hintAnimRef.current?.stop()
     }
   }, [])
-
-  // Precompute dark pinned tiles so anchor dots maintain crisp contrast.
-  const darkTileIds = useMemo(() => {
-    const dark = new Set<number>()
-    for (const tile of state.tiles) {
-      if (tile.pinned && hexToOklab(tile.color).L < 0.58) {
-        dark.add(tile.id)
-      }
-    }
-    return dark
-  }, [state.tiles])
 
   // Compute responsive square cell sizing that fits inside the stage without overflow.
   const metrics = useMemo(() => {
@@ -471,7 +459,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
       howTo={HOW_TO}
       controls={
         <View style={styles.bar}>
-          <Text style={[styles.barTitle, { color: color.ink }]} numberOfLines={1}>
+          <Text style={[styles.barTitle, { color: color.ink2 }]} numberOfLines={1}>
             {state.paletteTitle}
           </Text>
           <GameControlBar>
@@ -552,13 +540,10 @@ export function HueScreen({ onExit }: GameScreenProps) {
                     >
                       {tile.pinned && (
                         <View
+                          pointerEvents="none"
                           style={[
-                            styles.anchorDot,
-                            {
-                              backgroundColor: darkTileIds.has(tile.id)
-                                ? color.ink
-                                : color.accentInk,
-                            },
+                            styles.anchorClasp,
+                            { backgroundColor: color.accent, borderColor: color.accentInk },
                           ]}
                         />
                       )}
@@ -648,11 +633,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.xs,
     borderWidth: 2,
   },
-  anchorDot: {
-    width: 4,
-    height: 4,
+  anchorClasp: {
+    width: 10,
+    height: 10,
+    borderWidth: 1,
     borderRadius: 2,
-    opacity: 0.85,
+    borderCurve: 'continuous',
+    transform: [{ rotate: '45deg' }],
   },
   hintRing: {
     position: 'absolute',
@@ -664,11 +651,11 @@ const styles = StyleSheet.create({
   },
   bar: {
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
   },
   barTitle: {
     maxWidth: '100%',
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '600',
     letterSpacing: -0.2,
   },

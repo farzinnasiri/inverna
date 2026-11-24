@@ -89,72 +89,72 @@ export const PALETTES: readonly HuePalette[] = [
   {
     id: 'midnight-brass',
     title: 'Midnight Brass',
-    corners: { tl: '#cbd0d8', tr: '#b89450', bl: '#3d5a73', br: '#3c1d24' },
+    corners: { tl: '#cbd0d8', tr: '#b89450', bl: '#375b79', br: '#3c1d24' },
   },
   {
     id: 'pine-silver',
     title: 'Pine & Silver',
-    corners: { tl: '#d3d9d6', tr: '#497362', bl: '#555078', br: '#192530' },
+    corners: { tl: '#d3d9d6', tr: '#407562', bl: '#555080', br: '#192530' },
   },
   {
     id: 'observatory',
     title: 'Observatory',
-    corners: { tl: '#d6d3c9', tr: '#5b567d', bl: '#466e64', br: '#2f2119' },
+    corners: { tl: '#d6d3c9', tr: '#5c5682', bl: '#3e7064', br: '#2f2119' },
   },
   {
     id: 'clockwork',
     title: 'Clockwork',
-    corners: { tl: '#cfd5dc', tr: '#456682', bl: '#8a434b', br: '#1b1e26' },
+    corners: { tl: '#cfd5dc', tr: '#406687', bl: '#8a434b', br: '#1b1e26' },
   },
   {
     id: 'verdigris-vault',
     title: 'Verdigris Vault',
-    corners: { tl: '#cfd8d4', tr: '#3f6e67', bl: '#7c5e3a', br: '#1f2833' },
+    corners: { tl: '#cfd8d4', tr: '#367068', bl: '#7c5e3a', br: '#1f2833' },
   },
   {
     id: 'oxblood-brass',
     title: 'Oxblood & Brass',
-    corners: { tl: '#d5cfd2', tr: '#9c7e47', bl: '#7d3a43', br: '#1e212a' },
+    corners: { tl: '#d5cfd2', tr: '#9c7e47', bl: '#813742', br: '#1e212a' },
   },
   {
     id: 'astrolabe',
     title: 'Astrolabe',
-    corners: { tl: '#d8d1c1', tr: '#a68549', bl: '#465c70', br: '#2b2436' },
+    corners: { tl: '#d8d1c1', tr: '#a68549', bl: '#405c75', br: '#2b2436' },
   },
   {
     id: 'fjord-iron',
     title: 'Fjord & Iron',
-    corners: { tl: '#cdd5dc', tr: '#4e6d82', bl: '#3b594d', br: '#20232b' },
+    corners: { tl: '#cdd5dc', tr: '#476e87', bl: '#345b4a', br: '#20232b' },
   },
   {
     id: 'smoked-indigo',
     title: 'Smoked Indigo',
-    corners: { tl: '#d1d0da', tr: '#5c547d', bl: '#7f5b3c', br: '#1c2630' },
+    corners: { tl: '#d1d0da', tr: '#5c5383', bl: '#7f5b3c', br: '#1c2630' },
   },
   {
     id: 'antiquary',
     title: 'Antiquary',
-    corners: { tl: '#d4cec4', tr: '#9b7e48', bl: '#3e6156', br: '#3d2229' },
+    corners: { tl: '#d4cec4', tr: '#9b7e48', bl: '#376354', br: '#3d2229' },
   },
   {
     id: 'harbor-bell',
     title: 'Harbor Bell',
-    corners: { tl: '#ccd4d8', tr: '#3c5f78', bl: '#88454c', br: '#182826' },
+    corners: { tl: '#ccd4d8', tr: '#365f7e', bl: '#88454c', br: '#182826' },
   },
   {
     id: 'graphite-gold',
     title: 'Graphite & Gold',
-    corners: { tl: '#d3d6dc', tr: '#b39051', bl: '#4c5460', br: '#1d222b' },
+    corners: { tl: '#d3d6dc', tr: '#b39051', bl: '#495365', br: '#1d222b' },
   },
   {
     id: 'spruce-garnet',
     title: 'Spruce & Garnet',
-    corners: { tl: '#cfd6d1', tr: '#476e5c', bl: '#7e3d45', br: '#212633' },
+    corners: { tl: '#cfd6d1', tr: '#3e705b', bl: '#7e3d45', br: '#212633' },
   },
   {
     id: 'moonlit-foundry',
     title: 'Moonlit Foundry',
-    corners: { tl: '#d5d8de', tr: '#676f7d', bl: '#8e6d3f', br: '#212838' },
+    corners: { tl: '#d5d8de', tr: '#646e83', bl: '#8e6d3f', br: '#212838' },
   },
 ] as const
 

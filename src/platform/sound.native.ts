@@ -31,14 +31,19 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 
 /**
  * Native iOS / Android sound engine powered by `expo-audio`.
- * Plays seamless looping procedural WAV layers + stereo binaural tracks with
- * lock-screen background playback (`playsInSilentMode: true`, `shouldPlayInBackground: true`).
+ * - Plays seamless looping procedural WAV layers + stereo binaural tracks.
+ * - Uses `interruptionMode: 'doNotMix'` + `setActiveForLockScreen(true, ...)` so iOS
+ *   displays Lull's live audio controls on the Lock Screen, Control Center, and
+ *   Dynamic Island whenever sound is running in the background!
+ * - Listens for external OS Pause presses from Lock Screen / Dynamic Island and
+ *   cleanly pauses all active layers + notifies `useSound`.
  */
 export function createPlatformSoundEngine(): SoundEngine {
   let running = false
   let cuesEnabled = true
   let master = 0.85
   let modeReady = false
+  let ignorePauseUntil = 0
 
   const layerPlayers = new Map<LayerId, AudioPlayer>()
   const bandPlayers = new Map<SleepBandId, AudioPlayer>()
@@ -46,6 +51,13 @@ export function createPlatformSoundEngine(): SoundEngine {
 
   let activeBand: SleepBandId | null = null
   let lastMix: Mix | null = null
+  let lockScreenPlayer: AudioPlayer | null = null
+  let lockScreenSub: { remove: () => void } | null = null
+  let nowPlayingMeta: { title: string; subtitle?: string } = {
+    title: 'Night Soundscape',
+    subtitle: 'Lull',
+  }
+  const externalPauseListeners = new Set<() => void>()
 
   const ensureAudioMode = async () => {
     if (modeReady) return
@@ -54,12 +66,75 @@ export function createPlatformSoundEngine(): SoundEngine {
       await setAudioModeAsync({
         playsInSilentMode: true,
         shouldPlayInBackground: true,
-        interruptionMode: 'mixWithOthers',
+        // Apple requires an exclusive audio session (`doNotMix`) for Lock Screen,
+        // Control Center, and Dynamic Island Now Playing controls to appear.
+        interruptionMode: 'doNotMix',
         allowsRecording: false,
         shouldRouteThroughEarpiece: false,
       })
     } catch {
       /* ignore in unsupported runtime */
+    }
+  }
+
+  const clearLockScreen = () => {
+    lockScreenSub?.remove()
+    lockScreenSub = null
+    if (lockScreenPlayer) {
+      try {
+        lockScreenPlayer.clearLockScreenControls()
+      } catch {
+        /* ignore */
+      }
+      lockScreenPlayer = null
+    }
+  }
+
+  const bindLockScreen = (primary: AudioPlayer | null) => {
+    if (!primary || !running) {
+      clearLockScreen()
+      return
+    }
+    const meta = {
+      title: nowPlayingMeta.title,
+      artist: 'Lull',
+      albumTitle: nowPlayingMeta.subtitle ?? 'Night Soundscape',
+    }
+    if (lockScreenPlayer === primary) {
+      try {
+        primary.updateLockScreenMetadata(meta)
+      } catch {
+        /* ignore */
+      }
+      return
+    }
+    clearLockScreen()
+    lockScreenPlayer = primary
+    try {
+      primary.setActiveForLockScreen(true, meta, {
+        showSeekBackward: false,
+        showSeekForward: false,
+        isLiveStream: true,
+      })
+      // Sync Lock Screen / Dynamic Island Pause button back to all Lull layers + UI state.
+      lockScreenSub = primary.addListener('playbackStatusUpdate', (status) => {
+        if (!running) return
+        if (Date.now() < ignorePauseUntil) return
+        if (status && status.isLoaded && !status.playing) {
+          running = false
+          ignorePauseUntil = Date.now() + 400
+          for (const p of layerPlayers.values()) {
+            if (p !== primary && p.playing) p.pause()
+          }
+          for (const p of bandPlayers.values()) {
+            if (p !== primary && p.playing) p.pause()
+          }
+          clearLockScreen()
+          for (const fn of externalPauseListeners) fn()
+        }
+      })
+    } catch {
+      /* ignore if lock screen controls unavailable on current runtime */
     }
   }
 
@@ -97,6 +172,11 @@ export function createPlatformSoundEngine(): SoundEngine {
 
   const applyVolumes = () => {
     if (!lastMix) return
+    ignorePauseUntil = Date.now() + 350
+
+    let primaryPlayer: AudioPlayer | null = null
+    let primaryGain = 0
+
     for (const id of ALL_LAYERS) {
       const gain = clamp01(lastMix.layers[id] ?? 0)
       const p = layerPlayers.get(id)
@@ -104,6 +184,10 @@ export function createPlatformSoundEngine(): SoundEngine {
         const player = p ?? getLayer(id)
         player.volume = gain * master
         if (!player.playing) player.play()
+        if (gain > primaryGain) {
+          primaryGain = gain
+          primaryPlayer = player
+        }
       } else if (p) {
         p.volume = 0
         if (p.playing) p.pause()
@@ -123,7 +207,10 @@ export function createPlatformSoundEngine(): SoundEngine {
       const bp = getBand(nextBand)
       bp.volume = clamp01(lastMix.bandGain) * 0.55 * master
       if (!bp.playing) bp.play()
+      if (!primaryPlayer) primaryPlayer = bp
     }
+
+    bindLockScreen(primaryPlayer)
   }
 
   return {
@@ -150,6 +237,8 @@ export function createPlatformSoundEngine(): SoundEngine {
 
     stop() {
       running = false
+      ignorePauseUntil = Date.now() + 400
+      clearLockScreen()
       for (const p of layerPlayers.values()) {
         p.volume = 0
         if (p.playing) p.pause()
@@ -174,6 +263,30 @@ export function createPlatformSoundEngine(): SoundEngine {
 
     setCuesEnabled(enabled: boolean) {
       cuesEnabled = Boolean(enabled)
+    },
+
+    setNowPlayingMeta(meta) {
+      if (meta) {
+        nowPlayingMeta = meta
+        if (lockScreenPlayer && running) {
+          try {
+            lockScreenPlayer.updateLockScreenMetadata({
+              title: meta.title,
+              artist: 'Lull',
+              albumTitle: meta.subtitle ?? 'Night Soundscape',
+            })
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    },
+
+    onExternalPause(listener) {
+      externalPauseListeners.add(listener)
+      return () => {
+        externalPauseListeners.delete(listener)
+      }
     },
 
     get isRunning() {

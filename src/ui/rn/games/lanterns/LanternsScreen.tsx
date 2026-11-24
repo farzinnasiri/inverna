@@ -5,7 +5,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   View,
   type LayoutChangeEvent,
 } from 'react-native'
@@ -209,33 +208,36 @@ function SigilMark({
 /** Subtle machined watchmaker brass/crosshair guilloché mark for tile backs. */
 function CardBackMark({
   size,
-  ringColor,
+  ribColor,
   brassColor,
 }: {
   size: number
-  ringColor: string
+  ribColor: string
   brassColor: string
 }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 40 40">
-      <Circle
-        cx={20}
-        cy={20}
-        r={10.5}
+      <Path
+        d="M20 9C13 9 8 13 8 20s5 11 12 11 12-4 12-11S27 9 20 9Z"
         fill="none"
-        stroke={ringColor}
-        strokeWidth={1}
-        strokeLinecap="round"
-        strokeDasharray="1.5 3.5"
+        stroke={brassColor}
+        strokeWidth={1.4}
       />
       <Path
-        d="M20 6v4M20 30v4M6 20h4M30 20h4"
+        d="M18 10c-7 5-7 15 0 20m4-20c7 5 7 15 0 20M20 11v18"
         fill="none"
-        stroke={ringColor}
-        strokeWidth={1}
-        strokeLinecap="round"
+        stroke={ribColor}
+        strokeWidth={1.2}
       />
-      <Circle cx={20} cy={20} r={1.4} fill={brassColor} />
+      <Path
+        d="M17 6h6m-6 27h6m-3 0v3M4 18l2 2-2 2m32-4-2 2 2 2"
+        fill="none"
+        stroke={brassColor}
+        strokeWidth={1.3}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={20} cy={37} r={1.4} fill={brassColor} />
     </Svg>
   )
 }
@@ -321,7 +323,7 @@ function LanternTile({
             },
           ]}
         >
-          <CardBackMark size={backMarkSize} ringColor={color.ink4} brassColor={color.accentDim} />
+          <CardBackMark size={backMarkSize} ribColor={color.ink4} brassColor={color.accentDim} />
         </View>
 
         <Animated.View
@@ -582,36 +584,32 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={HOW_TO}
       controls={
-        <GameControlBar>
-          <View style={styles.progressWrap}>
-            <View
-              style={styles.pipsRow}
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-            >
-              {Array.from({ length: state.totalPairs }, (_, i) => {
-                const filled = i < state.matchedPairs
-                return (
-                  <View
-                    key={i}
-                    style={[
-                      styles.pip,
-                      {
-                        backgroundColor: filled ? color.accent : color.surface2,
-                        borderColor: filled ? color.accent : color.lineStrong,
-                      },
-                    ]}
-                  />
-                )
-              })}
-            </View>
-            <Text style={[styles.progressLabel, { color: color.ink3 }]}>
-              {state.matchedPairs} of {state.totalPairs} pairs
-            </Text>
+        <View style={styles.progressWrap}>
+          <View
+            style={styles.pipsRow}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            {Array.from({ length: state.totalPairs }, (_, i) => {
+              const filled = i < state.matchedPairs
+              return (
+                <View
+                  key={i}
+                  style={[
+                    styles.pip,
+                    {
+                      backgroundColor: filled ? color.accent : color.surface2,
+                      borderColor: filled ? color.accent : color.lineStrong,
+                    },
+                  ]}
+                />
+              )
+            })}
           </View>
-
-          <GameActionButton label="New board" onPress={handleNext} />
-        </GameControlBar>
+          <GameControlBar>
+            <GameActionButton label="New board" onPress={handleNext} />
+          </GameControlBar>
+        </View>
       }
     >
       <View style={styles.stage} onLayout={onStageLayout}>
@@ -707,8 +705,8 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
   },
   progressWrap: {
-    gap: 5,
-    marginRight: 12,
+    gap: 6,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   pipsRow: {
@@ -720,11 +718,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
+    borderCurve: 'continuous',
     borderWidth: 1,
-  },
-  progressLabel: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
   },
 })

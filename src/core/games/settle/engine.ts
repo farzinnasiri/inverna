@@ -6,7 +6,7 @@
  * Sleep-friendly rules:
  * - Speed NEVER increases with lines cleared.
  * - Gravity slows gently as `calm` (0..1) rises during wind-down.
- * - No game-over: if a newly spawned piece collides with the stack, the
+ * - In Endless, if a newly spawned piece collides with the stack, the
  *   bottom 4 rows dissolve into embers so play continues seamlessly.
  */
 import { createRng } from '../../rng'
@@ -380,7 +380,11 @@ export interface DissolveEvent {
   remainingMs: number
 }
 
+export type SettleMode = 'endless' | 'classic'
+
 export interface SettleState {
+  mode: SettleMode
+  gameOver: boolean
   board: Cell[][]
   active: ActivePiece | null
   hold: TetrominoType | null
@@ -496,13 +500,16 @@ function spawnPiece(
   type: TetrominoType,
   dissolveCount: number,
   dissolving: DissolveEvent | null,
-): { board: Cell[][]; active: ActivePiece; dissolveCount: number; dissolving: DissolveEvent | null } {
+  mode: SettleMode,
+): { board: Cell[][]; active: ActivePiece | null; dissolveCount: number; dissolving: DissolveEvent | null } {
   const pos = spawnPosition(type)
   let nextBoard = board
   let nextDissolveCount = dissolveCount
   let nextDissolving = dissolving
 
   if (!canPlace(nextBoard, type, pos.x, pos.y, 0)) {
+    if (mode === 'classic') return { board, active: null, dissolveCount, dissolving }
+
     // Sleep-friendly top-out: dissolve bottom 4 rows into embers so play continues.
     let latestDissolved: Cell[][] = []
     let safety = 0
@@ -531,18 +538,19 @@ function spawnPiece(
 function spawnNextFromQueue(state: SettleState, board: Cell[][]): SettleState {
   const [nextType, ...rest] = state.queue
   const refilled = refillQueue(rest, state.rngState)
-  const spawned = spawnPiece(board, nextType!, state.dissolveCount, state.dissolving)
+  const spawned = spawnPiece(board, nextType!, state.dissolveCount, state.dissolving, state.mode)
   return {
     ...state,
     board: spawned.board,
     active: spawned.active,
-    canHold: true,
+    gameOver: spawned.active === null,
+    canHold: spawned.active !== null,
     queue: refilled.queue,
     rngState: refilled.rngState,
     gravityTimerMs: 0,
     lockTimerMs: 0,
     lockResets: 0,
-    lowestY: spawned.active.y,
+    lowestY: spawned.active?.y ?? 0,
     dissolveCount: spawned.dissolveCount,
     dissolving: spawned.dissolving,
   }
@@ -619,7 +627,7 @@ function applyMoveReset(state: SettleState, nextActive: ActivePiece): SettleStat
 /* Public Engine API                                                          */
 /* -------------------------------------------------------------------------- */
 
-export function createSettle(opts: { seed: number; calm?: number }): SettleState {
+export function createSettle(opts: { seed: number; calm?: number; mode?: SettleMode }): SettleState {
   const initial = refillQueue([], opts.seed >>> 0, 14)
   const [first, ...rest] = initial.queue
   const refilled = refillQueue(rest, initial.rngState)
@@ -627,6 +635,8 @@ export function createSettle(opts: { seed: number; calm?: number }): SettleState
   const pos = spawnPosition(first!)
   return {
     board,
+    mode: opts.mode ?? 'endless',
+    gameOver: false,
     active: { type: first!, x: pos.x, y: pos.y, rotation: 0 },
     hold: null,
     canHold: true,
@@ -731,11 +741,12 @@ export function hold(state: SettleState): SettleState {
     nextRng = refilled.rngState
   }
 
-  const spawned = spawnPiece(cloneBoard(state.board), nextType, state.dissolveCount, state.dissolving)
+  const spawned = spawnPiece(cloneBoard(state.board), nextType, state.dissolveCount, state.dissolving, state.mode)
   return {
     ...state,
     board: spawned.board,
     active: spawned.active,
+    gameOver: spawned.active === null,
     hold: heldType,
     canHold: false,
     queue: nextQueue,
@@ -743,14 +754,14 @@ export function hold(state: SettleState): SettleState {
     gravityTimerMs: 0,
     lockTimerMs: 0,
     lockResets: 0,
-    lowestY: spawned.active.y,
+    lowestY: spawned.active?.y ?? 0,
     dissolveCount: spawned.dissolveCount,
     dissolving: spawned.dissolving,
   }
 }
 
-export function restart(_state: SettleState, seed: number): SettleState {
-  return createSettle({ seed })
+export function restart(state: SettleState, seed: number): SettleState {
+  return createSettle({ seed, mode: state.mode })
 }
 
 export function settleReducer(state: SettleState, action: SettleAction): SettleState {
@@ -779,7 +790,7 @@ export function settleReducer(state: SettleState, action: SettleAction): SettleS
  * Pure & deterministic — time comes in as an argument.
  */
 export function tickSettle(state: SettleState, dtMs: number, calm: number): SettleState {
-  if (dtMs <= 0) return state
+  if (state.gameOver || dtMs <= 0) return state
 
   let next = state
 

@@ -48,7 +48,7 @@ export function SoundField({
   ).current
 
   const { width, height } = useWindowDimensions()
-  const size = Math.min(260, Math.max(196, Math.round(Math.min(width - 96, height * 0.34))))
+  const size = Math.min(204, Math.max(148, Math.round(Math.min(width - 144, height * 0.24))))
   const vb = 248
   const c = vb / 2
   const l = mix.layers
@@ -148,7 +148,7 @@ export function SoundField({
           </Svg>
 
           <View pointerEvents="none" style={styles.caption}>
-            <Text style={[styles.stateText, { color: playing ? color.accent : color.ink3 }]}>
+            <Text style={[styles.stateText, { color: playing ? color.accent : color.ink2 }]}>
               {playing ? 'Playing' : 'Tap to play'}
             </Text>
           </View>
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   },
   caption: {
     position: 'absolute',
-    bottom: 28,
+    bottom: 20,
     alignItems: 'center',
   },
   stateText: {

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle } from 'react-native-svg'
-import { LayoutGrid, SlidersHorizontal, Waves } from 'lucide-react-native'
+import { LayoutGrid, Moon, Waves } from 'lucide-react-native'
 import { sessionProgress } from '@/core/session'
 import { presetById } from '@/core/sound/catalog'
 import { haptics } from '@/platform'
@@ -11,13 +11,12 @@ import { useNav, type Tab } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
-import { FRAME_MAX_WIDTH } from './controls'
 import { GlassGroup, GlassSurface } from './Glass'
 
 function LiveBars({ color }: { color: string }) {
   const [tick, setTick] = useState(0)
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => (t + 1) % 12), 240)
+    const id = setInterval(() => setTick((t) => (t + 1) % 12), 260)
     return () => clearInterval(id)
   }, [])
   const h1 = 6 + ((tick * 3) % 9)
@@ -33,9 +32,9 @@ function LiveBars({ color }: { color: string }) {
 }
 
 /**
- * Floating iOS 26 Liquid Glass navigation dock.
- * Concentric capsule geometry (outer r=29, pad=5, inner r=24) with balanced
- * spacing for small (375pt) through large (440pt+) iPhones.
+ * Centered floating iOS 26 Liquid Glass navigation dock.
+ * - Optically centered `Play | Sounds` pill + `Moon` Night Control orb grouped together.
+ * - Distinct icons (`Moon` = Night settings; `SlidersHorizontal` is reserved exclusively for Sound Mix).
  */
 export function TabIsland({
   activeTab,
@@ -46,7 +45,6 @@ export function TabIsland({
 }) {
   const { color } = useTokenColors()
   const insets = useSafeAreaInsets()
-  const { width } = useWindowDimensions()
   const setNightOpen = useNav((s) => s.setNightOpen)
   const hapticsOn = useSettings((s) => s.haptics)
   const playing = useSound((s) => s.playing)
@@ -63,7 +61,6 @@ export function TabIsland({
   const preset = presetId ? presetById(presetId) : null
   const sessProgress = session ? sessionProgress(session, Date.now()) : 0
   const soundsLabel = playing && activeTab === 'play' ? (preset?.name ?? 'Custom') : 'Sounds'
-  const isCompact = width < 385
 
   const handleTab = (tab: Tab) => {
     if (tab !== activeTab && hapticsOn) haptics.play('light')
@@ -76,18 +73,11 @@ export function TabIsland({
       style={[
         styles.outer,
         {
-          bottom: Math.max(insets.bottom, 12) + 4,
+          bottom: Math.max(insets.bottom, 10) + 6,
         },
       ]}
     >
-      <GlassGroup
-        spacing={12}
-        pointerEvents="box-none"
-        style={[styles.row, { paddingHorizontal: isCompact ? 16 : 20 }]}
-      >
-        {/* Spacer balances the right 56pt glass orb so the main pill stays optically centered */}
-        <View style={styles.balanceSpacer} pointerEvents="none" />
-
+      <GlassGroup spacing={10} pointerEvents="box-none" style={styles.row}>
         <GlassSurface variant="chrome" radius={28} style={styles.pillWrap}>
           <Pressable
             onPress={() => handleTab('play')}
@@ -176,7 +166,7 @@ export function TabIsland({
                 />
               </Svg>
             )}
-            <SlidersHorizontal
+            <Moon
               size={19}
               strokeWidth={1.65}
               color={session ? color.accent : color.ink2}
@@ -197,16 +187,10 @@ const styles = StyleSheet.create({
     zIndex: 40,
   },
   row: {
-    width: '100%',
-    maxWidth: FRAME_MAX_WIDTH,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     gap: 10,
-  },
-  balanceSpacer: {
-    width: 56,
-    height: 56,
   },
   pillWrap: {
     flexDirection: 'row',
@@ -221,14 +205,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     height: 44,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     borderRadius: 22,
-    maxWidth: 132,
+    maxWidth: 138,
   },
   segActive: {
     backgroundColor: 'rgba(255, 255, 255, 0.13)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255, 255, 255, 0.18)',
+    borderColor: 'rgba(255, 255, 255, 0.20)',
   },
   segLabel: {
     fontSize: 14,

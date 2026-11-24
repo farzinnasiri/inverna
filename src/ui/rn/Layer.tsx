@@ -1,12 +1,16 @@
 import type { ReactNode } from 'react'
-import { Modal, Platform, StyleSheet } from 'react-native'
+import { Modal, Platform, StyleSheet, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { FullWindowOverlay } from 'react-native-screens'
+import { NightFilterOverlay } from './NightFilterOverlay'
 
 /**
  * Overlay container (Al Dente pattern):
  * - On iOS: react-native-screens FullWindowOverlay avoids native Modal stacking freezes.
  * - On Android & Web: transparent Modal portal.
+ *
+ * Mounts `<NightFilterOverlay />` on top of the portal content so adjusting the
+ * Night Light slider inside Onboarding or NightSheet visibly dims & warms the UI live!
  */
 export function Layer({
   visible,
@@ -21,12 +25,17 @@ export function Layer({
 }) {
   if (!visible) return null
 
+  const content = (
+    <GestureHandlerRootView style={styles.root}>
+      <View style={styles.root}>
+        {children}
+        <NightFilterOverlay />
+      </View>
+    </GestureHandlerRootView>
+  )
+
   if (Platform.OS === 'ios') {
-    return (
-      <FullWindowOverlay>
-        <GestureHandlerRootView style={StyleSheet.absoluteFill}>{children}</GestureHandlerRootView>
-      </FullWindowOverlay>
-    )
+    return <FullWindowOverlay>{content}</FullWindowOverlay>
   }
 
   return (
@@ -39,7 +48,7 @@ export function Layer({
       onRequestClose={onRequestClose}
       accessibilityLabel={label}
     >
-      <GestureHandlerRootView style={styles.root}>{children}</GestureHandlerRootView>
+      {content}
     </Modal>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from 'react'
 import {
+  Animated,
   PanResponder,
   StyleSheet,
   Text,
@@ -47,7 +48,7 @@ const RAD_TO_DEG = 180 / Math.PI
 const KOI_CLIP_ID = 'pond-koi-body-clip'
 
 const HOW_TO = [
-  'Touch or drag across the dark water to guide the koi toward the light motes.',
+  'Touch or drag across the dark water to guide the koi through the glowing lotus bud. Follow the water-thread to the next bud.',
   'Lift your finger and watch it glide on its own. There is no timer and no rush.',
   'During a wind-down session, the pond slows gradually as bedtime approaches.',
 ] as const
@@ -61,7 +62,9 @@ function isValidPondState(v: unknown): v is PondState {
     Boolean(s.koi) &&
     Array.isArray(s.koi?.spine) &&
     s.koi.spine.length === SPINE_SEGMENTS &&
-    Array.isArray(s.motes) &&
+    Array.isArray(s.buds) &&
+    typeof s.nextBud === 'number' &&
+    typeof s.blooms === 'number' &&
     Array.isArray(s.ripples) &&
     Array.isArray(s.leaves) &&
     typeof s.gathered === 'number' &&
@@ -194,23 +197,10 @@ function buildTailPaths(unit: number, sway: number): { body: string; rays: strin
   return { body, rays }
 }
 
-function buildLeafPaths(lr: number, notch: number): { body: string; veins: string } {
-  const a0 = notch
-  const a1 = Math.PI * 2 - notch
-  const x0 = Math.cos(a0) * lr
-  const y0 = Math.sin(a0) * lr
-  const x1 = Math.cos(a1) * lr
-  const y1 = Math.sin(a1) * lr
-  const body = `M 0 0 L ${f(x0)} ${f(y0)} A ${f(lr)} ${f(lr)} 0 1 1 ${f(x1)} ${f(y1)} Z`
-
-  const veinParts: string[] = []
-  for (let v = 0; v < 5; v++) {
-    const va = notch + 0.55 + (v / 4) * (Math.PI * 2 - notch * 2 - 1.1)
-    veinParts.push(`M 0 0 L ${f(Math.cos(va) * lr * 0.78)} ${f(Math.sin(va) * lr * 0.78)}`)
-  }
-
-  return { body, veins: veinParts.join(' ') }
-}
+const PAD_OUTLINE = 'M .35 .03 C .48 -.14 .91 -.22 .91 -.44 C .9 -.68 .64 -.77 .45 -.85 C .22 -1.04 -.08 -.91 -.23 -.92 C -.53 -.96 -.79 -.7 -.87 -.48 C -1.03 -.28 -1.06 -.01 -.94 .18 C -.91 .5 -.64 .82 -.37 .87 C -.11 1 .16 .91 .34 .83 C .67 .84 .96 .54 .96 .29 C .97 .12 .55 .17 .35 .03 Z'
+const PAD_VEINS = 'M .35 .03 Q -.18 -.29 -.62 -.62 M .35 .03 Q -.10 -.03 -.84 -.19 M .35 .03 Q -.18 .32 -.61 .61 M .35 .03 Q .16 .42 -.08 .79 M .35 .03 Q .46 .45 .62 .56 M .35 .03 Q .26 -.45 .39 -.72 M -.28 -.31 Q -.41 -.54 -.43 -.66 M -.36 .15 Q -.57 .12 -.72 .26 M .14 .44 Q -.11 .44 -.22 .61'
+const LOTUS_PETAL = 'M 0 0 C -5 -3 -5 -10 0 -15 C 5 -10 5 -3 0 0 Z'
+const LOTUS_ANGLES = [0, 60, 120, 180, 240, 300] as const
 
 export function PondScreen({ onExit }: GameScreenProps) {
   const tokens = useTokenColors()
@@ -232,6 +222,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
   const [paused, setPaused] = useState(false)
   const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
 
+  const [hintOpacity] = useState(() => new Animated.Value(1))
   const sizeRef = useRef(stageSize)
   const touchOriginRef = useRef<Vec2 | null>(null)
   const pointerPosRef = useRef<Vec2 | null>(null)
@@ -282,11 +273,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
 
         if (next.gatherEventId > prevGatherIdRef.current) {
           prevGatherIdRef.current = next.gatherEventId
-          if (next.gathered % 5 === 0) {
-            cue('chime', 0.65)
-          } else {
-            cue('clear', 0.55)
-          }
+          cue('chime', 0.32)
           haptic('light')
           persist(next)
         }
@@ -341,6 +328,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
         if (pausedRef.current) return
         const lx = e.nativeEvent.locationX
         const ly = e.nativeEvent.locationY
+        Animated.timing(hintOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start()
         touchOriginRef.current = { x: lx, y: ly }
         const pt = toNorm(lx, ly)
         pointerPosRef.current = pt
@@ -561,8 +549,8 @@ export function PondScreen({ onExit }: GameScreenProps) {
   return (
     <GameShell
       gameId="pond"
-      score={pondState.gathered}
-      stats={[{ label: 'Gathered', value: pondState.gathered }]}
+      hideBest
+      stats={[{ label: 'Blooms', value: pondState.blooms }]}
       paused={paused}
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
@@ -570,11 +558,8 @@ export function PondScreen({ onExit }: GameScreenProps) {
       howTo={HOW_TO}
       controls={
         <GameControlBar>
-          <GlassSurface variant="pill" radius={16} style={styles.status}>
-            <Text style={[styles.caption, { color: color.ink2 }]}>Touch to guide</Text>
-          </GlassSurface>
           <GameActionButton
-            label="Scatter"
+            label="Ripple"
             icon={<Waves size={16} strokeWidth={1.5} color={color.ink2} />}
             onPress={handleScatter}
             disabled={paused}
@@ -707,13 +692,13 @@ export function PondScreen({ onExit }: GameScreenProps) {
                 const ease = 1 - Math.pow(1 - t, 2.2)
                 const fadeIn = Math.min(1, t / 0.09)
                 const fadeOut = Math.pow(1 - t, 1.7)
-                const baseAlpha = fadeIn * fadeOut * (r.kind === 'gather' ? 0.56 : r.kind === 'tap' ? 0.44 : 0.2)
+                const baseAlpha = fadeIn * fadeOut * (r.kind === 'wash' ? 0.42 : r.kind === 'gather' ? 0.56 : r.kind === 'tap' ? 0.44 : 0.2)
                 if (baseAlpha <= 0.005) return null
 
                 const rx = r.x * w
                 const ry = r.y * h
-                const outerRadius = (r.startRadius + (r.maxRadius - r.startRadius) * ease) * unit
-                const ringCount = r.kind === 'tail' ? 1 : r.kind === 'gather' ? 3 : 2
+                const outerRadius = (r.startRadius + (r.maxRadius - r.startRadius) * ease) * (r.kind === 'wash' ? Math.hypot(w, h) * 0.64 : unit)
+                const ringCount = r.kind === 'tail' ? 1 : r.kind === 'gather' || r.kind === 'wash' ? 3 : 2
 
                 const rings = []
                 for (let ring = 0; ring < ringCount; ring++) {
@@ -721,10 +706,8 @@ export function PondScreen({ onExit }: GameScreenProps) {
                   if (ringRadius <= 1) continue
                   const ringAlpha = baseAlpha * (1 - ring * 0.28)
                   const ringHex =
-                    r.kind === 'gather'
-                      ? ring === 0
-                        ? pieces.clay
-                        : color.accentDim
+                    r.kind === 'gather' || r.kind === 'wash'
+                      ? color.accent
                       : r.kind === 'tap'
                         ? pieces.clay
                         : color.ink3
@@ -744,41 +727,38 @@ export function PondScreen({ onExit }: GameScreenProps) {
                 return rings
               })}
 
-              {/* 6. Floating lantern motes in Antique Brass & Moon Ivory */}
-              {pondState.motes.map((m) => {
-                if (m.fadeIn <= 0.01) return null
-                const mx = m.x * w
-                const my = m.y * h
-                const pulse = 0.5 + 0.5 * Math.sin(m.phase * 1.55) * motionAmp
-                const coreAlpha = m.fadeIn * (0.42 + 0.22 * pulse)
-                const coreR = m.radius * unit * (0.92 + 0.08 * pulse)
-                const isIvoryLantern = m.id % 3 === 0
-
+              <Path
+                d={pondState.buds.map((bud, i) => `${i === 0 ? 'M' : 'L'} ${f(bud.x * w)} ${f(bud.y * h)}`).join(' ')}
+                stroke={pieces.bone}
+                strokeOpacity={0.19}
+                strokeWidth={1}
+                fill="none"
+              />
+              {pondState.buds.map((bud, index) => {
+                const active = index === pondState.nextBud
+                const open = bud.openedAt !== null
+                const age = pondState.timeMs - (bud.openedAt ?? pondState.timeMs)
+                const spread = reducedMotion ? 1 : 1 - Math.pow(1 - Math.min(1, age / 850), 3)
+                const pulse = 0.5 + 0.5 * Math.sin(pondState.timeMs / 600) * motionAmp
                 return (
-                  <G key={`mote-${m.id}`}>
-                    <Circle
-                      cx={mx}
-                      cy={my}
-                      r={coreR * 1.95}
-                      fill="none"
-                      stroke={isIvoryLantern ? pieces.clay : color.accentDim}
-                      strokeOpacity={0.34 * m.fadeIn}
-                      strokeWidth={0.85}
-                    />
-                    <Circle
-                      cx={mx}
-                      cy={my}
-                      r={coreR}
-                      fill={isIvoryLantern ? pieces.bone : color.accent}
-                      fillOpacity={coreAlpha}
-                    />
-                    <Circle
-                      cx={mx}
-                      cy={my}
-                      r={coreR * 0.38}
-                      fill={isIvoryLantern ? color.accent : pieces.bone}
-                      fillOpacity={m.fadeIn * 0.62}
-                    />
+                  <G key={bud.id} transform={`translate(${f(bud.x * w)}, ${f(bud.y * h)}) scale(${unit / 340})`}>
+                    {active && <Circle r={12 + pulse * 4} fill={color.accent} fillOpacity={0.07}
+                      stroke={color.accent} strokeOpacity={0.3 + pulse * 0.35} />}
+                    {open ? (
+                      <G>
+                        {LOTUS_ANGLES.map((angle, i) => (
+                          <Path key={angle} d={LOTUS_PETAL}
+                            transform={`rotate(${angle * spread}) scale(${0.65 + spread * 0.35})`}
+                            fill={i % 2 ? pieces.bone : color.accent}
+                            fillOpacity={0.68} stroke={pieces.bone} strokeWidth={0.55} />
+                        ))}
+                        <Circle r={3.3} fill={color.accent} stroke={pieces.bone} strokeWidth={0.75} />
+                      </G>
+                    ) : (
+                      <Path d="M 0 6 C -8 4 -7 -2 0 -9 C 7 -2 8 4 0 6 Z"
+                        fill={active ? color.accent : color.surface3}
+                        stroke={active ? pieces.bone : color.accentDim} strokeWidth={0.9} />
+                    )}
                   </G>
                 )
               })}
@@ -788,20 +768,20 @@ export function PondScreen({ onExit }: GameScreenProps) {
                 const lx = leaf.x * w
                 const ly = leaf.y * h
                 const lr = leaf.radius * unit
-                const leafPaths = buildLeafPaths(lr, leaf.notch)
                 return (
-                  <G key={`leaf-${leaf.id}`} transform={`translate(${lx.toFixed(2)}, ${ly.toFixed(2)}) rotate(${(leaf.angle * RAD_TO_DEG).toFixed(2)})`}>
+                  <G key={`leaf-${leaf.id}`} transform={`translate(${lx.toFixed(2)}, ${ly.toFixed(2)}) rotate(${(leaf.angle * RAD_TO_DEG).toFixed(2)}) scale(${lr})`}>
                     <Path
-                      d={leafPaths.body}
+                      d={PAD_OUTLINE}
                       fill={color.surface3}
-                      stroke={color.line}
-                      strokeWidth={0.9}
+                      stroke={color.accentDim}
+                      strokeWidth={0.9 / lr}
                     />
                     <Path
-                      d={leafPaths.veins}
+                      d={PAD_VEINS}
                       fill="none"
-                      stroke={color.line}
-                      strokeWidth={0.7}
+                      stroke={pieces.bone}
+                      strokeOpacity={0.22}
+                      strokeWidth={0.7 / lr}
                     />
                   </G>
                 )
@@ -830,6 +810,9 @@ export function PondScreen({ onExit }: GameScreenProps) {
               )}
             </Svg>
           )}
+          <Animated.View pointerEvents="none" style={[styles.hint, { opacity: hintOpacity }]}>
+            <Text style={[styles.caption, { color: color.ink2 }]}>Drag anywhere on the water to guide</Text>
+          </Animated.View>
           <View
             {...panResponder.panHandlers}
             collapsable={false}
@@ -858,10 +841,11 @@ const styles = StyleSheet.create({
   canvas: {
     position: 'absolute',
   },
-  status: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
+  hint: {
+    position: 'absolute',
+    bottom: 18,
+    left: 12,
+    right: 12,
   },
   caption: {
     fontSize: 13,

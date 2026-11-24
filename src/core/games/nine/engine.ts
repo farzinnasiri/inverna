@@ -9,7 +9,12 @@ export interface NineSnapshot {
   notes: number[][]
 }
 
+export type NineDifficulty = 'easy' | 'medium' | 'hard' | 'expert'
+
+const DIFFICULTY_GIVENS: Record<NineDifficulty, number> = { easy: 46, medium: 39, hard: 33, expert: 29 }
+
 export interface NineState {
+  difficulty?: NineDifficulty
   puzzleNumber: number
   seed: number
   rngState: number
@@ -31,6 +36,7 @@ export interface NineState {
 }
 
 export interface CreateNineOptions {
+  difficulty?: NineDifficulty
   seed?: number
   calm?: number
   puzzleNumber?: number
@@ -445,11 +451,12 @@ export function createNine(opts: CreateNineOptions = {}): NineState {
   const rng = createRng(seed)
 
   const solution = generateSolution(rng)
-  const targetGivens = targetGivensForCalm(calm, rng)
+  const targetGivens = opts.difficulty ? DIFFICULTY_GIVENS[opts.difficulty] : targetGivensForCalm(calm, rng)
   const values = carveUniquePuzzle(solution, targetGivens, rng)
   const givens = values.map((v) => v !== 0)
 
   return {
+    ...(opts.difficulty ? { difficulty: opts.difficulty } : {}),
     puzzleNumber,
     seed,
     rngState: rng.state(),
@@ -646,12 +653,13 @@ export function restartPuzzle(state: NineState): NineState {
   }
 }
 
-export function nextPuzzle(state: NineState, calm: number): NineState {
+export function nextPuzzle(state: NineState, calm: number, difficulty = state.difficulty): NineState {
   const rng = createRng(state.rngState)
   const nextSeed = (Math.floor(rng.next() * 0xffffffff) ^ (state.puzzleNumber * 0x9e3779b9)) >>> 0
   return createNine({
     seed: nextSeed === 0 ? 1 : nextSeed,
     calm,
+    ...(difficulty ? { difficulty } : {}),
     puzzleNumber: state.puzzleNumber + 1,
   })
 }

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PanResponder, Platform, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
-import Svg, { Circle, Line, Rect, Text as SvgText } from 'react-native-svg'
+import { PanResponder, Platform, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
+import Svg, { Circle, Line, Rect } from 'react-native-svg'
 import {
   AI_Y,
   BALL_RADIUS,
   createRally,
   PADDLE_HALF_HEIGHT,
   PLAYER_Y,
-  SERVE_DELAY_MS,
   serveNow,
   setDifficulty,
   setPlayerVelocity,
@@ -20,7 +20,7 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { Segmented } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
-import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
+import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
 
 interface RallySave {
   state: RallyState | null
@@ -43,7 +43,7 @@ const DIFFICULTY_OPTIONS: readonly { value: RallyDifficulty; label: string }[] =
 const HOW_TO = [
   'Drag anywhere across the court or along the bottom rail to glide your ivory paddle.',
   'Strike the brass ball off-center to angle your return, or tap to serve immediately.',
-  'Switch between Easy, Medium, and Hard below at any time.',
+  'Choose Easy, Medium, or Hard before starting.',
 ] as const
 
 function isDifficulty(v: unknown): v is RallyDifficulty {
@@ -71,11 +71,14 @@ function isValidRallyState(v: unknown): v is RallyState {
   )
 }
 
+function motionFrame(state: RallyState) {
+  return { x: state.ball.x, y: state.ball.y, player: state.playerX, ai: state.aiX }
+}
+
 export function RallyScreen({ onExit }: GameScreenProps) {
   const { isCompact } = useResponsiveLayout()
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
-  const reduceMotion = useReducedMotion()
   const tokens = useTokenColors()
   const { color, pieces } = tokens
   const [saved, setSaved] = useGameSave<RallySave>('rally', DEFAULT_SAVE)
@@ -104,7 +107,7 @@ export function RallyScreen({ onExit }: GameScreenProps) {
   const [started, setStarted] = useState(false)
   const playing = started && !paused
   const [courtSize, setCourtSize] = useState({ w: 0, h: 0 })
-  const [, setTick] = useState(0)
+  const frame = useSharedValue(motionFrame(initialStateRef.current))
 
   const courtWidthRef = useRef(0)
   const railWidthRef = useRef(0)
@@ -121,9 +124,9 @@ export function RallyScreen({ onExit }: GameScreenProps) {
   const calmRef = useRef(calm)
   calmRef.current = calm
 
-  const redraw = useCallback(() => {
-    setTick((n) => (n + 1) % 1_000_000)
-  }, [])
+  const updateMotion = useCallback(() => {
+    frame.value = motionFrame(stateRef.current)
+  }, [frame])
 
   const persist = useCallback(
     (next: RallyState) => {
@@ -146,7 +149,7 @@ export function RallyScreen({ onExit }: GameScreenProps) {
     )
   }, [])
 
-  // 60fps simulation & SVG render loop
+  // Simulate on JS and send only the moving pieces to Reanimated.
   useGameLoop(
     useCallback(
       (dtMs: number) => {
@@ -156,7 +159,7 @@ export function RallyScreen({ onExit }: GameScreenProps) {
 
         if (next.eventId > prevEventIdRef.current && next.event) {
           prevEventIdRef.current = next.eventId
-          syncStats(next)
+          if (next.event !== 'wall') syncStats(next)
 
           if (next.event === 'wall') {
             cue('tap', 0.42)
@@ -175,9 +178,9 @@ export function RallyScreen({ onExit }: GameScreenProps) {
           }
         }
 
-        redraw()
+        updateMotion()
       },
-      [cue, haptic, persist, redraw, syncStats],
+      [cue, haptic, persist, updateMotion, syncStats],
     ),
     playing,
   )
@@ -243,8 +246,8 @@ export function RallyScreen({ onExit }: GameScreenProps) {
     prevEventIdRef.current = 0
     syncStats(fresh)
     persist(fresh)
-    redraw()
-  }, [persist, redraw, syncStats])
+    updateMotion()
+  }, [persist, updateMotion, syncStats])
 
   const handleExit = useCallback(() => {
     persist(stateRef.current)
@@ -260,9 +263,9 @@ export function RallyScreen({ onExit }: GameScreenProps) {
       cue('tap', 0.45)
       haptic('light')
       persist(updated)
-      redraw()
+      updateMotion()
     },
-    [cue, haptic, persist, redraw],
+    [cue, haptic, persist, updateMotion],
   )
 
   const handleServeNow = useCallback(() => {
@@ -270,8 +273,8 @@ export function RallyScreen({ onExit }: GameScreenProps) {
     if (stateRef.current.serveDelayMs <= 0) return
     stateRef.current = serveNow(stateRef.current, calmRef.current)
     cue('tap', 0.4)
-    redraw()
-  }, [cue, redraw])
+    updateMotion()
+  }, [cue, updateMotion])
 
   const touchRef = useRef({ handleServeNow })
   touchRef.current = { handleServeNow }
@@ -369,29 +372,31 @@ export function RallyScreen({ onExit }: GameScreenProps) {
 
   const paddleW = s.paddleWidth * w
   const paddleH = Math.max(9, PADDLE_HALF_HEIGHT * 2 * h)
-  const paddleR = paddleH * 0.5
-  const aiLeft = s.aiX * w - paddleW * 0.5
   const aiTop = AI_Y * h - paddleH * 0.5
-  const playerLeft = s.playerX * w - paddleW * 0.5
   const playerTop = PLAYER_Y * h - paddleH * 0.5
   const notchW = Math.max(10, paddleW * 0.16)
   const notchH = Math.max(2.5, paddleH * 0.28)
-
   const ballR = Math.max(5.5, BALL_RADIUS * w)
-  const bx = s.ball.x * w
-  const by = s.ball.y * h
 
-  const serveProgress = s.serveDelayMs > 0 ? Math.max(0, Math.min(1, s.serveDelayMs / SERVE_DELAY_MS)) : 0
-
-  const railMarkerX = Math.max(0, Math.min(railWidth - 24, s.playerX * railWidth - 12))
+  const ballStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: frame.value.x * w - ballR }, { translateY: frame.value.y * h - ballR }],
+  }))
+  const aiStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: frame.value.ai * w - paddleW / 2 }],
+  }))
+  const playerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: frame.value.player * w - paddleW / 2 }],
+  }))
+  const railStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: Math.max(0, Math.min(railWidth - 24, frame.value.player * railWidth - 12)) }],
+  }))
+  const paddleShape = { width: paddleW, height: paddleH, borderRadius: paddleH / 2 }
 
   return (
     <GameShell
       gameId="rally"
       score={stats.rally}
       stats={[
-        { label: 'You', value: stats.playerScore },
-        { label: 'AI', value: stats.aiScore },
         { label: 'Rally', value: stats.rally },
       ]}
       commitScore={started}
@@ -403,7 +408,7 @@ export function RallyScreen({ onExit }: GameScreenProps) {
       onRestart={handleRestart}
       onExit={handleExit}
       howTo={HOW_TO}
-      controls={
+      readyExtra={
         <View style={styles.controlsWrap}>
           <Segmented
             label="Difficulty"
@@ -453,132 +458,24 @@ export function RallyScreen({ onExit }: GameScreenProps) {
                   strokeWidth={1}
                 />
                 <Circle cx={midX} cy={midY} r={2} fill={color.ink4} fillOpacity={0.6} />
-
-                {/* 3. Ultra-subtle watermarked scores */}
-                <SvgText
-                  x={midX}
-                  y={h * 0.285}
-                  fill={color.ink4}
-                  fillOpacity={0.18}
-                  fontSize={scoreSize}
-                  fontWeight="200"
-                  textAnchor="middle"
-                  alignmentBaseline="central"
-                >
-                  {String(s.aiScore)}
-                </SvgText>
-                <SvgText
-                  x={midX}
-                  y={h * 0.715}
-                  fill={color.ink4}
-                  fillOpacity={0.18}
-                  fontSize={scoreSize}
-                  fontWeight="200"
-                  textAnchor="middle"
-                  alignmentBaseline="central"
-                >
-                  {String(s.playerScore)}
-                </SvgText>
-
-                {/* 5. Expanding hairline impact rings */}
-                {s.ripples.map((r) => {
-                  const t = Math.max(0, Math.min(1, r.ageMs / r.durationMs))
-                  const ease = 1 - Math.pow(1 - t, 2.4)
-                  const rippleScale = reduceMotion ? 0.55 : 1
-                  const alpha =
-                    (1 - t) *
-                    (1 - t) *
-                    (r.kind === 'paddle' ? 0.62 : r.kind === 'wall' ? 0.42 : 0.5) *
-                    rippleScale
-                  if (alpha <= 0.01) return null
-
-                  const radius = Math.max(3, (0.012 + r.maxRadius * ease) * unit)
-                  const strokeHex =
-                    r.kind === 'paddle' || r.kind === 'scorePlayer'
-                      ? color.accent
-                      : r.kind === 'scoreAi'
-                        ? pieces.clay
-                        : color.ink3
-
-                  return (
-                    <Circle
-                      key={`rip-${r.id}`}
-                      cx={r.x * w}
-                      cy={r.y * h}
-                      r={radius}
-                      fill="none"
-                      stroke={strokeHex}
-                      strokeOpacity={alpha}
-                      strokeWidth={1}
-                    />
-                  )
-                })}
-
-                {/* 6. AI top paddle (Deep Navy Slate) */}
-                <Rect
-                  x={aiLeft}
-                  y={aiTop}
-                  width={paddleW}
-                  height={paddleH}
-                  rx={paddleR}
-                  fill={pieces.clay}
-                  stroke={color.line}
-                  strokeWidth={1}
-                />
-
-                {/* 7. Player bottom paddle (Moon Ivory + Antique Brass index notch) */}
-                <Rect
-                  x={playerLeft}
-                  y={playerTop}
-                  width={paddleW}
-                  height={paddleH}
-                  rx={paddleR}
-                  fill={pieces.bone}
-                />
-                <Rect
-                  x={s.playerX * w - notchW * 0.5}
-                  y={PLAYER_Y * h - notchH * 0.5}
-                  width={notchW}
-                  height={notchH}
-                  rx={notchH * 0.5}
-                  fill={color.accent}
-                />
-
-                {/* 8. Tapering 7-dot brass ball trail */}
-                {!reduceMotion && s.serveDelayMs <= 0
-                  ? s.trail.map((pt, i) => {
-                      const frac = (i + 1) / (s.trail.length + 1)
-                      const dotR = ballR * (0.24 + frac * 0.48)
-                      const dotAlpha = frac * frac * 0.34
-                      return (
-                        <Circle
-                          key={`tr-${i}`}
-                          cx={pt.x * w}
-                          cy={pt.y * h}
-                          r={dotR}
-                          fill={color.accent}
-                          fillOpacity={dotAlpha}
-                        />
-                      )
-                    })
-                  : null}
-
-                {/* Quiet hairline serve ring during brief serve pause */}
-                {s.serveDelayMs > 0 ? (
-                  <Circle
-                    cx={bx}
-                    cy={by}
-                    r={ballR * (1.5 + serveProgress * 1.4)}
-                    fill="none"
-                    stroke={color.accentDim}
-                    strokeOpacity={0.45 * (1 - serveProgress * 0.4)}
-                    strokeWidth={1}
-                  />
-                ) : null}
-
-                {/* Brass ball */}
-                <Circle cx={bx} cy={by} r={ballR} fill={color.accent} />
               </Svg>
+            )}
+            {w > 0 && h > 0 && (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                {[stats.aiScore, stats.playerScore].map((score, index) => (
+                  <Text key={index} style={[styles.courtScore, {
+                    color: color.ink4, top: h * (index === 0 ? 0.285 : 0.715) - scoreSize / 2,
+                    fontSize: scoreSize, lineHeight: scoreSize,
+                  }]}>{score}</Text>
+                ))}
+                <Animated.View style={[styles.moving, paddleShape, { top: aiTop, backgroundColor: pieces.clay }, aiStyle]} />
+                <Animated.View style={[styles.moving, styles.playerPaddle, paddleShape, { top: playerTop, backgroundColor: color.ink2 }, playerStyle]}>
+                  <View style={{ width: notchW, height: notchH, borderRadius: notchH / 2, backgroundColor: color.accent }} />
+                </Animated.View>
+                <Animated.View style={[styles.moving, {
+                  width: ballR * 2, height: ballR * 2, borderRadius: ballR, backgroundColor: color.accent,
+                }, ballStyle]} />
+              </View>
             )}
             <View
               {...courtResponder.panHandlers}
@@ -595,11 +492,12 @@ export function RallyScreen({ onExit }: GameScreenProps) {
             style={[styles.railTrack, { backgroundColor: color.lineStrong }]}
           />
           {railWidth > 0 && (
-            <View
+            <Animated.View
               pointerEvents="none"
               style={[
                 styles.railMarker,
-                { backgroundColor: color.accent, transform: [{ translateX: railMarkerX }] },
+                { backgroundColor: color.accent },
+                railStyle,
               ]}
             />
           )}
@@ -616,6 +514,17 @@ export function RallyScreen({ onExit }: GameScreenProps) {
 }
 
 const styles = StyleSheet.create({
+  moving: { position: 'absolute', left: 0, top: 0 },
+  playerPaddle: { alignItems: 'center', justifyContent: 'center' },
+  courtScore: {
+    position: 'absolute',
+    width: '100%',
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+    fontFamily: Platform.OS === 'android' ? 'sans-serif' : Platform.OS === 'web' ? 'system-ui' : 'System',
+    fontWeight: '300',
+    opacity: 0.4,
+  },
   playArea: {
     flex: 1,
     width: '100%',

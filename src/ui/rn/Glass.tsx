@@ -27,9 +27,7 @@ let cachedBinding: NativeGlassBinding | null | undefined
 
 /**
  * Safely detects whether Apple's native iOS 26 Liquid Glass module (`expo-glass-effect`)
- * is both compiled into the current native binary AND supported by the OS.
- * Returns null on Web, Android, older iOS versions, or dev-client builds made before
- * `expo-glass-effect` was linked — preventing runtime crashes during Fast Refresh.
+ * is compiled into the current native binary AND supported by the OS.
  */
 function getNativeGlassBinding(): NativeGlassBinding | null {
   if (cachedBinding !== undefined) return cachedBinding
@@ -56,65 +54,71 @@ function getNativeGlassBinding(): NativeGlassBinding | null {
       return cachedBinding
     }
   } catch {
-    // Native module absent or unavailable; use clean BlurView glass fallback.
+    // Native module absent or unavailable; fall back cleanly.
   }
   cachedBinding = null
   return null
 }
 
+/**
+ * Calibrated translucent obsidian glass values so luminous AmbientBackdrop blooms
+ * subtly refract through cards & floating chrome instead of reading as muddy opaque gray.
+ */
 const VARIANT_CONFIG: Record<
   GlassVariant,
   {
     iosIntensity: number
     iosBg: string
-    fallbackBg: string
+    webBg: string
     nativeTint: string
     nativeStyle: 'clear' | 'regular'
     border: string
   }
 > = {
   chrome: {
-    iosIntensity: 52,
-    iosBg: 'rgba(24, 26, 32, 0.54)',
-    fallbackBg: 'rgba(20, 22, 28, 0.90)',
-    nativeTint: 'rgba(24, 26, 32, 0.34)',
+    iosIntensity: 48,
+    iosBg: 'rgba(18, 20, 26, 0.44)',
+    webBg: 'rgba(16, 18, 24, 0.72)',
+    nativeTint: 'rgba(18, 20, 26, 0.28)',
     nativeStyle: 'regular',
     border: 'rgba(255, 255, 255, 0.14)',
   },
   card: {
-    iosIntensity: 28,
-    iosBg: 'rgba(18, 20, 26, 0.68)',
-    fallbackBg: 'rgba(14, 16, 20, 0.92)',
-    nativeTint: 'rgba(18, 20, 26, 0.46)',
+    iosIntensity: 26,
+    iosBg: 'rgba(15, 17, 23, 0.52)',
+    webBg: 'rgba(14, 16, 22, 0.68)',
+    nativeTint: 'rgba(16, 18, 24, 0.36)',
     nativeStyle: 'clear',
     border: 'rgba(255, 255, 255, 0.10)',
   },
   elevated: {
-    iosIntensity: 64,
-    iosBg: 'rgba(26, 28, 36, 0.72)',
-    fallbackBg: 'rgba(22, 24, 30, 0.96)',
-    nativeTint: 'rgba(26, 28, 36, 0.50)',
+    iosIntensity: 58,
+    iosBg: 'rgba(20, 22, 29, 0.68)',
+    webBg: 'rgba(18, 20, 27, 0.88)',
+    nativeTint: 'rgba(22, 24, 32, 0.48)',
     nativeStyle: 'regular',
     border: 'rgba(255, 255, 255, 0.16)',
   },
   pill: {
-    iosIntensity: 42,
-    iosBg: 'rgba(24, 26, 34, 0.60)',
-    fallbackBg: 'rgba(22, 24, 30, 0.92)',
-    nativeTint: 'rgba(24, 26, 34, 0.38)',
+    iosIntensity: 38,
+    iosBg: 'rgba(20, 22, 29, 0.48)',
+    webBg: 'rgba(18, 20, 27, 0.74)',
+    nativeTint: 'rgba(20, 22, 29, 0.32)',
     nativeStyle: 'regular',
     border: 'rgba(255, 255, 255, 0.13)',
   },
 }
 
-const ACCENT_BORDER = 'rgba(194, 161, 95, 0.58)'
+const ACCENT_BORDER = 'rgba(194, 161, 95, 0.56)'
 const ACCENT_TINT = 'rgba(194, 161, 95, 0.16)'
-const ACCENT_BG = 'rgba(34, 29, 20, 0.76)'
+const ACCENT_BG_IOS = 'rgba(34, 28, 18, 0.58)'
+const ACCENT_BG_WEB = 'rgba(32, 26, 17, 0.74)'
 
-/**
- * Container that lets adjacent native iOS 26 Liquid Glass surfaces merge and morph
- * seamlessly (`GlassContainer`), falling back to a plain `View` elsewhere.
- */
+const WEB_GLASS_STYLE =
+  Platform.OS === 'web'
+    ? ({ backdropFilter: 'blur(22px) saturate(140%)', WebkitBackdropFilter: 'blur(22px) saturate(140%)' } as unknown as ViewStyle)
+    : null
+
 export function GlassGroup({
   spacing = 12,
   style,
@@ -142,15 +146,6 @@ export function GlassGroup({
   )
 }
 
-/**
- * Unified Liquid Glass surface primitive used across TabIsland, GameShell,
- * Sheets, Home cards, and Onboarding.
- *
- * Uses Apple's native `expo-glass-effect` (`GlassView`) when running on an iOS 26+
- * native build, and a clean single-border continuous-corner `BlurView` fallback on
- * Web, Android, and earlier builds (never mixing per-side border colors on rounded
- * views, which causes Core Animation corner clipping artifacts on iOS).
- */
 export function GlassSurface({
   variant = 'card',
   radius = 20,
@@ -183,7 +178,7 @@ export function GlassSurface({
             borderRadius: radius,
             borderCurve: 'continuous',
             borderWidth: accent ? 1 : StyleSheet.hairlineWidth,
-            borderColor: accent ? ACCENT_BORDER : 'rgba(255, 255, 255, 0.10)',
+            borderColor: accent ? ACCENT_BORDER : 'rgba(255, 255, 255, 0.12)',
           },
           style,
         ]}
@@ -197,10 +192,17 @@ export function GlassSurface({
     <View
       style={[
         styles.base,
+        WEB_GLASS_STYLE,
         {
           borderRadius: radius,
           borderCurve: 'continuous',
-          backgroundColor: accent ? ACCENT_BG : Platform.OS === 'ios' ? cfg.iosBg : cfg.fallbackBg,
+          backgroundColor: accent
+            ? Platform.OS === 'ios'
+              ? ACCENT_BG_IOS
+              : ACCENT_BG_WEB
+            : Platform.OS === 'ios'
+              ? cfg.iosBg
+              : cfg.webBg,
           borderColor: accent ? ACCENT_BORDER : cfg.border,
         },
         style,
@@ -218,9 +220,6 @@ export function GlassSurface({
   )
 }
 
-/**
- * Interactive Liquid Glass pressable with uniform tactile scale + optional haptic feedback.
- */
 export function GlassPressable({
   variant = 'pill',
   radius = 22,

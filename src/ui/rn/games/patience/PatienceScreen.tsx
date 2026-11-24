@@ -11,6 +11,7 @@ import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
 } from 'react-native'
+import { RotateCcw, Sparkles, Undo2 } from 'lucide-react-native'
 import Svg, { Circle, Path, Rect } from 'react-native-svg'
 import {
   FOUNDATION_COUNT,
@@ -63,7 +64,6 @@ type HintSuggestion =
   | { readonly kind: 'move'; readonly source: MoveSource; readonly target: MoveTarget }
   | { readonly kind: 'stock' }
 
-const BOARD_MAX_WIDTH = 408
 const TOP_ROW_GAP = 12
 const BOARD_PADDING_TOP = 2
 const DRAG_THRESHOLD = 6
@@ -71,8 +71,8 @@ const AUTO_COMPLETE_MS = 110
 const COMPLETION_DELAY_MS = 520
 const HINT_DURATION_MS = 2400
 
-const OXBLOOD_BASE = '#D78389'
-const WARM_OXBLOOD_TARGET = '#D19168'
+const OXBLOOD_BASE = '#E27A76'
+const WARM_OXBLOOD_TARGET = '#D99368'
 
 const HOW_TO = [
   'Build the four foundations up by suit from Ace to King.',
@@ -116,7 +116,7 @@ function computeColumnOffsets(
   availableHeight: number,
   cardHeight: number,
 ): number[] {
-  const idealDown = Math.max(5, Math.round(cardHeight * 0.11))
+  const idealDown = Math.max(6, Math.min(8, Math.round(cardHeight * 0.12)))
   const idealUp = Math.max(19, Math.round(cardHeight * 0.34))
 
   if (column.length <= 1) {
@@ -338,6 +338,7 @@ function CardBackArt({
 }) {
   return (
     <Svg width={width} height={height} viewBox="0 0 50 70" preserveAspectRatio="none">
+      <Path d="M8 2.5h34" stroke={brassColor} opacity={0.5} strokeWidth={0.9} />
       <Rect
         x={4.5}
         y={4.5}
@@ -355,18 +356,24 @@ function CardBackArt({
   )
 }
 
+const COURT_CRESTS: Readonly<Record<number, string>> = {
+  11: 'M16 2l4 6-4 5-4-5z M6 11l10 5 10-5-4 14-6 4-6-4z',
+  12: 'M5 11l6 4 5-11 5 11 6-4-4 14H9z M11 28h10',
+  13: 'M16 2v5m-2-3h4 M5 12h5v4h4v-4h4v4h4v-4h5l-3 14H8z M10 29h12',
+}
+
 function CardFaceContent({
   card,
   cardWidth,
   inkColor,
   redColor,
-  courtRingColor,
+  courtBrass,
 }: {
   card: Card
   cardWidth: number
   inkColor: string
   redColor: string
-  courtRingColor: string
+  courtBrass: string
 }) {
   const label = rankLabel(card.rank)
   const isAce = card.rank === 1
@@ -377,8 +384,8 @@ function CardFaceContent({
   const rankFontSize = compact ? 13 : 15
   const smallPipSize = compact ? 12 : 13
   const largePipSize = isAce ? (compact ? 21 : 25) : compact ? 17 : 20
-  const courtSize = compact ? 22 : 26
-  const courtPipSize = compact ? 12 : 14
+  const courtSize = compact ? 28 : 32
+  const courtPipSize = compact ? 9 : 11
 
   return (
     <View style={styles.cardInner} pointerEvents="none">
@@ -402,18 +409,21 @@ function CardFaceContent({
 
       <View style={styles.cardBody}>
         {isCourt ? (
-          <View
-            style={[
-              styles.courtRing,
-              {
-                width: courtSize,
-                height: courtSize,
-                borderRadius: courtSize / 2,
-                borderColor: courtRingColor,
-              },
-            ]}
-          >
-            <SuitPip suit={card.suit} size={courtPipSize} color={pipColor} opacity={0.92} />
+          <View style={{ width: courtSize, height: courtSize }}>
+            <Svg width={courtSize} height={courtSize} viewBox="0 0 32 32">
+              <Path
+                d={COURT_CRESTS[card.rank]}
+                fill="none"
+                stroke={courtBrass}
+                strokeWidth={1.4}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              {card.rank === 13 && <Circle cx={16} cy={9} r={2} fill="none" stroke={courtBrass} />}
+            </Svg>
+            <View style={styles.courtSuit}>
+              <SuitPip suit={card.suit} size={courtPipSize} color={pipColor} />
+            </View>
           </View>
         ) : (
           <SuitPip
@@ -447,7 +457,7 @@ function InteractiveCard({
   borderColor,
   inkColor,
   redColor,
-  courtRingColor,
+  courtBrass,
   hidden,
   shaking,
   reducedMotion,
@@ -472,7 +482,7 @@ function InteractiveCard({
   borderColor: string
   inkColor: string
   redColor: string
-  courtRingColor: string
+  courtBrass: string
   hidden: boolean
   shaking: boolean
   reducedMotion: boolean
@@ -625,7 +635,7 @@ function InteractiveCard({
           cardWidth={cardWidth}
           inkColor={inkColor}
           redColor={redColor}
-          courtRingColor={courtRingColor}
+          courtBrass={courtBrass}
         />
       </Pressable>
     </Animated.View>
@@ -640,7 +650,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   const { frameWidth, sideMargin, usableHeight, isCompact } = useResponsiveLayout()
 
   const redSuitColor = useMemo(
-    () => lerpHexOklab(OXBLOOD_BASE, WARM_OXBLOOD_TARGET, warmth * 0.2),
+    () => lerpHexOklab(OXBLOOD_BASE, WARM_OXBLOOD_TARGET, warmth),
     [warmth],
   )
 
@@ -704,12 +714,12 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
     setStageDims(next)
   }, [clearDrag])
 
-  const boardWidth = Math.min(BOARD_MAX_WIDTH, stageDims?.width ?? frameWidth - sideMargin * 2)
+  const boardWidth = stageDims?.width ?? frameWidth - sideMargin * 2
   const stageHeight = stageDims?.height ?? usableHeight - 166
-  const colGap = isCompact ? 4 : 5
+  const colGap = isCompact ? 2 : 3
   const cardRadius = isCompact ? 6 : 7
-  const cardWidth = Math.max(0, Math.floor((boardWidth - colGap * (TABLEAU_COLUMNS - 1)) / TABLEAU_COLUMNS))
-  const cardHeight = Math.round((cardWidth * 7) / 5)
+  const cardWidth = Math.max(0, Math.floor(((boardWidth - colGap * (TABLEAU_COLUMNS - 1)) / TABLEAU_COLUMNS) * PixelRatio.get()) / PixelRatio.get())
+  const cardHeight = Math.round(cardWidth * 1.5)
   const actualBoardWidth = cardWidth * TABLEAU_COLUMNS + colGap * (TABLEAU_COLUMNS - 1)
   const tableauTopY = BOARD_PADDING_TOP + cardHeight + TOP_ROW_GAP
   const tableauHeight = Math.max(0, stageHeight - tableauTopY)
@@ -1157,7 +1167,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
   const controlsLocked = paused || autoCompleting
   const cardSize = { width: cardWidth, height: cardHeight }
   // Four pill borders and paddings plus three gaps use 160 points before text.
-  const stackActions = boardWidth < 160 + 226 * PixelRatio.getFontScale()
+  const stackActions = boardWidth < 220 + 226 * PixelRatio.getFontScale()
   const autoCompleteAction = autoCompletable && !autoCompleting && (
     <GameActionButton
       label="Auto-complete"
@@ -1189,17 +1199,24 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
           <GameControlBar>
             <GameActionButton
               label="Undo"
+              icon={<Undo2 size={16} strokeWidth={1.5} color={color.ink2} />}
               onPress={handleUndo}
               disabled={inputLocked || state.history.length === 0}
             />
             <GameActionButton
               label="Hint"
+              icon={<Sparkles size={16} strokeWidth={1.5} color={hint ? color.accent : color.ink2} />}
               onPress={handleHint}
               disabled={inputLocked}
               active={hint !== null}
             />
             {!stackActions && autoCompleteAction}
-            <GameActionButton label="New deal" onPress={handleNewDeal} disabled={controlsLocked} />
+            <GameActionButton
+              label="New deal"
+              icon={<RotateCcw size={16} strokeWidth={1.5} color={color.ink2} />}
+              onPress={handleNewDeal}
+              disabled={controlsLocked}
+            />
           </GameControlBar>
         </View>
       }
@@ -1298,7 +1315,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                     cardWidth={cardWidth}
                     inkColor={color.ink}
                     redColor={redSuitColor}
-                    courtRingColor={color.lineStrong}
+                    courtBrass={color.accent}
                   />
                 </View>
               )}
@@ -1327,7 +1344,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                   }
                   inkColor={color.ink}
                   redColor={redSuitColor}
-                  courtRingColor={color.lineStrong}
+                  courtBrass={color.accent}
                   hidden={Boolean(drag && sameSource(drag.source, { pile: 'waste' }))}
                   shaking={shakingId === wasteTop.id}
                   reducedMotion={reducedMotion}
@@ -1407,7 +1424,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                         cardWidth={cardWidth}
                         inkColor={color.ink}
                         redColor={redSuitColor}
-                        courtRingColor={color.lineStrong}
+                        courtBrass={color.accent}
                       />
                     </View>
                   )}
@@ -1434,7 +1451,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                       }
                       inkColor={color.ink}
                       redColor={redSuitColor}
-                      courtRingColor={color.lineStrong}
+                      courtBrass={color.accent}
                       hidden={isDraggingSource}
                       shaking={shakingId === topCard.id}
                       reducedMotion={reducedMotion}
@@ -1558,7 +1575,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                         borderColor={cardBorder}
                         inkColor={color.ink}
                         redColor={redSuitColor}
-                        courtRingColor={color.lineStrong}
+                        courtBrass={color.accent}
                         hidden={isDraggingSource}
                         shaking={shakingId === card.id}
                         reducedMotion={reducedMotion}
@@ -1613,7 +1630,7 @@ export function PatienceScreen({ onExit }: GameScreenProps) {
                     cardWidth={cardWidth}
                     inkColor={color.ink}
                     redColor={redSuitColor}
-                    courtRingColor={color.lineStrong}
+                    courtBrass={color.accent}
                   />
                 </View>
               ))}
@@ -1709,8 +1726,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 4,
   },
-  courtRing: {
-    borderWidth: 1,
+  courtSuit: {
+    ...StyleSheet.absoluteFill,
+    paddingTop: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },

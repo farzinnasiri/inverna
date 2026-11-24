@@ -478,8 +478,8 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
   )
 
   // 5-cell divider on boards larger than 5×5 (7×7 and 8×8).
-  const guideRowIndex = state.rows > 5 ? 4 : -1
-  const guideColIndex = state.cols > 5 ? 4 : -1
+  const guideRowIndex = state.rows >= 10 ? 4 : -1
+  const guideColIndex = state.cols >= 10 ? 4 : -1
   const markSize = Math.max(10, Math.round(cellSize * 0.52))
 
   return (

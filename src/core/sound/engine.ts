@@ -30,5 +30,9 @@ export interface SoundEngine {
   cue(name: CueName, volume?: number): void
   /** Cues on/off (ambient mix unaffected). */
   setCuesEnabled(enabled: boolean): void
+  /** Optional native Lock Screen / Dynamic Island Now Playing metadata. */
+  setNowPlayingMeta?(meta: { title: string; subtitle?: string } | null): void
+  /** Optional listener invoked when OS Lock Screen / Control Center pauses playback. */
+  onExternalPause?(listener: () => void): () => void
   readonly isRunning: boolean
 }

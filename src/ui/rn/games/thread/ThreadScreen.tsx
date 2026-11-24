@@ -559,6 +559,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
       stats={[
         { label: 'Pairs', value: `${connectedCount}/${state.pairs.length}` },
         { label: 'Board', value: `${fillPercent}%` },
+        { label: 'Puzzle', value: state.puzzleNumber },
       ]}
       paused={paused}
       onPauseChange={handlePauseChange}
@@ -566,25 +567,20 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
       onExit={onExit}
       howTo={HOW_TO}
       controls={
-        <View style={styles.bar}>
-          <Text style={[styles.barTitle, { color: color.ink }]} numberOfLines={1}>
-            Puzzle {state.puzzleNumber}
-          </Text>
-          <GameControlBar>
-            <GameActionButton
-              label="Undo"
-              icon={<Undo2 size={16} strokeWidth={1.5} color={color.ink2} />}
-              onPress={handleUndo}
-              disabled={state.history.length === 0 || state.solved}
-            />
-            <GameActionButton
-              label="Reset"
-              icon={<RotateCcw size={16} strokeWidth={1.5} color={color.ink2} />}
-              onPress={handleClear}
-              disabled={!hasDrawnPaths || state.solved}
-            />
-          </GameControlBar>
-        </View>
+        <GameControlBar>
+          <GameActionButton
+            label="Undo"
+            icon={<Undo2 size={16} strokeWidth={1.5} color={color.ink2} />}
+            onPress={handleUndo}
+            disabled={state.history.length === 0 || state.solved}
+          />
+          <GameActionButton
+            label="Reset"
+            icon={<RotateCcw size={16} strokeWidth={1.5} color={color.ink2} />}
+            onPress={handleClear}
+            disabled={!hasDrawnPaths || state.solved}
+          />
+        </GameControlBar>
       }
     >
       <View style={styles.stage}>
@@ -762,17 +758,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
-  },
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  barTitle: {
-    flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
   },
 })

@@ -3,6 +3,7 @@ import {
   Animated,
   Easing,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,9 +15,10 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
-import { Check, Sun } from 'lucide-react-native'
-import { Platform } from 'react-native'
+import { Check, Moon, Sun } from 'lucide-react-native'
+import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { useSettings } from '@/ui/state/settings'
 import { Layer } from './Layer'
 
 export const FRAME_MAX_WIDTH = 440
@@ -50,7 +52,7 @@ export function Button({
     variant === 'primary'
       ? color.accent
       : variant === 'quiet'
-        ? 'rgba(24, 26, 33, 0.72)'
+        ? 'rgba(22, 24, 31, 0.72)'
         : 'transparent'
   const fg = variant === 'primary' ? color.accentInk : variant === 'quiet' ? color.ink : color.ink2
   const borderColor = variant === 'quiet' ? 'rgba(255, 255, 255, 0.14)' : 'transparent'
@@ -183,28 +185,50 @@ export function HoldButton({ label, onConfirm }: { label: string; onConfirm: () 
   )
 }
 
-/* --- Control-Center LightSlider (56px rounded track) -------------------- */
+/* --- Tactile Liquid Glass LightSlider (with physical thumb & readout) --- */
+
+function lightMoodLabel(light: number): string {
+  if (light < 0.2) return 'Clear'
+  if (light < 0.5) return 'Soft warm'
+  if (light < 0.78) return 'Candlelight'
+  return 'Deep ember'
+}
 
 export function LightSlider({
   value,
   onChange,
-  label = 'Light',
+  label = 'In-app night light',
 }: {
   value: number
   onChange: (nextLight: number) => void
   label?: string
 }) {
   const { color } = useTokenColors()
+  const hapticsOn = useSettings((s) => s.haptics)
+  const [trackW, setTrackW] = useState(300)
   const widthRef = useRef(300)
+  const lastStepRef = useRef(Math.round((1 - value) * 10))
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
+  const hapticsRef = useRef(hapticsOn)
+  hapticsRef.current = hapticsOn
 
   const brightness = Math.min(1, Math.max(0, 1 - value))
+  const pct = Math.round(brightness * 100)
+  const thumbW = 24
+  const pad = 6
+  const usableW = Math.max(1, trackW - pad * 2 - thumbW)
+  const thumbX = pad + brightness * usableW
 
   const updateFromX = (x: number) => {
-    const w = Math.max(1, widthRef.current)
-    const b = Math.min(1, Math.max(0, x / w))
+    const w = Math.max(1, widthRef.current - pad * 2)
+    const b = Math.min(1, Math.max(0, (x - pad) / w))
     const nextLight = Math.round((1 - b) * 50) / 50
+    const step10 = Math.round(b * 10)
+    if (step10 !== lastStepRef.current) {
+      lastStepRef.current = step10
+      if (hapticsRef.current) haptics.play('light')
+    }
     onChangeRef.current(nextLight)
   }
 
@@ -218,24 +242,65 @@ export function LightSlider({
   ).current
 
   return (
-    <View
-      {...panResponder.panHandlers}
-      onLayout={(e: LayoutChangeEvent) => {
-        widthRef.current = e.nativeEvent.layout.width
-      }}
-      accessibilityRole="adjustable"
-      accessibilityLabel={label}
-      style={[styles.lightSlider, { backgroundColor: color.surface2, borderColor: color.line }]}
-    >
+    <View style={styles.lightOuter}>
       <View
-        pointerEvents="none"
+        {...panResponder.panHandlers}
+        onLayout={(e: LayoutChangeEvent) => {
+          widthRef.current = e.nativeEvent.layout.width
+          setTrackW(e.nativeEvent.layout.width)
+        }}
+        accessibilityRole="adjustable"
+        accessibilityLabel={`${label}, ${pct} percent`}
         style={[
-          styles.lightSliderFill,
-          { backgroundColor: color.surface3, width: `${Math.round(brightness * 100)}%` },
+          styles.lightSlider,
+          {
+            backgroundColor: 'rgba(18, 20, 26, 0.86)',
+            borderColor: 'rgba(255, 255, 255, 0.14)',
+            borderCurve: 'continuous',
+          },
         ]}
-      />
-      <View pointerEvents="none" style={[styles.lightSliderIcon, { opacity: 0.35 + brightness * 0.65 }]}>
-        <Sun size={20} strokeWidth={1.5} color={color.ink2} />
+      >
+        {/* Warm golden-brass luminous fill */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.lightSliderFill,
+            {
+              width: Math.max(thumbW + pad * 2, thumbX + thumbW + pad),
+              backgroundColor: 'rgba(194, 161, 95, 0.24)',
+              borderCurve: 'continuous',
+            },
+          ]}
+        />
+
+        {/* End icons */}
+        <View pointerEvents="none" style={styles.lightEndLeft}>
+          <Moon size={16} strokeWidth={1.65} color={color.ink3} />
+        </View>
+        <View pointerEvents="none" style={styles.lightEndRight}>
+          <Sun size={17} strokeWidth={1.65} color={color.accent} style={{ opacity: 0.45 + brightness * 0.55 }} />
+        </View>
+
+        {/* Tactile brass-rimmed thumb */}
+        <View
+          pointerEvents="none"
+          style={[
+            styles.lightThumb,
+            {
+              left: thumbX,
+              backgroundColor: color.accent,
+              borderColor: 'rgba(255, 245, 224, 0.45)',
+              borderCurve: 'continuous',
+            },
+          ]}
+        >
+          <View style={styles.lightThumbGrip} />
+        </View>
+      </View>
+
+      <View style={styles.lightMetaRow}>
+        <Text style={[styles.lightMetaStage, { color: color.ink2 }]}>{lightMoodLabel(value)}</Text>
+        <Text style={[styles.lightMetaPct, { color: color.accent }]}>{pct}% in-app light</Text>
       </View>
     </View>
   )
@@ -288,7 +353,7 @@ export function Slider({
       accessibilityLabel={label}
       style={styles.sliderWrap}
     >
-      <View pointerEvents="none" style={[styles.sliderTrack, { backgroundColor: color.surface3 }]}>
+      <View pointerEvents="none" style={[styles.sliderTrack, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
         <View
           style={[
             styles.sliderFill,
@@ -306,7 +371,8 @@ export function Slider({
           styles.sliderThumb,
           {
             backgroundColor: color.ink,
-            transform: [{ translateX: Math.max(0, Math.min(trackW - 20, clamped * (trackW - 20))) }],
+            borderColor: 'rgba(0,0,0,0.28)',
+            transform: [{ translateX: Math.max(0, Math.min(trackW - 22, clamped * (trackW - 22))) }],
           },
         ]}
       />
@@ -332,7 +398,14 @@ export function Segmented<T extends string | number>({
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={label}
-      style={[styles.seg, { backgroundColor: color.bg, borderColor: color.line }]}
+      style={[
+        styles.seg,
+        {
+          backgroundColor: 'rgba(10, 12, 16, 0.85)',
+          borderColor: 'rgba(255, 255, 255, 0.12)',
+          borderCurve: 'continuous',
+        },
+      ]}
     >
       {options.map((o) => {
         const active = o.value === value
@@ -344,10 +417,17 @@ export function Segmented<T extends string | number>({
             accessibilityState={{ checked: active }}
             style={[
               styles.segOpt,
-              active ? { backgroundColor: color.surface3 } : null,
+              active
+                ? {
+                    backgroundColor: 'rgba(194, 161, 95, 0.18)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(194, 161, 95, 0.45)',
+                    borderCurve: 'continuous',
+                  }
+                : null,
             ]}
           >
-            <Text style={[styles.segText, { color: active ? color.ink : color.ink3 }]}>{o.label}</Text>
+            <Text style={[styles.segText, { color: active ? color.accent : color.ink3 }]}>{o.label}</Text>
           </Pressable>
         )
       })}
@@ -375,7 +455,7 @@ export function Toggle({
       accessibilityState={{ checked }}
       style={[
         styles.toggle,
-        { backgroundColor: checked ? color.accent : color.surface3 },
+        { backgroundColor: checked ? color.accent : 'rgba(255, 255, 255, 0.14)' },
       ]}
     >
       <View
@@ -439,7 +519,7 @@ export function PopoverMenu<T extends string | number | null>({
   )
 }
 
-/* --- Sheet --------------------------------------------------------------- */
+/* --- Sheet (uniform continuous border — zero iOS corner clip notch) ------ */
 
 export function Sheet({
   open,
@@ -463,12 +543,12 @@ export function Sheet({
       Animated.parallel([
         Animated.timing(backdropOpacity, {
           toValue: 1,
-          duration: 220,
+          duration: 200,
           useNativeDriver: true,
         }),
         Animated.timing(translateY, {
           toValue: 0,
-          duration: 320,
+          duration: 300,
           easing: Easing.bezier(0.32, 0.72, 0, 1),
           useNativeDriver: true,
         }),
@@ -505,16 +585,16 @@ export function Sheet({
           style={[
             styles.sheetCard,
             {
-              backgroundColor: Platform.OS === 'ios' ? 'rgba(20, 22, 28, 0.72)' : 'rgba(18, 20, 25, 0.97)',
-              borderColor: 'rgba(255, 255, 255, 0.15)',
+              backgroundColor: Platform.OS === 'ios' ? 'rgba(18, 20, 26, 0.76)' : 'rgba(16, 18, 24, 0.96)',
+              borderColor: 'rgba(255, 255, 255, 0.14)',
               borderCurve: 'continuous',
-              paddingBottom: Math.max(insets.bottom, 16) + 12,
+              paddingBottom: Math.max(insets.bottom, 16) + 14,
               transform: [{ translateY }],
             },
           ]}
         >
           {Platform.OS === 'ios' && (
-            <BlurView intensity={64} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={60} tint="systemChromeMaterialDark" style={StyleSheet.absoluteFill} />
           )}
           <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.24)' }]} />
           <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
@@ -546,7 +626,7 @@ const styles = StyleSheet.create({
   },
   holdBtn: {
     width: '100%',
-    height: 48,
+    height: 46,
     borderRadius: 14,
     borderWidth: 1,
     overflow: 'hidden',
@@ -559,8 +639,12 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
   },
+  lightOuter: {
+    width: '100%',
+    gap: 8,
+  },
   lightSlider: {
-    height: 56,
+    height: 52,
     width: '100%',
     borderRadius: 18,
     borderWidth: 1,
@@ -572,10 +656,45 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     bottom: 0,
+    borderRadius: 16,
   },
-  lightSliderIcon: {
+  lightEndLeft: {
     position: 'absolute',
-    right: 18,
+    left: 14,
+  },
+  lightEndRight: {
+    position: 'absolute',
+    right: 14,
+  },
+  lightThumb: {
+    position: 'absolute',
+    width: 24,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lightThumbGrip: {
+    width: 2.5,
+    height: 14,
+    borderRadius: 2,
+    backgroundColor: 'rgba(18, 16, 11, 0.45)',
+  },
+  lightMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+  },
+  lightMetaStage: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  lightMetaPct: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   sliderWrap: {
     height: 36,
@@ -583,7 +702,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sliderTrack: {
-    height: 4,
+    height: 5,
     width: '100%',
     borderRadius: 99,
     overflow: 'hidden',
@@ -594,16 +713,17 @@ const styles = StyleSheet.create({
   sliderThumb: {
     position: 'absolute',
     left: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
   },
   seg: {
     flexDirection: 'row',
     padding: 4,
     borderRadius: 14,
     borderWidth: 1,
-    gap: 2,
+    gap: 3,
   },
   segOpt: {
     flex: 1,
@@ -613,8 +733,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segText: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   toggle: {
     width: 50,
@@ -659,17 +779,16 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: 'rgba(0,0,0,0.70)',
   },
   sheetCard: {
     width: '100%',
     maxWidth: FRAME_MAX_WIDTH,
-    maxHeight: '85%',
+    maxHeight: '86%',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
+    borderWidth: 1,
+    marginBottom: -1,
     overflow: 'hidden',
     paddingTop: 10,
     paddingHorizontal: 22,
@@ -679,6 +798,6 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     alignSelf: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
 })

@@ -38,7 +38,8 @@ interface BoardLayout {
   boardY: number
   boardW: number
   boardH: number
-  cellSize: number
+  cellW: number
+  cellH: number
 }
 
 interface UiMeta {
@@ -104,12 +105,14 @@ function extractMeta(state: CascadeState): UiMeta {
 function computeBoardLayout(stageW: number, stageH: number, rows: number, cols: number, bezelPad: number): BoardLayout {
   const innerW = stageW - bezelPad * 2
   const innerH = stageH - bezelPad * 2
-  const cellSize = Math.max(0, Math.floor(Math.min(innerW / cols, innerH / rows)))
-  const boardW = cellSize * cols
-  const boardH = cellSize * rows
+  const cellW = Math.max(0, Math.floor(Math.min(innerW / cols, innerH / rows)))
+  // A slightly taller mosaic uses the portrait stage while retaining compact cells.
+  const cellH = Math.max(0, Math.floor(Math.min(innerH / rows, cellW * 1.32)))
+  const boardW = cellW * cols
+  const boardH = cellH * rows
   const boardX = Math.round((stageW - boardW) * 0.5)
   const boardY = Math.round((stageH - boardH) * 0.5)
-  return { boardX, boardY, boardW, boardH, cellSize }
+  return { boardX, boardY, boardW, boardH, cellW, cellH }
 }
 
 function buildPerimeterPath(
@@ -118,9 +121,10 @@ function buildPerimeterPath(
   previewKeys: ReadonlySet<number>,
 ): string {
   if (previewKeys.size < 2) return ''
-  const { boardX, boardY, cellSize } = layout
+  const { boardX, boardY, cellW, cellH } = layout
   const inset = TILE_GAP * 0.5
-  const tileSize = Math.max(4, cellSize - TILE_GAP)
+  const tileW = Math.max(4, cellW - TILE_GAP)
+  const tileH = Math.max(4, cellH - TILE_GAP)
   const segs: string[] = []
 
   for (const key of previewKeys) {
@@ -129,10 +133,10 @@ function buildPerimeterPath(
     const tile = state.board[r]?.[c]
     if (!tile) continue
 
-    const left = boardX + tile.x * cellSize + inset + 0.75
-    const top = boardY + tile.y * cellSize + inset + 0.75
-    const right = left + tileSize - 1.5
-    const bottom = top + tileSize - 1.5
+    const left = boardX + tile.x * cellW + inset + 0.75
+    const top = boardY + tile.y * cellH + inset + 0.75
+    const right = left + tileW - 1.5
+    const bottom = top + tileH - 1.5
 
     if (r === 0 || !previewKeys.has((r - 1) * state.cols + c)) {
       segs.push(`M${left.toFixed(1)} ${top.toFixed(1)}L${right.toFixed(1)} ${top.toFixed(1)}`)
@@ -152,12 +156,13 @@ function buildPerimeterPath(
 
 export function CascadeScreen({ onExit }: GameScreenProps) {
   const { isCompact } = useResponsiveLayout()
-  const bezelPad = isCompact ? 6 : 8
+  const bezelPad = isCompact ? 4 : 5
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
   const reduceMotion = useReducedMotion()
   const tokens = useTokenColors()
-  const { color, pieces } = tokens
+  const { color } = tokens
+  const pieces = { ...tokens.pieces, bone: '#797C82', stone: '#5B6370' }
   const [saved, setSaved] = useGameSave<CascadeSave>('cascade', DEFAULT_SAVE)
 
   const initialStateRef = useRef<CascadeState | null>(null)
@@ -474,14 +479,16 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     }
   }, [redraw])
 
-  const { boardX, boardY, boardW, boardH, cellSize } = layout
+  const { boardX, boardY, boardW, boardH, cellW, cellH } = layout
   const bezelX = boardX - bezelPad
   const bezelY = boardY - bezelPad
   const bezelW = boardW + bezelPad * 2
   const bezelH = boardH + bezelPad * 2
   const inset = TILE_GAP * 0.5
-  const tileSize = Math.max(4, cellSize - TILE_GAP)
-  const half = tileSize * 0.5
+  const tileW = Math.max(4, cellW - TILE_GAP)
+  const tileH = Math.max(4, cellH - TILE_GAP)
+  const halfW = tileW * 0.5
+  const halfH = tileH * 0.5
   const svgH = stageSize.h + CANVAS_BOTTOM_OVERFLOW
   const previewKeys = previewKeysRef.current
   const perimeterPath = buildPerimeterPath(cur, layout, previewKeys)
@@ -518,7 +525,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
       }
     >
       <View style={styles.stage} onLayout={handleStageLayout}>
-        {cellSize > 0 && (
+        {cellW > 0 && (
           <>
             <View pointerEvents="none" style={[styles.bezel, { left: bezelX, top: bezelY, width: bezelW, height: bezelH }]}>
               <GlassSurface variant="card" radius={BEZEL_RADIUS} style={styles.bezelSurface}>
@@ -548,8 +555,8 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                         return (
                           <Circle
                             key={`dot-${r}-${c}`}
-                            cx={boardX + (c + 0.5) * cellSize}
-                            cy={boardY + (r + 0.5) * cellSize}
+                            cx={boardX + (c + 0.5) * cellW}
+                            cy={boardY + (r + 0.5) * cellH}
                             r={0.9}
                             fill={color.ink4}
                             fillOpacity={0.16}
@@ -567,8 +574,8 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                           const amp = reduceMotion ? 1.4 : 3.2
                           wobbleOffsetX = Math.sin(progress * Math.PI * 5) * (1 - progress) * amp
                         }
-                        const tx = boardX + tile.x * cellSize + inset + wobbleOffsetX
-                        const ty = boardY + tile.y * cellSize + inset
+                        const tx = boardX + tile.x * cellW + inset + wobbleOffsetX
+                        const ty = boardY + tile.y * cellH + inset
                         const key = r * cur.cols + c
                         const inPreview = previewKeys.has(key)
 
@@ -577,8 +584,8 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                             <Rect
                               x={tx}
                               y={ty}
-                              width={tileSize}
-                              height={tileSize}
+                              width={tileW}
+                              height={tileH}
                               rx={TILE_RADIUS}
                               fill={pieces[tile.color]}
                             />
@@ -586,8 +593,8 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                               <Rect
                                 x={tx}
                                 y={ty}
-                                width={tileSize}
-                                height={tileSize}
+                                width={tileW}
+                                height={tileH}
                                 rx={TILE_RADIUS}
                                 fill="#FFFFFF"
                                 fillOpacity={0.085}
@@ -596,12 +603,12 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                             <Rect
                               x={tx + 0.5}
                               y={ty + 0.5}
-                              width={Math.max(1, tileSize - 1)}
-                              height={Math.max(1, tileSize - 1)}
+                              width={Math.max(1, tileW - 1)}
+                              height={Math.max(1, tileH - 1)}
                               rx={Math.max(1, TILE_RADIUS - 0.5)}
                               fill="none"
-                              stroke="#FFFFFF"
-                              strokeOpacity={0.08}
+                              stroke="#000000"
+                              strokeOpacity={0.24}
                               strokeWidth={1}
                             />
                           </G>
@@ -625,8 +632,8 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                   {/* Layer 3: Tumbling 2D rigid-body detached tiles (unclipped past bottom bezel) */}
                   {cur.falling.map((f) => {
                     if (f.alpha <= 0.005) return null
-                    const cx = boardX + (f.x + 0.5) * cellSize
-                    const cy = boardY + (f.y + 0.5) * cellSize
+                    const cx = boardX + (f.x + 0.5) * cellW
+                    const cy = boardY + (f.y + 0.5) * cellH
                     const drawAngleRad = reduceMotion ? f.angle * 0.2 : f.angle
                     const drawDeg = drawAngleRad * (180 / Math.PI)
                     const drawScale = reduceMotion ? 1 : f.scale
@@ -642,29 +649,29 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
                         opacity={drawAlpha}
                       >
                         <Rect
-                          x={-half}
-                          y={-half}
-                          width={tileSize}
-                          height={tileSize}
+                          x={-halfW}
+                          y={-halfH}
+                          width={tileW}
+                          height={tileH}
                           rx={TILE_RADIUS}
                           fill={pieces[f.color]}
                         />
                         <Rect
-                          x={-half + 0.5}
-                          y={-half + 0.5}
-                          width={Math.max(1, tileSize - 1)}
-                          height={Math.max(1, tileSize - 1)}
+                          x={-halfW + 0.5}
+                          y={-halfH + 0.5}
+                          width={Math.max(1, tileW - 1)}
+                          height={Math.max(1, tileH - 1)}
                           rx={Math.max(1, TILE_RADIUS - 0.5)}
                           fill="none"
-                          stroke="#FFFFFF"
-                          strokeOpacity={0.08}
+                          stroke="#000000"
+                          strokeOpacity={0.24}
                           strokeWidth={1}
                         />
                         <Rect
-                          x={-half - 0.5}
-                          y={-half - 0.5}
-                          width={tileSize + 1}
-                          height={tileSize + 1}
+                          x={-halfW - 0.5}
+                          y={-halfH - 0.5}
+                          width={tileW + 1}
+                          height={tileH + 1}
                           rx={TILE_RADIUS + 0.5}
                           fill="none"
                           stroke="#000000"

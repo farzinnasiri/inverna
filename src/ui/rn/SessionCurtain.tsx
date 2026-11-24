@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { formatBedtime12h, formatHHMM } from '@/core/night'
 import { sessionDone, sessionLevels } from '@/core/session'
 import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSession } from '@/ui/state/session'
+import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
 
 /**
@@ -44,6 +46,8 @@ export function SessionCurtain() {
         sound.setMaster(vol * lvl.volume, 0.8)
       }
       if (sessionDone(session, now) && !ended) {
+        const d = new Date(now)
+        useSettings.getState().set({ lastLightsOut: formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes())) })
         finish()
         stopSound(3)
       }

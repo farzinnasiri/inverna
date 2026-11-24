@@ -2,15 +2,12 @@ import { createRng, type Rng } from '../../rng'
 
 export const SPINE_SEGMENTS = 10
 export const SPINE_SPACING = 0.024
-export const MOTE_COUNT = 6
 export const LEAF_COUNT = 4
 export const MAX_RIPPLES = 18
 export const GATHER_RADIUS = 0.052
 export const USER_TARGET_IDLE_MS = 5000
 
 export type MoteColor = 'candle' | 'glow' | 'ember' | 'honey' | 'rose'
-
-export const MOTE_COLORS: readonly MoteColor[] = ['candle', 'glow', 'ember', 'honey', 'rose']
 
 export interface Vec2 {
   x: number
@@ -30,20 +27,12 @@ export interface KoiState {
   turnRate: number
 }
 
-export interface Mote {
+export interface LotusBud extends Vec2 {
   id: number
-  x: number
-  y: number
-  vx: number
-  vy: number
-  phase: number
-  color: MoteColor
-  radius: number
-  /** 0..1 gentle fade-in progress after spawning. */
-  fadeIn: number
+  openedAt: number | null
 }
 
-export type RippleKind = 'tap' | 'gather' | 'tail'
+export type RippleKind = 'tap' | 'gather' | 'tail' | 'wash'
 
 export interface Ripple {
   id: number
@@ -68,7 +57,6 @@ export interface FloatingLeaf {
   baseAngle: number
   phase: number
   driftSpeed: number
-  notch: number
 }
 
 export interface PondState {
@@ -77,12 +65,14 @@ export interface PondState {
   idleMs: number
   wanderTarget: Vec2
   wanderTimerMs: number
-  motes: Mote[]
+  buds: LotusBud[]
+  nextBud: number
+  blooms: number
+  completedAt: number | null
   ripples: Ripple[]
   leaves: FloatingLeaf[]
   gathered: number
   gatherEventId: number
-  lastGatherColor: MoteColor | null
   nextId: number
   timeMs: number
   tailRippleCooldownMs: number
@@ -157,52 +147,24 @@ function pickWanderTarget(rng: Rng, from: Vec2): Vec2 {
   return best
 }
 
-function spawnMote(
-  rng: Rng,
-  id: number,
-  avoidHead: Vec2,
-  existing: readonly Mote[],
-  fadeIn: number,
-  minHeadDist: number,
-): Mote {
-  let chosen: Vec2 = { x: 0.5, y: 0.5 }
-  let bestScore = -1
+const CONSTELLATIONS: readonly (readonly (readonly [number, number])[])[] = [
+  [[-0.26, 0.12], [0, -0.17], [0.26, 0.12]],
+  [[0.12, -0.26], [-0.17, -0.12], [-0.19, 0.15], [0.08, 0.27]],
+  [[-0.26, 0.18], [-0.19, -0.18], [0.16, -0.25], [0.26, 0.07], [0.05, 0.11]],
+  [[0, -0.27], [0.27, 0], [0, 0.27], [-0.27, 0]],
+]
 
-  for (let attempt = 0; attempt < 18; attempt++) {
-    const candidate: Vec2 = {
-      x: 0.12 + rng.next() * 0.76,
-      y: 0.12 + rng.next() * 0.76,
-    }
-    const dHead = dist(candidate, avoidHead)
-    let dNearestMote = 1
-    for (const m of existing) {
-      const dm = dist(candidate, m)
-      if (dm < dNearestMote) dNearestMote = dm
-    }
-    if (dHead >= minHeadDist && dNearestMote >= 0.15) {
-      chosen = candidate
-      break
-    }
-    const score = Math.min(dHead, minHeadDist) * 1.4 + dNearestMote
-    if (score > bestScore) {
-      bestScore = score
-      chosen = candidate
-    }
-  }
-
+function createConstellation(rng: Rng, blooms: number, firstId: number): LotusBud[] {
   const angle = rng.next() * Math.PI * 2
-  const drift = 0.009 + rng.next() * 0.011
-  return {
-    id,
-    x: chosen.x,
-    y: chosen.y,
-    vx: Math.cos(angle) * drift,
-    vy: Math.sin(angle) * drift,
-    phase: rng.next() * Math.PI * 2,
-    color: rng.pick(MOTE_COLORS),
-    radius: 0.0085 + rng.next() * 0.004,
-    fadeIn,
-  }
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  const shape = CONSTELLATIONS[blooms % CONSTELLATIONS.length]!
+  return shape.map(([x, y], index) => ({
+    id: firstId + index,
+    x: 0.5 + x * cos - y * sin,
+    y: 0.5 + x * sin + y * cos,
+    openedAt: null,
+  }))
 }
 
 function createLeaves(rng: Rng): FloatingLeaf[] {
@@ -229,7 +191,6 @@ function createLeaves(rng: Rng): FloatingLeaf[] {
       baseAngle,
       phase: rng.next() * Math.PI * 2,
       driftSpeed: 0.16 + rng.next() * 0.12,
-      notch: 0.24 + rng.next() * 0.14,
     })
   }
   return leaves
@@ -250,11 +211,8 @@ export function createPond({ seed, calm }: CreatePondOptions): PondState {
   const spine = buildInitialSpine(headX, headY, heading)
   const head = spine[0]!
 
-  let nextId = LEAF_COUNT + 1
-  const motes: Mote[] = []
-  for (let i = 0; i < MOTE_COUNT; i++) {
-    motes.push(spawnMote(rng, nextId++, head, motes, 1, 0.19))
-  }
+  const buds = createConstellation(rng, 0, LEAF_COUNT + 1)
+  const nextId = LEAF_COUNT + 1 + buds.length
 
   const leaves = createLeaves(rng)
   const wanderTarget = pickWanderTarget(rng, head)
@@ -271,12 +229,14 @@ export function createPond({ seed, calm }: CreatePondOptions): PondState {
     idleMs: 0,
     wanderTarget,
     wanderTimerMs: 5000 + rng.next() * 3000,
-    motes,
+    buds,
+    nextBud: 0,
+    blooms: 0,
+    completedAt: null,
     ripples: [],
     leaves,
     gathered: 0,
     gatherEventId: 0,
-    lastGatherColor: null,
     nextId,
     timeMs: 0,
     tailRippleCooldownMs: 1800 + rng.next() * 1400,
@@ -333,7 +293,6 @@ function stepPondOnce(state: PondState, dtMs: number, calm: number): PondState {
   const c = clamp01(calm)
   const speedScale = calmSpeedScale(c)
   const rippleScale = 1 - c * 0.34
-  const moteDriftScale = speedScale * (1 - c * 0.16)
 
   const rng = createRng(state.rngState)
   const nextTimeMs = state.timeMs + dtMs
@@ -473,61 +432,45 @@ function stepPondOnce(state: PondState, dtMs: number, calm: number): PondState {
     tailRippleCooldownMs = 2100 + rng.next() * 1600
   }
 
-  // 5. Drift motes & detect gathering
-  let gathered = state.gathered
-  let gatherEventId = state.gatherEventId
-  let lastGatherColor = state.lastGatherColor
-  const nextMotes: Mote[] = []
+  let { buds, nextBud, blooms, completedAt, gathered, gatherEventId } = state
+  if (completedAt !== null && nextTimeMs - completedAt >= 2200) {
+    buds = createConstellation(rng, blooms, nextId)
+    nextId += buds.length
+    nextBud = 0
+    completedAt = null
+  }
 
-  for (let i = 0; i < state.motes.length; i++) {
-    const m = state.motes[i]!
-    const phase = m.phase + dt * (0.55 + (i % 3) * 0.14) * speedScale
-    let vx = m.vx + Math.cos(phase * 0.85 + i) * 0.0045 * dt
-    let vy = m.vy + Math.sin(phase * 0.72 + i * 1.7) * 0.0045 * dt
+  const activeBud = buds[nextBud]
+  if (state.target && activeBud && dist(newHead, activeBud) <= GATHER_RADIUS) {
+    buds = buds.map((bud, index) => index === nextBud ? { ...bud, openedAt: nextTimeMs } : bud)
+    nextBud++
+    gathered++
+    gatherEventId++
+    ripples = appendRipple(ripples, {
+      id: nextId++,
+      x: activeBud.x,
+      y: activeBud.y,
+      ageMs: 0,
+      durationMs: 2900,
+      startRadius: 0.015,
+      maxRadius: 0.28,
+      kind: 'gather',
+      color: 'honey',
+    })
 
-    // Soft containment well inside pond edges
-    if (m.x < 0.11) vx += (0.11 - m.x) * 0.18 * dt
-    else if (m.x > 0.89) vx -= (m.x - 0.89) * 0.18 * dt
-    if (m.y < 0.11) vy += (0.11 - m.y) * 0.18 * dt
-    else if (m.y > 0.89) vy -= (m.y - 0.89) * 0.18 * dt
-
-    const vMag = Math.hypot(vx, vy)
-    const maxMoteSpeed = 0.022
-    if (vMag > maxMoteSpeed) {
-      vx = (vx / vMag) * maxMoteSpeed
-      vy = (vy / vMag) * maxMoteSpeed
-    }
-
-    const mx = clamp(m.x + vx * dt * moteDriftScale, 0.07, 0.93)
-    const my = clamp(m.y + vy * dt * moteDriftScale, 0.07, 0.93)
-    const fadeIn = Math.min(1, m.fadeIn + dt * 0.95)
-
-    if (dist(newHead, { x: mx, y: my }) <= GATHER_RADIUS) {
-      gathered += 1
-      gatherEventId += 1
-      lastGatherColor = m.color
+    if (nextBud === buds.length) {
+      completedAt = nextTimeMs
+      blooms++
       ripples = appendRipple(ripples, {
         id: nextId++,
-        x: mx,
-        y: my,
+        x: 0.5,
+        y: 0.5,
         ageMs: 0,
-        durationMs: 2800 + rng.next() * 750,
-        startRadius: 0.01,
-        maxRadius: 0.22 + rng.next() * 0.06,
-        kind: 'gather',
-        color: m.color,
-      })
-      const existingOthers = [...nextMotes, ...state.motes.slice(i + 1)]
-      nextMotes.push(spawnMote(rng, nextId++, newHead, existingOthers, 0, 0.28))
-    } else {
-      nextMotes.push({
-        ...m,
-        x: mx,
-        y: my,
-        vx,
-        vy,
-        phase,
-        fadeIn,
+        durationMs: 3500,
+        startRadius: 0.035,
+        maxRadius: 1.05,
+        kind: 'wash',
+        color: 'honey',
       })
     }
   }
@@ -556,12 +499,14 @@ function stepPondOnce(state: PondState, dtMs: number, calm: number): PondState {
     idleMs,
     wanderTarget,
     wanderTimerMs,
-    motes: nextMotes,
+    buds,
+    nextBud,
+    blooms,
+    completedAt,
     ripples,
     leaves: nextLeaves,
     gathered,
     gatherEventId,
-    lastGatherColor,
     nextId,
     timeMs: nextTimeMs,
     tailRippleCooldownMs,
