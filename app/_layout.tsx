@@ -8,7 +8,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { applyTokens } from '@/design/tokens'
 import { bootPlatform } from '@/platform'
-import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
 import { NightSheet } from '@/ui/rn/NightSheet'
 import { Onboarding } from '@/ui/rn/Onboarding'
@@ -47,11 +46,10 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="light" />
         <View style={styles.root}>
-          <AmbientBackdrop />
           <Stack
             screenOptions={{
               headerShown: false,
-              contentStyle: { backgroundColor: 'transparent' },
+              contentStyle: { backgroundColor: '#000000' },
               animation: 'fade',
             }}
           >

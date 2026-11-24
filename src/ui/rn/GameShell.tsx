@@ -9,6 +9,7 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useHighScores } from '@/ui/state/highscores'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
+import { AmbientBackdrop } from './AmbientBackdrop'
 import { GameAudioSheet } from './GameAudioSheet'
 import { Button, FRAME_MAX_WIDTH, IconButton, Sheet } from './controls'
 import { useBackgroundPause, useHighScore } from './hooks'
@@ -97,6 +98,7 @@ export function GameShell({
         },
       ]}
     >
+      <AmbientBackdrop />
       <View style={styles.frame}>
         {/* Consistent Floating Watchmaker Top Chrome */}
         <View style={styles.top}>
@@ -425,7 +427,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#000000',
   },
   frame: {
     flex: 1,

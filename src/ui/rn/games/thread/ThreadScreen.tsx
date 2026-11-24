@@ -674,8 +674,11 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
                       return (
                         <G
                           key={`${pair.color}-${endIdx}`}
-                          origin={`${cx}, ${cy}`}
-                          scale={scale}
+                          transform={
+                            scale === 1
+                              ? undefined
+                              : `translate(${cx}, ${cy}) scale(${scale}) translate(${-cx}, ${-cy})`
+                          }
                         >
                           <EndpointShape
                             piece={pair.color}

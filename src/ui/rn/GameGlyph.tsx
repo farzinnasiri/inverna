@@ -29,9 +29,9 @@ export function GameGlyph({ id, size = 30 }: { id: GameId; size?: number }) {
           <Rect x="12.5" y="4" width="7" height="7" rx="1.6" fill={pieces.straw} />
           <Rect x="21" y="4" width="7" height="7" rx="1.6" fill={pieces.straw} />
           <Rect x="4" y="12.5" width="7" height="7" rx="1.6" fill={pieces.clay} />
-          <Rect x="13" y="14" width="7" height="7" rx="1.6" fill={pieces.ochre} rotation={14} origin="16.5, 17.5" />
-          <Rect x="21.5" y="19.5" width="7" height="7" rx="1.6" fill={pieces.sage} rotation={-18} origin="25, 23" />
-          <Rect x="5" y="22" width="7" height="7" rx="1.6" fill={pieces.bone} rotation={24} origin="8.5, 25.5" />
+          <Rect x="13" y="14" width="7" height="7" rx="1.6" fill={pieces.ochre} transform="rotate(14 16.5 17.5)" />
+          <Rect x="21.5" y="19.5" width="7" height="7" rx="1.6" fill={pieces.sage} transform="rotate(-18 25 23)" />
+          <Rect x="5" y="22" width="7" height="7" rx="1.6" fill={pieces.bone} transform="rotate(24 8.5 25.5)" />
         </Svg>
       )
     case 'hue':

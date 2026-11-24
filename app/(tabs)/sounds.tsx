@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SlidersHorizontal, Timer } from 'lucide-react-native'
 import { PRESETS, presetById, SILENT_MIX } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { FRAME_MAX_WIDTH, PopoverMenu } from '@/ui/rn/controls'
 import { MixSheet } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
@@ -91,6 +92,7 @@ export default function SoundsScreen() {
         },
       ]}
     >
+      <AmbientBackdrop />
       <View style={styles.frame}>
         <Text style={[styles.heading, { color: color.ink }]}>{currentItem.name}</Text>
 
@@ -108,6 +110,7 @@ export default function SoundsScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.stripScroll}
             contentContainerStyle={styles.strip}
           >
             {items.map((item) => {
@@ -211,7 +214,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#000000',
   },
   frame: {
     flex: 1,
@@ -237,9 +240,15 @@ const styles = StyleSheet.create({
     gap: 16,
     alignItems: 'center',
   },
+  stripScroll: {
+    width: '100%',
+    flexGrow: 0,
+  },
   strip: {
     gap: 6,
     paddingHorizontal: 8,
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   modeChip: {
     paddingHorizontal: 14,

@@ -8,6 +8,7 @@ import { bestFor, formatBestCompact } from '@/core/highscores'
 import { formatBedtimeShort, minutesUntilBedtime, parseHHMM } from '@/core/night'
 import { sessionElapsed, sessionProgress } from '@/core/session'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { ContinuePreview } from '@/ui/rn/ContinuePreview'
 import { FRAME_MAX_WIDTH } from '@/ui/rn/controls'
 import { GameGlyph } from '@/ui/rn/GameGlyph'
@@ -109,7 +110,9 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView
+    <View style={styles.root}>
+      <AmbientBackdrop />
+      <ScrollView
       style={styles.scroll}
       contentContainerStyle={[
         styles.content,
@@ -249,11 +252,16 @@ export default function HomeScreen() {
           ))}
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
   scroll: {
     flex: 1,
     backgroundColor: 'transparent',

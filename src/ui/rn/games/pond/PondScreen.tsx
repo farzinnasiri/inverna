@@ -599,7 +599,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
           ))}
 
           {/* 2. Translucent Moon Ivory pectoral & pelvic fins */}
-          <G x={pecL.x} y={pecL.y} rotation={pecL.deg}>
+          <G transform={`translate(${pecL.x.toFixed(2)}, ${pecL.y.toFixed(2)}) rotate(${pecL.deg.toFixed(2)})`}>
             <Path d={pecPathsL.body} fill={pieces.bone} fillOpacity={0.24} />
             <Path
               d={pecPathsL.rays}
@@ -609,7 +609,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
               strokeWidth={Math.max(0.6, pecScale * 0.024)}
             />
           </G>
-          <G x={pecR.x} y={pecR.y} rotation={pecR.deg}>
+          <G transform={`translate(${pecR.x.toFixed(2)}, ${pecR.y.toFixed(2)}) rotate(${pecR.deg.toFixed(2)})`}>
             <Path d={pecPathsR.body} fill={pieces.bone} fillOpacity={0.24} />
             <Path
               d={pecPathsR.rays}
@@ -619,7 +619,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
               strokeWidth={Math.max(0.6, pecScale * 0.024)}
             />
           </G>
-          <G x={pelvL.x} y={pelvL.y} rotation={pelvL.deg}>
+          <G transform={`translate(${pelvL.x.toFixed(2)}, ${pelvL.y.toFixed(2)}) rotate(${pelvL.deg.toFixed(2)})`}>
             <Path d={pelvPathsL.body} fill={pieces.bone} fillOpacity={0.24} />
             <Path
               d={pelvPathsL.rays}
@@ -629,7 +629,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
               strokeWidth={Math.max(0.6, pelvScale * 0.024)}
             />
           </G>
-          <G x={pelvR.x} y={pelvR.y} rotation={pelvR.deg}>
+          <G transform={`translate(${pelvR.x.toFixed(2)}, ${pelvR.y.toFixed(2)}) rotate(${pelvR.deg.toFixed(2)})`}>
             <Path d={pelvPathsR.body} fill={pieces.bone} fillOpacity={0.24} />
             <Path
               d={pelvPathsR.rays}
@@ -641,7 +641,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
           </G>
 
           {/* 3. Forked flowing tail fin */}
-          <G x={tailAnchor.x} y={tailAnchor.y} rotation={tailAngle * RAD_TO_DEG}>
+          <G transform={`translate(${tailAnchor.x.toFixed(2)}, ${tailAnchor.y.toFixed(2)}) rotate(${(tailAngle * RAD_TO_DEG).toFixed(2)})`}>
             <Path d={tailPaths.body} fill={pieces.bone} fillOpacity={0.32} />
             <Path
               d={tailPaths.rays}
@@ -663,7 +663,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
               const cx = p.x + nm.x * BODY_WIDTHS[patch.idx]! * unit * patch.offsetN
               const cy = p.y + nm.y * BODY_WIDTHS[patch.idx]! * unit * patch.offsetN
               return (
-                <G key={`patch-${i}`} x={cx} y={cy} rotation={deg}>
+                <G key={`patch-${i}`} transform={`translate(${cx.toFixed(2)}, ${cy.toFixed(2)}) rotate(${deg.toFixed(2)})`}>
                   <Ellipse cx={0} cy={0} rx={patch.rx * unit} ry={patch.ry * unit} fill={patch.fill} />
                 </G>
               )
@@ -783,7 +783,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
             const lr = leaf.radius * unit
             const leafPaths = buildLeafPaths(lr, leaf.notch)
             return (
-              <G key={`leaf-${leaf.id}`} x={lx} y={ly} rotation={leaf.angle * RAD_TO_DEG}>
+              <G key={`leaf-${leaf.id}`} transform={`translate(${lx.toFixed(2)}, ${ly.toFixed(2)}) rotate(${(leaf.angle * RAD_TO_DEG).toFixed(2)})`}>
                 <Path
                   d={leafPaths.body}
                   fill={color.surface3}

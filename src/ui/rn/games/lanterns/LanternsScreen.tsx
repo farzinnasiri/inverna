@@ -118,7 +118,7 @@ function SigilMark({
       {id === 'astrolabe' && (
         <>
           <Circle cx={20} cy={21} r={11} {...strokeProps} />
-          <Ellipse cx={20} cy={21} rx={5.5} ry={11} rotation={-24} origin="20, 21" {...strokeProps} />
+          <Ellipse cx={20} cy={21} rx={5.5} ry={11} transform="rotate(-24 20 21)" {...strokeProps} />
           <Path d="M10.5 21h19" {...strokeProps} />
           <Circle cx={20} cy={7.5} r={2} {...strokeProps} />
           <Circle cx={20} cy={21} r={1.5} fill={color} />
@@ -172,7 +172,7 @@ function SigilMark({
       {id === 'rings' && (
         <>
           <Circle cx={20} cy={20} r={6.8} {...strokeProps} />
-          <Ellipse cx={20} cy={20} rx={14} ry={4.8} rotation={-24} origin="20, 20" {...strokeProps} />
+          <Ellipse cx={20} cy={20} rx={14} ry={4.8} transform="rotate(-24 20 20)" {...strokeProps} />
         </>
       )}
 

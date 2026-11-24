@@ -9,7 +9,7 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        sceneStyle: { backgroundColor: 'transparent' },
+        sceneStyle: { backgroundColor: '#000000' },
       }}
       tabBar={({ state }) => {
         const routeName = state.routes[state.index]?.name
