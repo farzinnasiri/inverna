@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { Bell, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronUp, RotateCcw, Trash2 } from 'lucide-react-native'
 import { formatBedtime12h } from '@/core/night'
-import { kv } from '@/core/storage'
-import { notifications } from '@/platform'
+import { clearAll } from '@/core/storage'
+import { haptics, notifications } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
@@ -32,20 +32,20 @@ export function NightSheet() {
   const schedule = useSettings((s) => s.schedule)
   const sessionMinutes = useSettings((s) => s.sessionMinutes)
   const sfx = useSettings((s) => s.sfx)
-  const haptics = useSettings((s) => s.haptics)
+  const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const setSchedule = useSettings((s) => s.setSchedule)
 
   const [editingBedtime, setEditingBedtime] = useState(false)
   const [reminderStatus, setReminderStatus] = useState<string | null>(null)
-  const [showReset, setShowReset] = useState(false)
+  const [confirmWipe, setConfirmWipe] = useState(false)
 
   const close = () => {
     setOpen(false)
     setTimeout(() => {
       setEditingBedtime(false)
       setReminderStatus(null)
-      setShowReset(false)
+      setConfirmWipe(false)
     }, 240)
   }
 
@@ -56,33 +56,19 @@ export function NightSheet() {
     else setReminderStatus('Notifications disabled')
   }
 
-  const eraseAll = () => {
+  const wipeAndRestartOnboarding = () => {
+    if (hapticsOn) haptics.play('medium')
     useSound.getState().stop(0.2)
     useSession.getState().dismiss()
     useHighScores.getState().clearAll()
-    const store = kv()
-    const keys = [
-      'lull:v1:settings',
-      'lull:v1:session',
-      'lull:v1:highscores',
-      'lull:v1:game:settle',
-      'lull:v1:game:cascade',
-      'lull:v1:game:hue',
-      'lull:v1:game:thread',
-      'lull:v1:game:kindle',
-      'lull:v1:game:pond',
-      'lull:v1:game:drift',
-      'lull:v1:game:nine',
-      'lull:v1:game:weave',
-      'lull:v1:game:patience',
-      'lull:v1:game:lanterns',
-      'lull:v1:game:rally',
-      'lull:v1:game:chime',
-    ]
-    for (const k of keys) store.removeItem(k)
+    // Wipe EVERY persisted `lull:*` key (settings, highscores, all 13 game saves, check-in)
+    clearAll()
     set({
       light: 0.3,
       followBedtime: true,
+      sessionMinutes: 15,
+      sessionPreset: 'rainfall',
+      sleepTimer: 30,
       sfx: true,
       haptics: true,
       hasCustomMix: false,
@@ -90,17 +76,18 @@ export function NightSheet() {
       lastCheckInDate: null,
       tonightDay: null,
       tonightIntent: null,
+      lastLightsOut: null,
       onboarded: false,
     })
     close()
   }
 
   return (
-    <Sheet open={open} onClose={close} label="Night">
+    <Sheet open={open} onClose={close} label="Settings">
       <View style={styles.body}>
-        <Text style={[styles.title, { color: color.ink }]}>Night</Text>
+        <Text style={[styles.title, { color: color.ink }]}>Settings</Text>
 
-        {/* Live in-app night light slider */}
+        {/* Live 120fps continuous in-app night light slider */}
         <View style={styles.block}>
           <Text style={[styles.label, { color: color.ink3 }]}>In-app night light</Text>
           <LightSlider value={light} onChange={(v) => set({ light: v })} />
@@ -117,7 +104,7 @@ export function NightSheet() {
           />
         </View>
 
-        {/* Bedtime + toggles unified cleanly without a hidden More drawer */}
+        {/* Bedtime + toggles unified cleanly */}
         <GlassSurface variant="card" radius={20} style={styles.card}>
           <Pressable
             onPress={() => setEditingBedtime((e) => !e)}
@@ -164,7 +151,7 @@ export function NightSheet() {
 
           <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
             <Text style={[styles.rowLabel, { color: color.ink }]}>Haptics</Text>
-            <Toggle label="Haptics" checked={haptics} onChange={(v) => set({ haptics: v })} />
+            <Toggle label="Haptics" checked={hapticsOn} onChange={(v) => set({ haptics: v })} />
           </View>
         </GlassSurface>
 
@@ -184,16 +171,40 @@ export function NightSheet() {
             style={{ flex: 1 }}
           >
             <RotateCcw size={15} strokeWidth={1.65} color={color.ink2} />
-            <Text style={[styles.utilText, { color: color.ink }]}>Re-tune</Text>
+            <Text style={[styles.utilText, { color: color.ink }]}>Replay intro</Text>
           </Button>
         </View>
 
-        {showReset ? (
-          <HoldButton label="Hold to erase local data" onConfirm={eraseAll} />
+        {confirmWipe ? (
+          <View style={styles.wipeConfirm}>
+            <HoldButton
+              label="Hold to clear data & restart onboarding"
+              onConfirm={wipeAndRestartOnboarding}
+            />
+            <Button variant="ghost" size="sm" block onPress={() => setConfirmWipe(false)}>
+              Cancel
+            </Button>
+          </View>
         ) : (
-          <Button variant="ghost" size="sm" block onPress={() => setShowReset(true)}>
-            Erase local data
-          </Button>
+          <Pressable
+            onPress={() => {
+              if (hapticsOn) haptics.play('light')
+              setConfirmWipe(true)
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear all data and restart onboarding"
+            style={({ pressed }) => [
+              styles.wipeRow,
+              {
+                borderColor: 'rgba(226, 122, 118, 0.28)',
+                backgroundColor: 'rgba(226, 122, 118, 0.08)',
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}
+          >
+            <Trash2 size={15} strokeWidth={1.65} color="#E27A76" />
+            <Text style={styles.wipeText}>Clear data &amp; restart onboarding</Text>
+          </Pressable>
         )}
       </View>
     </Sheet>
@@ -254,5 +265,23 @@ const styles = StyleSheet.create({
   utilText: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  wipeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderCurve: 'continuous',
+  },
+  wipeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#E27A76',
+  },
+  wipeConfirm: {
+    gap: 6,
   },
 })

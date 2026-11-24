@@ -11,7 +11,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Svg, { Circle } from 'react-native-svg'
-import { LayoutGrid, Moon, Waves } from 'lucide-react-native'
+import { LayoutGrid, Settings, Waves } from 'lucide-react-native'
 import { sessionProgress } from '@/core/session'
 import { presetById } from '@/core/sound/catalog'
 import { haptics } from '@/platform'
@@ -342,7 +342,7 @@ export function TabIsland({
                 />
               </Svg>
             )}
-            <Moon
+            <Settings
               size={19}
               strokeWidth={1.65}
               color={session ? color.accent : color.ink2}
