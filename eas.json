@@ -30,6 +30,7 @@
       "ios": {
         "bundleIdentifier": "com.oooflabs.lull",
         "appleTeamId": "LFJY887CD3",
+        "ascAppId": "6838692003",
         "ascApiKeyPath": "$HOME/.config/oooflabs/apple/AuthKey_Q6F666S4RG.p8",
         "ascApiKeyId": "Q6F666S4RG",
         "ascApiKeyIssuerId": "f282a20b-2313-4ca7-b771-69e0ea111692"
