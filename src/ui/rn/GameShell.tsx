@@ -128,7 +128,7 @@ export function GameShell({
     onReady?.()
   }
 
-  const difficulty = useSettings((s) => s.difficulty[gameId] ?? 'medium')
+  const difficulty = useSettings((s) => s.difficulty[gameId] ?? s.defaultDifficulty)
   const setDifficulty = (d: Difficulty) => {
     const st = useSettings.getState()
     st.set({ difficulty: { ...st.difficulty, [gameId]: d } })

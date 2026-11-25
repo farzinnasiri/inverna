@@ -6,7 +6,7 @@ import { useIsFocused } from 'expo-router'
 import type { Mix, SoundIconId } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { GlassSurface } from './Glass'
-import { useReducedMotion } from './hooks'
+import { useAppActive, useReducedMotion } from './hooks'
 import { SoundGlyph } from './SoundGlyph'
 
 const AnimatedPath = Animated.createAnimatedComponent(Path)
@@ -70,6 +70,7 @@ export function SoundField({
   const { color } = useTokenColors()
   const reduced = useReducedMotion()
   const focused = useIsFocused()
+  const appActive = useAppActive()
   const onSwipeRef = useSharedRef(onSwipe)
 
   const phase = useSharedValue(0)
@@ -82,7 +83,7 @@ export function SoundField({
     phase.set(phase.get() + acc.get() * rate)
     acc.set(0)
   }, false)
-  const animate = playing && focused && !reduced
+  const animate = playing && focused && appActive && !reduced
   useEffect(() => {
     ringClock.setActive(animate)
   }, [animate, ringClock])

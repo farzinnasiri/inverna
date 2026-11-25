@@ -37,63 +37,111 @@ export const play = {
 }
 
 export const checkIn = {
-  intro: (name: string) => (name.trim() ? `Hey ${name.trim()}, how are you feeling tonight?` : 'Before we start, how are you feeling tonight?'),
-  skip: 'Skip for tonight',
+  skip: 'Skip',
   back: 'Back',
   dayQuestion: 'How was your day?',
-  daySub: 'I’ll pick tonight’s games and sound for you.',
   day: {
-    good: { label: 'Good', followUp: 'Glad to hear it.' },
-    calm: { label: 'Calm', followUp: 'Nice to end a quiet day quietly.' },
-    busy: { label: 'Busy', followUp: 'You can put the rest down now.' },
-    stressful: { label: 'Stressful', followUp: 'Today is over. Let’s slow things down.' },
-    exhausting: { label: 'Exhausting', followUp: 'You made it through. Almost time to rest.' },
-  } satisfies Record<DayAnswer, { label: string; followUp: string }>,
+    good: 'Good',
+    calm: 'Calm',
+    busy: 'Busy',
+    stressful: 'Stressful',
+    exhausting: 'Exhausting',
+    sad: 'Sad',
+  } satisfies Record<DayAnswer, string>,
   nowQuestion: 'How do you feel right now?',
-  nowSub: 'One more question, then I’ll set things up.',
   now: {
-    sleepy: { label: 'Sleepy', followUp: 'I’ll keep things slow and soft.' },
-    relaxed: { label: 'Relaxed', followUp: 'I’ll keep this easy pace going.' },
-    worn_out: { label: 'Worn out', followUp: 'Nothing demanding tonight.' },
-    overthinking: { label: 'Overthinking', followUp: 'I’ll give your mind one quiet thing to hold.' },
-    wide_awake: { label: 'Wide awake', followUp: 'No rush to sleep. Let’s ease into it.' },
-  } satisfies Record<NowAnswer, { label: string; followUp: string }>,
-  gamesReady: 'Tonight’s games are at the top of Play.',
+    sleepy: 'Sleepy',
+    relaxed: 'Relaxed',
+    worn_out: 'Worn out',
+    overthinking: 'Overthinking',
+    wide_awake: 'Wide awake',
+    restless: 'Restless',
+  } satisfies Record<NowAnswer, string>,
   done: 'Done',
 }
 
 export const soundsHelp = {
-  link: 'Not sure what fits tonight?',
-  heading: 'These two fit tonight',
-  sub: 'Based on how you’re feeling. Tap one to listen.',
+  link: 'Help me pick a sound',
+  heading: 'Try one of these tonight.',
 }
+
+export type SciencePillarKey = 'attention' | 'sound' | 'light'
 
 export const onboarding = {
   skip: 'Skip',
   back: 'Back',
+  continue: 'Continue',
   intro: {
-    title: 'Hi, I’m Lull',
-    body: 'I help you slow down in the hour before bed. Quiet games, soft sounds, and a warmer screen.',
-    button: 'Let’s begin',
+    name: 'Lull',
+    title: 'For minds that don’t switch off.',
+    subline: 'A quieter way out of late-night scrolling, when silence feels too loud.',
+    button: 'See how it works',
+  },
+  science: {
+    title: 'Three quiet signals, working together.',
+    curveStart: 'Alert',
+    curveEnd: 'Ready for rest',
+    bands: ['Beta', 'Alpha', 'Theta', 'Delta'] as readonly string[],
+    pillars: [
+      {
+        key: 'attention' as SciencePillarKey,
+        title: 'Attention',
+        body: 'Gentle play holds your focus so racing thoughts can’t take over.',
+      },
+      {
+        key: 'sound' as SciencePillarKey,
+        title: 'Sound',
+        body: 'Adaptive audio slows your pace from alert beta toward calm alpha and theta.',
+      },
+      {
+        key: 'light' as SciencePillarKey,
+        title: 'Light',
+        body: 'Warm, low-blue colours fade with the hour to signal night.',
+      },
+    ],
+    more: 'Read the science',
+    button: 'Get started',
   },
   bedtime: {
     title: 'When do you usually go to bed?',
-    body: 'I’ll start warming the screen an hour before. You can always move it for one night.',
-    reminder: 'Remind me before bed',
-    reminderNote: 'A quiet note an hour before bedtime.',
-    button: 'Continue',
+    reminder: 'Remind me an hour before bed',
   },
-  sound: {
-    title: 'What helps you fall asleep?',
-    body: 'Tap any sound to listen. You can change it any time.',
-    playing: 'Playing',
-    button: 'Continue',
+  keeps: {
+    title: 'What makes it harder for you to fall asleep?',
+    factors: {
+      mind_on: 'My mind won’t switch off',
+      tired_wired: 'Tired but wired',
+      lose_time: 'I lose track of time at night',
+      restless: 'My body feels restless',
+      me_time: 'Night is my only time for me',
+      stress: 'Stress or worry',
+      noise: 'Noise around me',
+      waking: 'Waking up at night',
+    },
+    private: 'This stays on your phone.',
+  },
+  mind: {
+    title: 'How busy is your mind at bedtime?',
+    label: 'Your mind at bedtime',
+    stages: ['Quiet', 'A little busy', 'Busy', 'Very busy'],
+  },
+  games: {
+    title: 'Which of these helps you switch off?',
+    styles: {
+      soothing: { title: 'Something slow and soothing', games: 'Pond, Hue, Lanterns' },
+      puzzle: { title: 'A puzzle I can get lost in', games: 'Nine, Weave, Thread' },
+      quick: { title: 'Something quick and light', games: 'Settle, Chime, Cascade' },
+    },
+  },
+  listen: {
+    title: 'Which of these sounds do you like?',
+    samples: { steady: 'Rain', music: 'Piano', nature: 'Ocean' },
+    volume: 'Volume',
   },
   name: {
-    title: 'May I know your name?',
-    body: 'Just so I can say hello now and then. You can skip this if you prefer.',
-    placeholder: 'Your first name',
-    note: 'Optional. Stays only on this phone.',
+    title: 'What should I call you?',
+    placeholder: 'First name',
+    note: 'Optional. It stays on this phone.',
     button: 'All set',
   },
 }
@@ -101,11 +149,148 @@ export const onboarding = {
 export const settingsCopy = {
   nameLabel: 'Your name',
   namePlaceholder: 'Add your first name',
-  nameNote: 'Used now and then in greetings and reminders.',
   reminderLabel: 'Bedtime reminder',
   reminderNote: 'Sends a quiet reminder an hour before bed.',
   reminderDenied: 'Turn on notifications in iPhone Settings.',
-  replayIntro: 'Replay intro',
+  howItWorks: 'How Lull works',
+  howItWorksNote: 'The three-pillar system and science behind it',
+  erase: 'Erase all data',
+  eraseHold: 'Hold to erase everything',
+}
+
+export type WaveBandKey = 'beta' | 'alpha' | 'theta' | 'delta'
+
+export interface ScienceSource {
+  label: string
+  url: string
+}
+
+export interface WaveBandInfo {
+  key: WaveBandKey
+  symbol: string
+  name: string
+  hz: string
+  state: string
+  role: string
+}
+
+export const scienceSheet = {
+  title: 'How Lull works',
+  intro:
+    'An active mind rarely settles in plain silence. Lull coordinates three systems across the hour before bed: cognitive load, neuroacoustics, and circadian light.',
+  attention: {
+    key: 'attention' as SciencePillarKey,
+    kicker: 'Pillar 1 · Cognitive psychology',
+    title: 'Working memory over empty silence',
+    compare: {
+      emptyLabel: 'Empty silence',
+      emptyTag: 'Rumination loop',
+      playLabel: 'Quiet play',
+      playTag: 'Visuospatial groove',
+    },
+    points: [
+      {
+        label: 'Mechanism',
+        text: 'Verbal overthinking and visuospatial tasks compete for the same limited working memory. Gentle spatial puzzles occupy that bandwidth, similar to cognitive shuffling, leaving less room for anxious loops.',
+      },
+      {
+        label: 'Effect',
+        text: 'Breaks the sleep-effort paradox without timers, streaks, or failure states that trigger cortisol or dopamine spikes.',
+      },
+    ],
+    sources: [
+      { label: 'Working memory', url: 'https://en.wikipedia.org/wiki/Working_memory' },
+      { label: 'Rumination', url: 'https://en.wikipedia.org/wiki/Rumination_(psychology)' },
+      { label: 'Cognitive shuffle', url: 'https://en.wikipedia.org/wiki/Cognitive_shuffle' },
+    ] satisfies readonly ScienceSource[],
+  },
+  sound: {
+    key: 'sound' as SciencePillarKey,
+    kicker: 'Pillar 2 · Neuroacoustics',
+    title: 'Brainwave bands & acoustic descent',
+    lead: 'Neural oscillations shift from fast, irregular ripples when you are alert toward slow, synchronized swells as you drift off. Tap a band to inspect its rhythm.',
+    bands: [
+      {
+        key: 'beta',
+        symbol: 'β',
+        name: 'Beta',
+        hz: '13–30 Hz',
+        state: 'Active thinking, problem-solving, late-night racing thoughts.',
+        role: 'Where most busy minds start at bedtime. Lull meets you here instead of demanding instant stillness.',
+      },
+      {
+        key: 'alpha',
+        symbol: 'α',
+        name: 'Alpha',
+        hz: '8–12 Hz',
+        state: 'Relaxed wakefulness, eyes resting, inner chatter loosening.',
+        role: 'Lull’s acoustic descent begins near the Alpha-Theta border (~7.8 Hz) to ease mental grip.',
+      },
+      {
+        key: 'theta',
+        symbol: 'θ',
+        name: 'Theta',
+        hz: '4–8 Hz',
+        state: 'Twilight drift, imagery loosening, pre-sleep hypnagogia.',
+        role: 'Mid-session modulation settles around ~5 Hz while high frequencies gently melt away.',
+      },
+      {
+        key: 'delta',
+        symbol: 'δ',
+        name: 'Delta',
+        hz: '0.5–4 Hz',
+        state: 'Deep, restorative slow-wave sleep.',
+        role: 'Near bedtime, modulation slows toward ~2.4 Hz before fading out on its own.',
+      },
+    ] satisfies readonly WaveBandInfo[],
+    points: [
+      {
+        label: '1/f Pink & brown noise',
+        text: 'Energy rolls off at higher frequencies, masking sudden room sounds without harsh hiss.',
+      },
+      {
+        label: '0.1 Hz breath pacing',
+        text: 'Subtle ~10-second volume swells (~6 breaths/min) mirror cardiorespiratory resonance to encourage parasympathetic calm.',
+      },
+      {
+        label: 'Harmonic key lock',
+        text: 'Every game tap is quantized to your soundscape’s scale (D Dorian, F Lydian, G Minor 9) so nothing jars the auditory cortex.',
+      },
+    ],
+    sources: [
+      { label: 'Neural oscillation', url: 'https://en.wikipedia.org/wiki/Neural_oscillation' },
+      { label: 'Colors of noise', url: 'https://en.wikipedia.org/wiki/Colors_of_noise' },
+      { label: 'Music therapy', url: 'https://en.wikipedia.org/wiki/Music_therapy' },
+    ] satisfies readonly ScienceSource[],
+  },
+  light: {
+    key: 'light' as SciencePillarKey,
+    kicker: 'Pillar 3 · Circadian optics',
+    title: 'Protecting melatonin after dark',
+    spectrum: {
+      startNm: '400 nm',
+      peakLabel: '460–480 nm melanopsin peak',
+      peakBadge: 'Filtered',
+      endNm: '700 nm',
+      safeBadge: 'Lull night palette + #000 OLED',
+    },
+    points: [
+      {
+        label: 'Mechanism',
+        text: 'Retinal ipRGC cells express melanopsin, a photopigment peaking around 460–480 nm (blue-cyan) that signals daytime to your circadian clock and suppresses melatonin.',
+      },
+      {
+        label: 'Effect',
+        text: 'True #000000 OLED pixels stay physically off while warm, low-blue surfaces dim gradually toward bedtime so dark-adapted eyes stay calm.',
+      },
+    ],
+    sources: [
+      { label: 'Melanopsin', url: 'https://en.wikipedia.org/wiki/Melanopsin' },
+      { label: 'Circadian rhythm', url: 'https://en.wikipedia.org/wiki/Circadian_rhythm' },
+    ] satisfies readonly ScienceSource[],
+  },
+  footnote: 'Grounded in cognitive, acoustic, and circadian research to support wind-down habits. Not a medical device.',
+  close: 'Got it',
 }
 
 /** One a night at wind-down time, in rotation. With a name, the `named` title is used. */
@@ -138,4 +323,15 @@ export const gameDoor = {
   endless: 'Endless',
   endlessNote: 'No game over. Keep playing as long as you like.',
   classic: 'Classic',
+}
+
+/** The maker's note at the bottom of Settings, in Farzin's own words. */
+export const about = {
+  credit: 'Made with ❤️ by Farzin',
+  title: 'Hi, I’m Farzin',
+  lines: [
+    'I’m the developer of this app. I made Lull because my always-on ADHD brain wouldn’t shut down at night. I barely had good sleep, and I woke up tired every morning.',
+    'I noticed that playing casual games instead of doomscrolling on social media, and listening to calming music, helped me. So I decided to bring the two together.',
+  ],
+  signature: 'Farzin',
 }

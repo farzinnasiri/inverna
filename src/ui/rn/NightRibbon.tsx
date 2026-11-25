@@ -102,11 +102,7 @@ export function NightRibbon({
         HOUR_MARKS.map((h) => (
           <View key={h.offset} pointerEvents="none" style={[styles.mark, { left: x(h.offset) }]}>
             <View style={[styles.tick, { backgroundColor: h.offset === 240 ? color.ink3 : color.ink4 }]} />
-            {h.offset === 240 ? (
-              <Moon size={11} strokeWidth={1.8} color={color.ink3} style={styles.midnight} />
-            ) : (
-              <Text style={[styles.hour, { color: color.ink4 }]}>{h.label}</Text>
-            )}
+            <Text style={[styles.hour, { color: h.offset === 240 ? color.ink3 : color.ink4 }]}>{h.label}</Text>
           </View>
         ))}
 
@@ -174,9 +170,6 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     marginTop: 3,
     fontVariant: ['tabular-nums'],
-  },
-  midnight: {
-    marginTop: 4,
   },
   nowMark: {
     position: 'absolute',

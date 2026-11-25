@@ -8,7 +8,7 @@ import { createClassicalMotifController, type ClassicalMotifController } from '.
 import { createCueBloomBus, playHarmonicCue, type CueBloomBus } from './cues'
 import { createAmbientLayer, type AmbientLayer } from './layers'
 import { createAsymmetricBreathWave, createHarmonicPadController, type HarmonicPadController } from './pad'
-import { clamp, rampParam, rampTracked, safeDisconnect, safeStop, type RampTrack } from './params'
+import { clamp, noteRamp, paramNow, rampParam, rampTracked, safeDisconnect, safeStop, type RampTrack } from './params'
 import type {
   AudioContextLike,
   AudioNodeLike,
@@ -466,7 +466,7 @@ export function createNeuroSoundEngine({
       } else {
         param.cancelScheduledValues(now)
       }
-      const cur = Number.isFinite(param.value) ? param.value : 1
+      const cur = paramNow(param, now)
       param.setValueAtTime(cur, now)
       if (cur < 0.999) {
         const recoverEnd = Math.min(fadeStart, now + 0.25)
@@ -474,6 +474,8 @@ export function createNeuroSoundEngine({
       }
       param.setValueAtTime(1, fadeStart)
       param.linearRampToValueAtTime(0, fadeEnd)
+      // Full volume until fadeStart, then down to silence at fadeEnd.
+      noteRamp(param, { from: 1, to: 0, t0: fadeStart, t1: fadeEnd })
     } catch {
       /* fallback handled by JS SessionCurtain */
     }
@@ -494,13 +496,14 @@ export function createNeuroSoundEngine({
     // Cancel any future sleepFadeGain ramp (keep its current value so fade-out stays click-free!)
     try {
       const now = g.ctx.currentTime
-      const curSleep = Number.isFinite(g.sleepFadeGain.gain.value) ? g.sleepFadeGain.gain.value : 1
+      const curSleep = paramNow(g.sleepFadeGain.gain, now)
       if (typeof g.sleepFadeGain.gain.cancelAndHoldAtTime === 'function') {
         g.sleepFadeGain.gain.cancelAndHoldAtTime(now)
       } else {
         g.sleepFadeGain.gain.cancelScheduledValues(now)
       }
       g.sleepFadeGain.gain.setValueAtTime(curSleep, now)
+      noteRamp(g.sleepFadeGain.gain, { from: curSleep, to: curSleep, t0: now, t1: now })
     } catch {
       /* ignore */
     }

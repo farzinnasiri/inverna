@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { Award, Moon, Pause, Play } from 'lucide-react-native'
-import { GAMES, GAMES_BY_INTENT, type GameId, type GameMeta, type NightIntent } from '@/core/games/catalog'
+import { arrangeGames } from '@/core/games/arrange'
+import { gameMeta, type GameId } from '@/core/games/catalog'
+import { profileIntent } from '@/core/profile'
 import { bestFor, formatBestCompact } from '@/core/highscores'
 import { eveningState, windowProgress, type EveningState } from '@/core/evening'
 import { formatBedtime12h, formatHHMM, nightKey, overrideActive } from '@/core/night'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { greeting, play as copy } from '@/ui/copy'
-import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { ContinuePreview } from '@/ui/rn/ContinuePreview'
 import { FRAME_MAX_WIDTH } from '@/ui/rn/controls'
 import { GameGlyph } from '@/ui/rn/GameGlyph'
 import { SoundGlyph } from '@/ui/rn/SoundGlyph'
 import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { Horizon } from '@/ui/rn/Horizon'
-import { useResponsiveLayout } from '@/ui/rn/hooks'
+import { tabBarClearance, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
+import { Rise } from '@/ui/rn/motion'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
@@ -48,26 +50,20 @@ function countdown(mins: number): { num: string; unit: string } {
   return { num: m === 0 ? `${h}h` : `${h}h ${m}m`, unit: '' }
 }
 
-/** Tonight's games: the check-in's pick leads; otherwise the last game played, then slow games. */
-function curateGames(intent: NightIntent | null, lastGame: GameId | null): { ordered: GameMeta[]; wideIds: Set<GameId> } {
-  const byId = new Map(GAMES.map((g) => [g.id, g]))
-  const base = GAMES_BY_INTENT[intent ?? 'melt'].map((id) => byId.get(id)!).filter(Boolean)
-  const leadId: GameId = !intent && lastGame && byId.has(lastGame) ? lastGame : base[0]!.id
-  const ordered = [byId.get(leadId)!, ...base.filter((g) => g.id !== leadId)]
-  // Rows: [2, 1] | [1, 1, 1] | [1, 2] | [1, 1, 1] | [1, 1, 1]
-  return { ordered, wideIds: new Set<GameId>([ordered[0]!.id, ordered[6]!.id]) }
-}
+// Play arrives in three beats (after onboarding, or on launch as the splash lifts).
+const ARRIVE = { distance: 8, duration: 360 } as const
 
 /** Rows in the bento above (13 games, two of them wide). */
 const GRID_ROWS = 5
-/** The floating native tab bar. */
-const TAB_BAR_H = 62
 const DOCK_H = 56
+/** Least height the hero needs: the big line, one line under it, and the accessory slot. */
+const HERO_MIN = 132
 
 export default function HomeScreen() {
   const router = useRouter()
   const { height, insets, isCompact, isLarge, sideMargin } = useResponsiveLayout()
   const { color } = useTokenColors()
+  const reduced = useReducedMotion()
 
   const onboarded = useSettings((s) => s.onboarded)
   const name = useSettings((s) => s.userName)
@@ -142,11 +138,20 @@ export default function HomeScreen() {
     return () => clearTimeout(timer)
   }, [onboarded, nearBedtime, lastCheckInDate, now, checkInOpen, setCheckIn])
 
-  const { ordered, wideIds } = useMemo(() => curateGames(tonightIntent, lastGame), [tonightIntent, lastGame])
+  // Tonight's check-in leads for one night; favourites (from what they play)
+  // take the wide tiles; onboarding's answers set the order underneath.
+  const profile = useSettings((s) => s.profile)
+  const plays = useSettings((s) => s.plays)
+  const tonightPlan = lastCheckInDate === nightKey(now) ? tonightIntent : null
+  const { ordered, wideIds } = useMemo(() => {
+    const { order, wide } = arrangeGames({ tonight: tonightPlan, usual: profile ? profileIntent(profile) : null, plays })
+    return { ordered: order.map(gameMeta), wideIds: new Set<GameId>(wide) }
+  }, [tonightPlan, profile, plays])
 
   const launchGame = (id: GameId) => {
     if (hapticsOn) haptics.play('light')
-    setSettings({ lastGame: id })
+    const st = useSettings.getState()
+    setSettings({ lastGame: id, plays: { ...st.plays, [id]: (st.plays[id] ?? 0) + 1 } })
     router.push(`/game/${id}`)
   }
 
@@ -162,32 +167,28 @@ export default function HomeScreen() {
     }
   }
 
-  // Every region gets a fixed share of the screen, so nothing moves when the
-  // hero's text changes: hero, then the grid, then the dock above the tab bar.
-  const heroH = Math.round(clamp(height * 0.2, 150, 190))
+  // Fixed layout, no scrolling: tiles keep their size, the dock sits above the
+  // tab bar, and the hero takes whatever height is left (its content is
+  // centred in it, so changing text never moves the tiles). Tiles shrink only
+  // on screens too short to fit everything (iPhone SE).
   const sectionGap = isCompact ? 10 : 14
   const tileGap = isCompact ? 8 : 10
-  const bottomReserve = Math.max(insets.bottom, 12) + (Platform.OS === 'web' ? 12 : TAB_BAR_H + 10)
-  const gridAvail = height - insets.top - 8 - heroH - sectionGap * 2 - DOCK_H - bottomReserve
-  const tileHeight = Math.floor(clamp((gridAvail - tileGap * (GRID_ROWS - 1)) / GRID_ROWS, 66, isLarge ? 100 : 92))
+  const bottomReserve = tabBarClearance(insets.bottom)
+  const preferredTile = isCompact ? 80 : isLarge ? 94 : 88
+  const fitTile = Math.floor(
+    (height - insets.top - HERO_MIN - sectionGap * 2 - DOCK_H - bottomReserve - tileGap * (GRID_ROWS - 1)) / GRID_ROWS,
+  )
+  const tileHeight = clamp(fitTile, 64, preferredTile)
   const colW = gridW > 0 ? Math.floor((gridW - tileGap * 2) / 3) : 104
   const wideW = colW * 2 + tileGap
   const bigSize = isCompact ? 44 : 54
 
   return (
     <View style={styles.root}>
-      <AmbientBackdrop />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[
-          styles.content,
-          { paddingHorizontal: sideMargin, paddingTop: insets.top + 8, paddingBottom: bottomReserve },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={[styles.content, { paddingHorizontal: sideMargin, paddingTop: insets.top, paddingBottom: bottomReserve }]}>
         <View style={[styles.frame, { gap: sectionGap }]}>
-          {/* Hero: a fixed-height region. Its content changes; its size never does. */}
-          <View style={[styles.hero, { height: heroH }]}>
+          {/* Hero: fills the space above the tiles; content centred, so the tiles never move. */}
+          <Rise {...ARRIVE} delay={0} reduced={reduced} style={[styles.hero, { minHeight: HERO_MIN }]}>
             <Pressable
               onPress={() => {
                 if (session) return
@@ -241,9 +242,10 @@ export default function HomeScreen() {
                 </View>
               ) : null}
             </View>
-          </View>
+          </Rise>
 
           {/* Tiles size themselves to the space left, so the grid ends above the dock. */}
+          <Rise {...ARRIVE} delay={90} reduced={reduced}>
           <GlassGroup
             spacing={0}
             style={[styles.bentoWrap, { gap: tileGap }]}
@@ -307,8 +309,10 @@ export default function HomeScreen() {
               )
             })}
           </GlassGroup>
+          </Rise>
 
           {/* Dock, in thumb reach: wind down on the left, tonight's sound on the right. */}
+          <Rise {...ARRIVE} delay={180} reduced={reduced}>
           <GlassGroup spacing={0} style={styles.dock}>
             <Pressable
               onPress={toggleWindDown}
@@ -358,8 +362,9 @@ export default function HomeScreen() {
               </GlassSurface>
             </Pressable>
           </GlassGroup>
+          </Rise>
         </View>
-      </ScrollView>
+      </View>
       <TonightSheet open={tonightOpen} onClose={() => setTonightOpen(false)} />
     </View>
   )
@@ -368,23 +373,23 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000000',
-  },
-  scroll: {
-    flex: 1,
+    // The backdrop is drawn once behind all tabs (app/(tabs)/_layout.tsx).
     backgroundColor: 'transparent',
   },
   content: {
-    flexGrow: 1,
+    flex: 1,
     alignItems: 'center',
   },
   frame: {
+    flex: 1,
     width: '100%',
     maxWidth: FRAME_MAX_WIDTH,
   },
   hero: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 14,
   },
   heroTap: {
     alignItems: 'center',

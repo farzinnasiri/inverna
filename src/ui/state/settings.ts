@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { GameId, NightIntent } from '@/core/games/catalog'
+import type { Difficulty, SleepProfile } from '@/core/profile'
 import type { DayAnswer, NowAnswer } from '@/core/tonight'
 import { DEFAULT_SCHEDULE, effectiveSchedule, type BedtimeOverride, type Schedule } from '@/core/night'
 import type { ModulationDepth } from '@/core/sound/arc'
@@ -20,7 +21,7 @@ export const kvStorage = createJSONStorage(() => ({
 
 export type { NightIntent }
 
-export type Difficulty = 'easy' | 'medium' | 'hard'
+export type { Difficulty }
 
 export interface SettingsState {
   /** Single unified night light level, 0 = normal, 1 = lowest. */
@@ -59,6 +60,14 @@ export interface SettingsState {
   reminders: boolean
   /** Chosen difficulty per game (games without their own difficulty use it through `useCalm`). */
   difficulty: Partial<Record<GameId, Difficulty>>
+  /** Difficulty for games not set one by one; from onboarding. */
+  defaultDifficulty: Difficulty
+  /** What onboarding learned (stays on the device); null if skipped. */
+  profile: SleepProfile | null
+  /** Times each game was opened; Play gives the favourites the wide tiles. */
+  plays: Partial<Record<GameId, number>>
+  /** Sound volume, 0..1, kept between launches. */
+  volume: number
   /** nightKey() of the night the in-game bedtime prompt was answered, so it asks once. */
   bedtimeNudgeNight: string | null
   /** Quiet non-streak reflection: formatted time of last completed wind-down. */
@@ -95,6 +104,10 @@ export const useSettings = create<SettingsState>()(
       userName: '',
       reminders: true,
       difficulty: {},
+      defaultDifficulty: 'medium',
+      profile: null,
+      plays: {},
+      volume: 0.85,
       bedtimeNudgeNight: null,
       lastLightsOut: null,
       lastLightsOutNight: null,
@@ -105,7 +118,7 @@ export const useSettings = create<SettingsState>()(
     {
       name: 'settings',
       storage: kvStorage,
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
         const p = persisted as Record<string, unknown>
@@ -133,6 +146,20 @@ export const useSettings = create<SettingsState>()(
             sessionPreset: prevPreset === 'rainfall' || !prevPreset ? DEFAULT_PRESET_ID : prevPreset,
             modulationDepth: 'subtle',
             autoDescent: true,
+          }
+        }
+        if (version < 5 && next.profile && typeof next.profile === 'object') {
+          // Onboarding asks different things now: keep what still applies.
+          const old = next.profile as Record<string, unknown>
+          next = {
+            ...next,
+            profile: {
+              factors: [],
+              mind: typeof old.mind === 'number' ? old.mind : 0.4,
+              styles: [],
+              liked: old.liked && typeof old.liked === 'object' ? old.liked : {},
+              volume: typeof old.volume === 'number' ? old.volume : 0.8,
+            },
           }
         }
         if (version < 4) {

@@ -1,6 +1,5 @@
-import { useRef, useState, type ComponentRef } from 'react'
+import { useMemo, useRef, useState, type ComponentRef } from 'react'
 import {
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,8 +9,9 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
-import { ChevronRight, SlidersHorizontal, Sparkles, Timer, Volume2 } from 'lucide-react-native'
+import { ChevronRight, Compass, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
 import { soundsHelp } from '@/ui/copy'
+import { soundOrder } from '@/core/profile'
 import {
   BANDS,
   DEFAULT_PRESET_ID,
@@ -23,10 +23,9 @@ import {
 } from '@/core/sound/catalog'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { FRAME_MAX_WIDTH, PopoverMenu, Slider } from '@/ui/rn/controls'
 import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
-import { useResponsiveLayout } from '@/ui/rn/hooks'
+import { tabBarClearance, useResponsiveLayout } from '@/ui/rn/hooks'
 import { MixSheet, type StudioTab } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
 import { SoundGlyph } from '@/ui/rn/SoundGlyph'
@@ -102,6 +101,12 @@ export default function SoundsScreen() {
   const pagerRef = useRef<ComponentRef<typeof ScrollView>>(null)
 
   const currentId = activePresetId ?? selectedId
+  // What they liked in onboarding comes first on each page.
+  const profile = useSettings((s) => s.profile)
+  const orderedPresets = useMemo(
+    () => (profile ? soundOrder(profile).map((id) => presetById(id)!).filter(Boolean) : PRESETS),
+    [profile],
+  )
   const currentPreset = currentId === 'custom' ? null : (presetById(currentId) ?? PRESETS[0]!)
   const currentName = currentPreset ? currentPreset.name : 'Your mix'
   const displayMix = playing && activeMix ? activeMix : (currentPreset?.mix ?? customMix)
@@ -163,20 +168,22 @@ export default function SoundsScreen() {
 
   return (
     <View style={styles.root}>
-      <AmbientBackdrop />
       <ScrollView
         style={styles.scroll}
+        // Insets are counted once, here, so the last row clears the floating tab bar.
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustsScrollIndicatorInsets={false}
         contentContainerStyle={[
           styles.content,
           {
             paddingHorizontal: sideMargin,
             paddingTop: insets.top + (isCompact ? 8 : 12),
-            paddingBottom: Platform.OS === 'ios' ? 22 : Math.max(insets.bottom, 16) + 92,
+            paddingBottom: tabBarClearance(insets.bottom),
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.frame, { gap: isCompact ? 14 : 18 }]}>
+        <View style={[styles.frame, { gap: isCompact ? 12 : 14 }]}>
           {/* Top Watchmaker utility bar: Timer | Title | Mix */}
           <View style={styles.topBar}>
             <Pressable
@@ -259,7 +266,7 @@ export default function SoundsScreen() {
                 scrollEventThrottle={32}
               >
                 {PRESET_PAGES.map((pg) => {
-                  const pageItems = PRESETS.filter((p) => p.page === pg.id)
+                  const pageItems = orderedPresets.filter((p) => p.page === pg.id)
                   return (
                     <GlassGroup
                       key={pg.id}
@@ -354,11 +361,13 @@ export default function SoundsScreen() {
           <Pressable
             onPress={() => useNav.getState().setCheckIn('sound')}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.helpRow, { opacity: pressed ? 0.7 : 1 }]}
+            style={({ pressed }) => [styles.helpCell, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}
           >
-            <Sparkles size={15} strokeWidth={1.7} color={color.accent} />
-            <Text style={[styles.helpText, { color: color.ink2 }]}>{soundsHelp.link}</Text>
-            <ChevronRight size={15} strokeWidth={1.7} color={color.ink3} />
+            <GlassSurface variant="card" radius={20} interactive style={styles.helpRow}>
+              <Compass size={17} strokeWidth={1.7} color={color.accent} />
+              <Text style={[styles.helpText, { color: color.ink }]}>{soundsHelp.link}</Text>
+              <ChevronRight size={16} strokeWidth={1.7} color={color.ink3} />
+            </GlassSurface>
           </Pressable>
         </View>
       </ScrollView>
@@ -404,7 +413,8 @@ export default function SoundsScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000000',
+    // The backdrop is drawn once behind all tabs (app/(tabs)/_layout.tsx).
+    backgroundColor: 'transparent',
   },
   scroll: {
     flex: 1,
@@ -530,16 +540,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
   },
+  helpCell: {
+    width: '100%',
+  },
   helpRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 44,
-    marginTop: 4,
+    gap: 12,
+    height: 52,
+    paddingHorizontal: 16,
   },
   helpText: {
-    fontSize: 14.5,
+    flex: 1,
+    fontSize: 15,
     fontWeight: '500',
   },
   volPct: {

@@ -9,10 +9,11 @@
  * - The field shader renders at ~1 pixel per 1.5pt and is scaled up by the
  *   compositor; everything in it is soft, so the upscale is invisible.
  * - Particles are one drawAtlas call; paints and transforms are reused.
- * - One simulation (and sprite atlas) is shared by the backdrops of every tab
- *   and survives remounts, so switching tabs rebuilds nothing. Only the focused
- *   tab's clock runs (`active`); hidden tabs keep their last frame and draw
- *   nothing. With Reduce Motion on, nothing animates: scenes switch instantly.
+ * - The tabs share one backdrop drawn behind them (app/(tabs)/_layout.tsx).
+ *   The simulation and sprite atlas are module-level too, so a remount (or the
+ *   onboarding backdrop) picks up where the scene is. The clock runs only while
+ *   its screen is focused (`active`). With Reduce Motion on, nothing animates:
+ *   scenes switch instantly.
  *
  * Default export so the web build can lazy-load it after CanvasKit is ready.
  */

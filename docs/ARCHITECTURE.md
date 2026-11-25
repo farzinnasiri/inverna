@@ -88,6 +88,11 @@ on water, Chladni sand, ...). `AmbientBackdrop` stacks two layers:
 - **Reminders** (`platform/notifications.ts`, `ui/rn/reminders.ts`): one
   notification a night at wind-down start, rotating messages, re-planned for
   the coming week whenever the app opens. Tapping one opens the check-in.
+- **Personalization** has three layers, shortest-lived wins:
+  onboarding sets the starting point (`core/profile.ts`: game intent,
+  difficulty, sound order, default sound, volume, wind-down length); Play
+  learns favourites from what is actually played (`core/games/arrange.ts`
+  gives them the wide tiles); tonight's check-in overrides one night only.
 - **Words** live in `ui/copy.ts`. Voice rules and the full copy deck:
   `design/copy/VOICE.md`, `design/copy/copy.json`.
 - **Games** open on a door (difficulty, Continue / New game) in `GameShell`.

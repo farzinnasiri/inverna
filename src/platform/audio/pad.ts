@@ -140,12 +140,23 @@ export function createHarmonicPadController(
     }
   }
 
+  /** Chords fading out after a sound switch; torn down when their fade ends. */
+  const retiring = new Map<ActivePadGraph, ReturnType<typeof setTimeout>>()
+
   const teardownNow = () => {
     clearStopTimer()
+    for (const [old, timer] of retiring) {
+      clearTimeout(timer)
+      destroyGraph(old)
+    }
+    retiring.clear()
     if (!graph) return
     const g = graph
     graph = null
+    destroyGraph(g)
+  }
 
+  const destroyGraph = (g: ActivePadGraph) => {
     for (const v of g.voices) {
       safeStop(v.oscA)
       safeStop(v.oscB)
@@ -410,32 +421,44 @@ export function createHarmonicPadController(
       clearStopTimer()
       const safeFade = Math.max(0.08, Math.max(0, fadeSeconds))
 
+      // A chord that's just been built swells in a little slower than a level change.
+      let swell = safeFade
       if (!graph) {
         currentKey = keyId
         graph = buildGraph(keyId)
+        swell = Math.max(safeFade, 2.2)
       } else if (keyId !== currentKey) {
+        // A new sound gets its own chord, crossfaded in. Bending the old
+        // chord's pitches into the new one was audible as a siren-like slide,
+        // and swapping its waveform mid-note clicked.
         currentKey = keyId
-        const meta = harmonicKeyMeta(keyId)
-        const nextWave = createTimbreWave(ctx, meta.timbre)
-        const now = ctx.currentTime
-        const glide = Math.max(0.35, Math.min(safeFade, 1.4))
-        graph.voices.forEach((v, idx) => {
-          const f = meta.padHz[idx] ?? meta.rootHz
-          if (nextWave && typeof v.oscA.setPeriodicWave === 'function' && typeof v.oscB.setPeriodicWave === 'function') {
-            try {
-              v.oscA.setPeriodicWave(nextWave)
-              v.oscB.setPeriodicWave(nextWave)
-            } catch {
-              /* keep existing wave */
-            }
-          }
-          rampParam(v.oscA.frequency, f * (1 - DETUNE_RATIO), glide, now)
-          rampParam(v.oscB.frequency, f * (1 + DETUNE_RATIO), glide, now)
-        })
+        const old = graph
+        const xfade = Math.max(1.2, Math.min(safeFade * 1.4, 2.4))
+        rampParam(old.outputGain.gain, 0, xfade, ctx.currentTime)
+        // Stop on the audio clock when the fade ends, so the old chord can't keep
+        // running (silently, costing CPU) if iOS delays the teardown timer while locked.
+        const end = ctx.currentTime + xfade + 0.05
+        for (const v of old.voices) {
+          safeStop(v.oscA, end)
+          safeStop(v.oscB, end)
+          safeStop(v.lfo, end)
+        }
+        safeStop(old.breathLfo, end)
+        safeStop(old.amLfo, end)
+        safeStop(old.panLfo, end)
+        retiring.set(
+          old,
+          setTimeout(() => {
+            retiring.delete(old)
+            destroyGraph(old)
+          }, Math.ceil(xfade * 1000) + 150),
+        )
+        graph = buildGraph(keyId)
+        swell = Math.max(safeFade, 2.2)
       }
 
       applyDescentToGraph(graph, Math.min(safeFade, 1.0))
-      rampParam(graph.outputGain.gain, targetGain, safeFade, ctx.currentTime)
+      rampParam(graph.outputGain.gain, targetGain, swell, ctx.currentTime)
     },
 
     setDescent(next, rampSeconds) {

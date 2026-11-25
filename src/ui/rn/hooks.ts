@@ -86,6 +86,14 @@ export function useHighScore(
   return { best, formattedBest, isNewBest }
 }
 
+/**
+ * Bottom padding for content on a tab: clears the home indicator and the
+ * floating tab bar with a small gap. One value, so every tab ends the same way.
+ */
+export function tabBarClearance(bottomInset: number): number {
+  return Math.max(bottomInset, 12) + (Platform.OS === 'web' ? 12 : 62 + 12)
+}
+
 /** How forgiving each difficulty starts out; winding down softens it further. */
 const DIFFICULTY_CALM: Record<Difficulty, number> = { easy: 0.7, medium: 0.3, hard: 0 }
 
@@ -96,7 +104,7 @@ const DIFFICULTY_CALM: Record<Difficulty, number> = { easy: 0.7, medium: 0.3, ha
  */
 export function useCalm(gameId?: GameId): number {
   const session = useSession((s) => s.session)
-  const difficulty = useSettings((s) => (gameId ? (s.difficulty[gameId] ?? 'medium') : null))
+  const difficulty = useSettings((s) => (gameId ? (s.difficulty[gameId] ?? s.defaultDifficulty) : null))
   const [windDown, setWindDown] = useState(() => (session ? sessionLevels(session, Date.now()).calm : 0))
   useEffect(() => {
     if (!session) {
@@ -176,6 +184,20 @@ export function useReducedMotion(): boolean {
     }
   }, [])
   return reduced
+}
+
+/**
+ * True while the app is in front. Locked (including the Always-On screen) or
+ * switched away, it's false: animations should stop, since nobody sees them
+ * and the audio needs the processor more.
+ */
+export function useAppActive(): boolean {
+  const [active, setActive] = useState(() => AppState.currentState === 'active')
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setActive(state === 'active'))
+    return () => sub.remove()
+  }, [])
+  return active
 }
 
 /** Calls `onBackground` when app moves to background or web tab hides. */

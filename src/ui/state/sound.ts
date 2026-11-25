@@ -108,7 +108,7 @@ export const useSound = create<SoundState>()((set, get) => {
     mix: null,
     harmonicKey: initialKey,
     descent: initialDescent,
-    volume: 0.85,
+    volume: useSettings.getState().volume,
     stopAt: null,
 
     playPreset: (id, timerMinutes) => {
@@ -199,6 +199,7 @@ export const useSound = create<SoundState>()((set, get) => {
       const volume = Math.min(1, Math.max(0, raw))
       sound.setMaster(volume, 0.12)
       set({ volume })
+      useSettings.getState().set({ volume })
     },
 
     setTimer: (choice) => {

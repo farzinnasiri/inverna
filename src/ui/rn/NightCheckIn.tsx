@@ -1,6 +1,23 @@
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import Animated, { FadeIn } from 'react-native-reanimated'
+import {
+  Activity,
+  Armchair,
+  BatteryLow,
+  Bed,
+  Brain,
+  Clock,
+  CloudLightning,
+  Eye,
+  Frown,
+  Leaf,
+  Moon,
+  Pause,
+  Play,
+  Sun,
+  type LucideIcon,
+} from 'lucide-react-native'
+import Animated from 'react-native-reanimated'
 import { nightKey } from '@/core/night'
 import { presetById } from '@/core/sound/catalog'
 import { DAY_ANSWERS, NOW_ANSWERS, planTonight, type DayAnswer, type NowAnswer } from '@/core/tonight'
@@ -13,6 +30,7 @@ import { useSound } from '@/ui/state/sound'
 import { Button, Sheet } from './controls'
 import { GlassSurface } from './Glass'
 import { useReducedMotion } from './hooks'
+import { HandoffTitle, itemDelay, Rise } from './motion'
 import { SoundGlyph } from './SoundGlyph'
 
 /** The evening this moment belongs to (rolls over at 06:00). */
@@ -22,18 +40,36 @@ export function todayNightKey(now = new Date()): string {
 
 type Step = 'day' | 'now' | 'result'
 
+/** Every answer gets a picture as well as a word. */
+const DAY_ICON: Record<DayAnswer, LucideIcon> = {
+  good: Sun,
+  calm: Leaf,
+  busy: Clock,
+  stressful: CloudLightning,
+  exhausting: BatteryLow,
+  sad: Frown,
+}
+const NOW_ICON: Record<NowAnswer, LucideIcon> = {
+  sleepy: Moon,
+  relaxed: Armchair,
+  worn_out: Bed,
+  overthinking: Brain,
+  wide_awake: Eye,
+  restless: Activity,
+}
+
 /**
  * Two plain questions near bedtime: how was your day, how do you feel now.
  * Lull decides the rest (which games lead, which sound) and shows two sounds
  * to try. Opened automatically on Play near bedtime, from a reminder, or from
- * "Not sure what to listen to?" on Sounds.
+ * "Help me pick a sound" on Sounds. One complete question per step, nothing
+ * around it; six answers each, so the grid is even.
  */
 export function NightCheckIn() {
   const { color } = useTokenColors()
   const reduced = useReducedMotion()
   const mode = useNav((s) => s.checkIn)
   const setMode = useNav((s) => s.setCheckIn)
-  const name = useSettings((s) => s.userName)
   const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const playing = useSound((s) => s.playing)
@@ -98,61 +134,69 @@ export function NightCheckIn() {
 
   const options =
     step === 'day'
-      ? DAY_ANSWERS.map((id) => ({ id, label: copy.day[id].label, onPress: () => pickDay(id) }))
-      : NOW_ANSWERS.map((id) => ({ id, label: copy.now[id].label, onPress: () => pickNow(id) }))
-  // Lull answers what you said before asking the next thing.
-  const kicker =
-    step === 'day' ? copy.intro(name) : step === 'now' ? (day ? copy.day[day].followUp : '') : now ? copy.now[now].followUp : ''
+      ? DAY_ANSWERS.map((id) => ({ id, label: copy.day[id], Icon: DAY_ICON[id], picked: day === id, onPress: () => pickDay(id) }))
+      : NOW_ANSWERS.map((id) => ({ id, label: copy.now[id], Icon: NOW_ICON[id], picked: now === id, onPress: () => pickNow(id) }))
 
   return (
     <Sheet open={mode !== null} onClose={close} label="Check-in">
-      <Text style={[styles.kicker, { color: color.ink3 }]} numberOfLines={2}>
-        {kicker}
-      </Text>
+      {/* The question hands over in place: old words lift away, new ones rise. */}
+      <HandoffTitle
+        text={step === 'day' ? copy.dayQuestion : step === 'now' ? copy.nowQuestion : soundsHelp.heading}
+        reduced={reduced}
+        style={styles.titleBox}
+        textStyle={[styles.title, { color: color.ink }]}
+      />
 
-      <Animated.View key={step} entering={reduced ? undefined : FadeIn.duration(200)}>
+      {/* Answers swap and rise in; no exit, so the old ones never sit above the new ones. */}
+      <Animated.View key={step}>
         {step !== 'result' ? (
           <>
-            <Text style={[styles.title, { color: color.ink }]}>
-              {step === 'day' ? copy.dayQuestion : copy.nowQuestion}
-            </Text>
-            <Text style={[styles.sub, { color: color.ink2 }]}>{step === 'day' ? copy.daySub : copy.nowSub}</Text>
             <View style={styles.options}>
-              {options.map((o) => (
+              {options.map((o, i) => (
+                <Rise key={o.id} delay={itemDelay(i)} reduced={reduced} style={styles.option}>
                 <Pressable
-                  key={o.id}
                   onPress={o.onPress}
                   accessibilityRole="button"
-                  style={({ pressed }) => [styles.option, { transform: [{ scale: pressed ? 0.97 : 1 }] }]}
+                  style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                 >
-                  <GlassSurface variant="pill" radius={22} interactive style={styles.optionPill}>
-                    <Text style={[styles.optionText, { color: color.ink }]}>{o.label}</Text>
+                  <GlassSurface variant="pill" radius={20} accent={o.picked} interactive style={styles.optionPill}>
+                    <o.Icon size={18} strokeWidth={1.7} color={o.picked ? color.accent : color.ink2} />
+                    <Text style={[styles.optionText, { color: color.ink }]} numberOfLines={1}>
+                      {o.label}
+                    </Text>
                   </GlassSurface>
                 </Pressable>
+                </Rise>
               ))}
             </View>
           </>
         ) : (
           <>
-            <Text style={[styles.title, { color: color.ink }]}>{soundsHelp.heading}</Text>
-            <Text style={[styles.sub, { color: color.ink2 }]}>
-              {mode === 'tonight' ? `${copy.gamesReady} ${soundsHelp.sub}` : soundsHelp.sub}
-            </Text>
             <View style={styles.sounds}>
-              {suggested.map((id) => {
+              {suggested.map((id, i) => {
                 const p = presetById(id)
                 if (!p) return null
                 const live = playing && presetId === id
                 return (
+                  <Rise key={id} delay={itemDelay(i)} reduced={reduced} style={styles.soundCell}>
                   <Pressable
-                    key={id}
                     onPress={() => toggleSound(id)}
                     accessibilityRole="button"
                     accessibilityLabel={live ? `Stop ${p.name}` : `Play ${p.name}`}
-                    style={({ pressed }) => [styles.soundCell, { transform: [{ scale: pressed ? 0.97 : 1 }] }]}
+                    style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                   >
                     <GlassSurface variant="card" radius={18} accent={live} interactive style={styles.soundTile}>
-                      <SoundGlyph icon={p.icon} size={22} color={live ? color.accent : color.ink2} />
+                      <View style={styles.soundTop}>
+                        <SoundGlyph icon={p.icon} size={22} color={live ? color.accent : color.ink2} />
+                        {/* Shows it plays on tap. */}
+                        <View style={[styles.playDot, { borderColor: live ? color.accent : 'rgba(255,255,255,0.18)' }]}>
+                          {live ? (
+                            <Pause size={13} strokeWidth={2} color={color.accent} fill={color.accent} />
+                          ) : (
+                            <Play size={13} strokeWidth={2} color={color.ink} fill={color.ink} style={{ marginLeft: 2 }} />
+                          )}
+                        </View>
+                      </View>
                       <Text style={[styles.soundName, { color: color.ink }]} numberOfLines={1}>
                         {p.name}
                       </Text>
@@ -161,6 +205,7 @@ export function NightCheckIn() {
                       </Text>
                     </GlassSurface>
                   </Pressable>
+                  </Rise>
                 )
               })}
             </View>
@@ -170,7 +215,7 @@ export function NightCheckIn() {
 
       <View style={styles.footer}>
         {step === 'now' ? (
-          <Button variant="ghost" size="sm" onPress={() => setStep('day')}>
+          <Button variant="quiet" size="sm" onPress={() => setStep('day')}>
             {copy.back}
           </Button>
         ) : (
@@ -181,7 +226,7 @@ export function NightCheckIn() {
             {copy.done}
           </Button>
         ) : (
-          <Button variant="ghost" size="sm" onPress={close}>
+          <Button variant="quiet" size="sm" onPress={close} style={styles.skip}>
             {copy.skip}
           </Button>
         )}
@@ -191,20 +236,15 @@ export function NightCheckIn() {
 }
 
 const styles = StyleSheet.create({
-  kicker: {
-    fontSize: 14,
-    lineHeight: 19,
+  titleBox: {
+    height: 36,
+    marginTop: 2,
   },
   title: {
     fontSize: 26,
     fontWeight: '600',
     letterSpacing: -0.5,
-    marginTop: 4,
-  },
-  sub: {
-    fontSize: 15,
-    lineHeight: 21,
-    marginTop: 6,
+    lineHeight: 32,
   },
   options: {
     flexDirection: 'row',
@@ -213,13 +253,15 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   option: {
+    // Two even columns, three rows.
+    width: '48%',
     flexGrow: 1,
-    minWidth: '30%',
   },
   optionPill: {
-    height: 50,
+    height: 52,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
     paddingHorizontal: 16,
   },
   optionText: {
@@ -240,6 +282,19 @@ const styles = StyleSheet.create({
     minHeight: 108,
     justifyContent: 'center',
   },
+  soundTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  playDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   soundName: {
     fontSize: 15,
     fontWeight: '600',
@@ -257,5 +312,8 @@ const styles = StyleSheet.create({
   },
   done: {
     minWidth: 120,
+  },
+  skip: {
+    minWidth: 88,
   },
 })

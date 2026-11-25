@@ -52,12 +52,41 @@ export function rampTracked(param: AudioParamLike, track: RampTrack, target: num
   track.t1 = now + duration
 }
 
+/**
+ * Where every param's last ramp was heading, so the next ramp starts from where
+ * the sound really is. Without this, a second change read `param.value` (the
+ * last value *set*, on native) and jumped back before ramping: audible as a
+ * short sweep on every sound switch. Params are stable per node, so a WeakMap
+ * keyed by the param object follows them and forgets them with the node.
+ */
+const lastRamp = new WeakMap<object, RampTrack>()
+
+/** Where a param really is now (its last ramp, if we scheduled one), for code that schedules by hand. */
+export function paramNow(param: AudioParamLike, now: number): number {
+  const known = lastRamp.get(param)
+  if (known) return trackedValue(known, now)
+  return Number.isFinite(param.value) ? param.value : 0
+}
+
+/** Record a ramp scheduled by hand (not through rampParam), so the next ramp starts from it. */
+export function noteRamp(param: AudioParamLike, track: RampTrack): void {
+  lastRamp.set(param, { ...track })
+}
+
 export function rampParam(param: AudioParamLike, target: number, rampSeconds: number, now: number, from?: number): void {
   const safeNow = Number.isFinite(now) ? Math.max(0, now) : 0
   const duration = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0)
   const safeTarget = Number.isFinite(target) ? target : 0
+  const known = lastRamp.get(param)
   const currentVal =
-    from !== undefined && Number.isFinite(from) ? from : Number.isFinite(param.value) ? param.value : safeTarget
+    from !== undefined && Number.isFinite(from)
+      ? from
+      : known
+        ? trackedValue(known, safeNow)
+        : Number.isFinite(param.value)
+          ? param.value
+          : safeTarget
+  lastRamp.set(param, { from: currentVal, to: safeTarget, t0: safeNow, t1: safeNow + (duration <= 0.002 ? 0 : duration) })
 
   try {
     if (typeof param.cancelAndHoldAtTime === 'function') {

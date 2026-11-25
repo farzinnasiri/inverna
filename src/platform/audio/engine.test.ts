@@ -3,7 +3,7 @@ import { DEFAULT_SCHEDULE } from '@/core/night'
 import { computeDescent } from '@/core/sound/arc'
 import { BANDS, LAYERS, PRESETS, presetById, SILENT_MIX, type Mix } from '@/core/sound/catalog'
 import type { CueName } from '@/core/sound/engine'
-import { HARMONIC_KEYS } from '@/core/sound/harmonics'
+import { HARMONIC_KEYS, harmonicKeyMeta } from '@/core/sound/harmonics'
 import { NOISE_BUFFER_SECONDS } from './buffers'
 import { createNeuroSoundEngine } from './index'
 import type { AudioContextLike, AudioContextStateLike, BiquadFilterTypeLike } from './types'
@@ -552,13 +552,37 @@ describe('createNeuroSoundEngine — background-safe layers, harmonic pad & AM d
     engine.stop(0)
   })
 
+  it('crossfades to a new chord on a sound switch instead of bending the old one', () => {
+    const { engine, contexts } = makeTestEngine({ initialState: 'running' })
+    const a = PRESETS.find((p) => p.id === 'theta-rain')!
+    const b = PRESETS.find((p) => p.harmonicKey !== a.harmonicKey)!
+    engine.setMix(a.mix, 0.5)
+    const ctx = contexts[0]!
+    const before = new Set(ctx.oscillators)
+    engine.setMix(b.mix, 0.5)
+    // The old chord's pitches never slide (that was the "bueee").
+    const chordHz = harmonicKeyMeta(a.harmonicKey).padHz
+    // Chord voices carry the timbre's periodic wave (binaural carriers are plain sines).
+    const voices = [...before].filter(
+      (o) => o.periodicWave !== null && chordHz.some((hz) => Math.abs(o.frequency.value - hz) < hz * 0.01),
+    )
+    expect(voices.length).toBeGreaterThan(0)
+    for (const osc of voices) {
+      expect(osc.frequency.calls.some((c) => c.method === 'linearRampToValueAtTime')).toBe(false)
+    }
+    // A fresh chord was built for the new sound.
+    expect(ctx.oscillators.length).toBeGreaterThan(before.size)
+    engine.stop(0)
+  })
+
   it('routes stereo binaural oscillators strictly to L/R via ChannelMerger', () => {
     const { engine, contexts } = makeTestEngine({ initialState: 'running', includeChannelMerger: true })
 
     for (const band of BANDS) {
       engine.setMix({ layers: {}, padGain: 0, band: band.id, bandGain: 0.4, carrier: 160 }, 0.3)
       const ctx = contexts[0]!
-      const merger = ctx.mergers[0]!
+      // A new band crossfades to a fresh pair: check the newest one.
+      const merger = ctx.mergers[ctx.mergers.length - 1]!
       const wiredLeft = ctx.oscillators.find((o) =>
         o.connections.some((c) => c.target === merger && c.input === 0),
       )

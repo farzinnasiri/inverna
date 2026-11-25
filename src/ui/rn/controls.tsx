@@ -14,6 +14,8 @@ import {
 } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Reanimated, {
+  Easing as REasing,
+  LinearTransition,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
@@ -206,13 +208,52 @@ function lightMoodLabel(light: number): string {
 const LIGHT_THUMB_W = 24
 const LIGHT_PAD = 6
 
+/** The night light, on the shared pill slider: left is dim and warm, right is bright. */
 export function LightSlider({
   value,
   onChange,
-  label = 'In-app night light',
+  label = 'Night light',
+  title = 'Night light',
 }: {
   value: number
   onChange: (nextLight: number) => void
+  label?: string
+  title?: string
+}) {
+  const { color } = useTokenColors()
+  return (
+    <PillSlider
+      value={1 - value}
+      onChange={(b) => onChange(Math.round((1 - b) * 100) / 100)}
+      title={title}
+      label={label}
+      valueLabel={(b) => lightMoodLabel(1 - b)}
+      left={<Moon size={16} strokeWidth={1.65} color={color.ink3} />}
+      right={<Sun size={17} strokeWidth={1.65} color={color.accent} />}
+    />
+  )
+}
+
+/**
+ * The app's big pill slider (night light, onboarding scales): a title on the
+ * left, the live answer in brass on the right, icons at both ends. `value` and
+ * `onChange` are the thumb position, 0 (left) to 1 (right).
+ */
+export function PillSlider({
+  value,
+  onChange,
+  title,
+  valueLabel,
+  left,
+  right,
+  label,
+}: {
+  value: number
+  onChange: (position: number) => void
+  title: string
+  valueLabel: (position: number) => string
+  left?: ReactNode
+  right?: ReactNode
   label?: string
 }) {
   const { color } = useTokenColors()
@@ -224,19 +265,19 @@ export function LightSlider({
   const lastEmitMsRef = useRef(0)
   /** When the finger last moved the slider; props arriving soon after are our own echoes. */
   const lastTouchMsRef = useRef(0)
-  const lastHapticTickRef = useRef(Math.round((1 - value) * 10))
+  const lastHapticTickRef = useRef(Math.round(value * 10))
 
-  const brightnessSV = useSharedValue(Math.min(1, Math.max(0, 1 - value)))
+  const brightnessSV = useSharedValue(Math.min(1, Math.max(0, value)))
   const trackWidthSV = useSharedValue(300)
   const draggingSV = useSharedValue(0)
-  const [liveBrightness, setLiveBrightness] = useState(() => Math.min(1, Math.max(0, 1 - value)))
+  const [liveBrightness, setLiveBrightness] = useState(() => Math.min(1, Math.max(0, value)))
 
   // Follow outside changes only. While dragging, and for a moment after, the
   // incoming value is a delayed echo of an earlier emit: applying it would pull
   // the thumb back and then forward again.
   useEffect(() => {
     if (draggingSV.get() !== 0 || Date.now() - lastTouchMsRef.current < 700) return
-    const nextB = Math.min(1, Math.max(0, 1 - value))
+    const nextB = Math.min(1, Math.max(0, value))
     brightnessSV.set(nextB)
     setLiveBrightness(nextB)
   }, [value, brightnessSV, draggingSV])
@@ -255,8 +296,7 @@ export function LightSlider({
     if (!force && now - lastEmitMsRef.current < 90) return
     lastEmitMsRef.current = now
     setLiveBrightness(clampedB)
-    // Smooth 1% resolution (100 steps) — zero janky stepping.
-    onChangeRef.current(Math.round((1 - clampedB) * 100) / 100)
+    onChangeRef.current(Math.round(clampedB * 100) / 100)
   }
 
   const panGesture = useMemo(
@@ -313,18 +353,21 @@ export function LightSlider({
     }
   })
 
-  const pct = Math.round(liveBrightness * 100)
-  const liveLight = 1 - liveBrightness
 
   return (
     <View style={styles.lightOuter}>
+      {/* One row above the slider: what it is, and where it's set now. */}
+      <View style={styles.lightMetaRow}>
+        <Text style={[styles.lightMetaTitle, { color: color.ink3 }]}>{title}</Text>
+        <Text style={[styles.lightMetaStage, { color: color.accent }]}>{valueLabel(liveBrightness)}</Text>
+      </View>
       <GestureDetector gesture={panGesture}>
         <View
           onLayout={(e: LayoutChangeEvent) => {
             trackWidthSV.set(Math.max(1, e.nativeEvent.layout.width))
           }}
           accessibilityRole="adjustable"
-          accessibilityLabel={`${label}, ${pct} percent`}
+          accessibilityLabel={`${label ?? title}, ${valueLabel(liveBrightness)}`}
           style={[
             styles.lightSlider,
             {
@@ -348,15 +391,10 @@ export function LightSlider({
           />
 
           <View pointerEvents="none" style={styles.lightEndLeft}>
-            <Moon size={16} strokeWidth={1.65} color={color.ink3} />
+            {left}
           </View>
-          <View pointerEvents="none" style={styles.lightEndRight}>
-            <Sun
-              size={17}
-              strokeWidth={1.65}
-              color={color.accent}
-              style={{ opacity: 0.4 + liveBrightness * 0.6 }}
-            />
+          <View pointerEvents="none" style={[styles.lightEndRight, { opacity: 0.4 + liveBrightness * 0.6 }]}>
+            {right}
           </View>
 
           {/* Smooth 120fps UI-thread physical thumb */}
@@ -376,11 +414,6 @@ export function LightSlider({
           </Reanimated.View>
         </View>
       </GestureDetector>
-
-      <View style={styles.lightMetaRow}>
-        <Text style={[styles.lightMetaStage, { color: color.ink2 }]}>{lightMoodLabel(liveLight)}</Text>
-        <Text style={[styles.lightMetaPct, { color: color.accent }]}>{pct}% brightness</Text>
-      </View>
     </View>
   )
 }
@@ -652,6 +685,8 @@ export function PopoverMenu<T extends string | number | null>({
 
 /* --- Sheet (uniform continuous border — zero iOS corner clip notch) ------ */
 
+const SHEET_RESIZE = LinearTransition.duration(260).easing(REasing.bezier(0.32, 0.72, 0, 1)).reduceMotion(ReduceMotion.System)
+
 export function Sheet({
   open,
   onClose,
@@ -666,9 +701,28 @@ export function Sheet({
   const insets = useSafeAreaInsets()
   const translateY = useRef(new Animated.Value(360)).current
   const backdropOpacity = useRef(new Animated.Value(0)).current
+  // Stays mounted through the exit so closing slides down instead of vanishing.
+  const [mounted, setMounted] = useState(open)
+  const sheetHeight = useRef(360)
 
   useEffect(() => {
-    if (open) {
+    if (!open) {
+      if (!mounted) return
+      Animated.parallel([
+        Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+        Animated.timing(translateY, {
+          toValue: sheetHeight.current + 24,
+          duration: 220,
+          easing: Easing.bezier(0.32, 0.72, 0, 1),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) setMounted(false)
+      })
+      return
+    }
+    setMounted(true)
+    {
       translateY.setValue(360)
       backdropOpacity.setValue(0)
       Animated.parallel([
@@ -705,8 +759,8 @@ export function Sheet({
   ).current
 
   return (
-    <Layer visible={open} onRequestClose={onClose} label={label}>
-      <View style={styles.sheetRoot}>
+    <Layer visible={mounted} onRequestClose={onClose} label={label}>
+      <View style={styles.sheetRoot} pointerEvents={open ? 'auto' : 'none'}>
         <Animated.View style={[styles.sheetBackdrop, { opacity: backdropOpacity }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close sheet" />
         </Animated.View>
@@ -719,7 +773,12 @@ export function Sheet({
             },
           ]}
         >
-          <View
+          {/* Height changes (a check-in step, a longer page) animate instead of jumping. */}
+          <Reanimated.View
+            layout={SHEET_RESIZE}
+            onLayout={(e: LayoutChangeEvent) => {
+              sheetHeight.current = e.nativeEvent.layout.height
+            }}
             style={[
               styles.sheetCard,
               {
@@ -734,7 +793,7 @@ export function Sheet({
             <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
               {children}
             </ScrollView>
-          </View>
+          </Reanimated.View>
         </Animated.View>
       </View>
     </Layer>
@@ -819,18 +878,16 @@ const styles = StyleSheet.create({
   },
   lightMetaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
   },
   lightMetaStage: {
     fontSize: 13,
     fontWeight: '500',
   },
-  lightMetaPct: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
+  lightMetaTitle: {
+    fontSize: 12.5,
+    fontWeight: '500',
   },
   sliderWrap: {
     height: 32,

@@ -16,7 +16,7 @@ import { DEFAULT_PRESET_ID, presetById, type SoundSceneId } from '@/core/sound/c
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
 import { SkiaBackdrop } from './backdrop/SkiaBackdrop'
-import { useReducedMotion } from './hooks'
+import { useAppActive, useReducedMotion } from './hooks'
 
 /**
  * Colour layer of one palette family: volumetric canopy / mid / horizon glows and
@@ -206,6 +206,7 @@ export function AmbientBackdrop({
   dim?: number
 } = {}) {
   const isFocused = useIsFocused()
+  const appActive = useAppActive()
   const { width, height } = useWindowDimensions()
   const playing = useSound((s) => s.playing)
   const soundMix = useSound((s) => s.mix)
@@ -399,7 +400,7 @@ export function AmbientBackdrop({
           breathHz={breathHz}
           descent={descent}
           reduced={reduced}
-          active={isFocused}
+          active={isFocused && appActive}
         />
       )}
       </View>

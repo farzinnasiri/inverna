@@ -124,11 +124,13 @@ export function createPlatformSoundEngine(): SoundEngine {
     createContext: () => {
       try {
         void prepareSession()
-        // 'playback' asks iOS for a 4096-frame IO buffer (~85 ms). Locked on the
-        // charger with the Always-On Display, 'balanced' (1024 frames) crackled
-        // and then broke into noise: the render thread was missing deadlines.
-        // A bigger buffer gives it slack; the cost is later game-cue taps.
-        // iOS treats this as a preference, so it's a mitigation, not a guarantee.
+        // 'playback' asks iOS for a 4096-frame IO buffer (~85 ms). Locked on a
+        // charger with the Always-On Display, iOS runs audio on its slowest
+        // cores; the bigger buffer gives the render thread slack. The cost is
+        // later game-cue taps. iOS treats it as a preference.
+        // Measured on device: development builds can't keep up there (the
+        // audio library compiles unoptimised and runs a debug check on every
+        // 128-frame slice), so judge this in a release build.
         return new AudioContext({ latencyHint: 'playback' }) as unknown as AudioContextLike
       } catch {
         return null
@@ -182,3 +184,4 @@ export function createPlatformSoundEngine(): SoundEngine {
     },
   })
 }
+

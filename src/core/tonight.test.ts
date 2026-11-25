@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PRESETS } from './sound/catalog'
-import { DAY_ANSWERS, NOW_ANSWERS, planTonight } from './tonight'
+import { DAY_ANSWERS, hasRule, NOW_ANSWERS, planTonight } from './tonight'
 
 describe('tonight plan from the check-in', () => {
   it('slows things down when sleepy or worn out, whatever the day was', () => {
@@ -19,6 +19,7 @@ describe('tonight plan from the check-in', () => {
     const ids = new Set(PRESETS.map((p) => p.id))
     for (const day of DAY_ANSWERS) {
       for (const now of NOW_ANSWERS) {
+        expect(hasRule(day, now), `${day}/${now} has a rule`).toBe(true)
         const [a, b] = planTonight(day, now).sounds
         expect(ids.has(a), `${day}/${now}: ${a}`).toBe(true)
         expect(ids.has(b), `${day}/${now}: ${b}`).toBe(true)
