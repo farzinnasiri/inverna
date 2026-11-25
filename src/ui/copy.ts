@@ -25,7 +25,10 @@ export const play = {
   minutesUntilBed: (n: number) => (n === 1 ? 'minute until bed' : 'minutes until bed'),
   untilBed: 'until bed',
   pastBig: (name: string) => (name.trim() ? `Still up, ${name.trim()}?` : 'It’s past your bedtime'),
-  pastSub: (bedtime: string) => `Your bedtime was ${bedtime}`,
+  pastSub: (bedtime: string) => `Most nights you’re asleep by ${bedtime}`,
+  /** Between the early and late edge of their usual range. */
+  rangeBig: (name: string) => named('Good night', name),
+  rangeSub: (lateEdge: string) => `Your usual sleep time, until ${lateEdge}`,
   pastWindDown: 'Wind down now',
   pastChange: 'Change bedtime',
   restBig: (name: string) => named('Rest well', name),
@@ -103,7 +106,7 @@ export const onboarding = {
     button: 'Get started',
   },
   bedtime: {
-    title: 'When do you usually go to bed?',
+    title: 'Most nights, when do you fall asleep?',
     reminder: 'Remind me an hour before bed',
   },
   keeps: {
@@ -149,6 +152,9 @@ export const onboarding = {
 export const settingsCopy = {
   nameLabel: 'Your name',
   namePlaceholder: 'Add your first name',
+  rangeLabel: 'Asleep between',
+  rangeNote: 'Set when your hour starts. Lull learns it from your nights.',
+  rangeLearned: (nights: number) => `Learned from your last ${nights} nights`,
   reminderLabel: 'Bedtime reminder',
   reminderNote: 'Sends a quiet reminder an hour before bed.',
   reminderDenied: 'Turn on notifications in iPhone Settings.',

@@ -3,7 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { GameId, NightIntent } from '@/core/games/catalog'
 import type { Difficulty, SleepProfile } from '@/core/profile'
 import type { DayAnswer, NowAnswer } from '@/core/tonight'
-import { DEFAULT_SCHEDULE, effectiveSchedule, type BedtimeOverride, type Schedule } from '@/core/night'
+import { DEFAULT_RANGE_MIN, DEFAULT_SCHEDULE, effectiveSchedule, nightKey, type BedtimeOverride, type Schedule } from '@/core/night'
+import { learnedRange, recordSignal, type SleepSignal, type SleepSignalKind } from '@/core/sleepRange'
 import type { ModulationDepth } from '@/core/sound/arc'
 import { DEFAULT_PRESET_ID, normalizeBand, SILENT_MIX, type Mix } from '@/core/sound/catalog'
 import { kv, NAMESPACE } from '@/core/storage'
@@ -76,8 +77,15 @@ export interface SettingsState {
   lastLightsOutNight: string | null
   /** Bedtime changed for one night only (tapping the time on Play). Expires at 06:00. */
   tonightBedtime: BedtimeOverride | null
-  set: (patch: Partial<Omit<SettingsState, 'set' | 'setSchedule'>>) => void
+  /** One moment close to falling asleep per recent night (see core/sleepRange). */
+  sleepSignals: SleepSignal[]
+  /** Nights the usual range was learned from; null while it's still what they said. */
+  rangeLearnedNights: number | null
+  set: (patch: Partial<Omit<SettingsState, 'set' | 'setSchedule' | 'recordSleep'>>) => void
+  /** A change made by hand. Changing the range starts learning over. */
   setSchedule: (patch: Partial<Schedule>) => void
+  /** Note a moment close to sleep tonight, and update the learned range. */
+  recordSleep: (kind: SleepSignalKind, at?: Date) => void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -112,13 +120,31 @@ export const useSettings = create<SettingsState>()(
       lastLightsOut: null,
       lastLightsOutNight: null,
       tonightBedtime: null,
+      sleepSignals: [],
+      rangeLearnedNights: null,
       set: (patch) => set(patch),
-      setSchedule: (patch) => set((s) => ({ schedule: { ...s.schedule, ...patch } })),
+      setSchedule: (patch) =>
+        set((s) => {
+          const schedule = { ...s.schedule, ...patch }
+          const rangeMoved = schedule.bedtime !== s.schedule.bedtime || schedule.rangeMinutes !== s.schedule.rangeMinutes
+          return rangeMoved ? { schedule, sleepSignals: [], rangeLearnedNights: null } : { schedule }
+        }),
+      recordSleep: (kind, at = new Date()) =>
+        set((s) => {
+          const sleepSignals = recordSignal(s.sleepSignals, nightKey(at), at, kind)
+          const learned = learnedRange(sleepSignals, s.schedule)
+          if (!learned) return { sleepSignals }
+          return {
+            sleepSignals,
+            rangeLearnedNights: learned.nights,
+            schedule: { ...s.schedule, bedtime: learned.bedtime, rangeMinutes: learned.rangeMinutes },
+          }
+        }),
     }),
     {
       name: 'settings',
       storage: kvStorage,
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
         const p = persisted as Record<string, unknown>
@@ -160,6 +186,16 @@ export const useSettings = create<SettingsState>()(
               liked: old.liked && typeof old.liked === 'object' ? old.liked : {},
               volume: typeof old.volume === 'number' ? old.volume : 0.8,
             },
+          }
+        }
+        if (version < 6 && next.schedule && typeof next.schedule === 'object') {
+          // Bedtime became a range: what they set is its early edge.
+          const sched = next.schedule as Schedule
+          next = {
+            ...next,
+            schedule: { ...sched, rangeMinutes: sched.rangeMinutes ?? DEFAULT_RANGE_MIN },
+            sleepSignals: [],
+            rangeLearnedNights: null,
           }
         }
         if (version < 4) {

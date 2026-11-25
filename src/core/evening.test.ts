@@ -55,3 +55,28 @@ describe('evening state around bedtime', () => {
     expect(eveningState({ ...s('23:00'), enabled: false }, at(22, 0)).kind).toBe('none')
   })
 })
+
+describe('evening state with a sleep range', () => {
+  const ranged = (bedtime: string, rangeMinutes: number): Schedule => ({ ...s(bedtime), rangeMinutes })
+
+  it('is a normal night between the early and late edge, not past bedtime', () => {
+    const st = eveningState(ranged('23:30', 60), at(0, 10, 25))
+    expect(st.kind).toBe('asleepRange')
+    expect(st.bedtime?.getHours()).toBe(23)
+    expect(st.rangeEnd?.getHours()).toBe(0)
+    expect(st.rangeEnd?.getMinutes()).toBe(30)
+  })
+
+  it('asks only once the late edge has gone by, and counts from it', () => {
+    const st = eveningState(ranged('23:30', 60), at(0, 45, 25))
+    expect(st.kind).toBe('past')
+    expect(st.minutesSinceBedtime).toBe(15)
+    expect(st.bedtime?.getMinutes()).toBe(30)
+  })
+
+  it('still winds down toward the early edge', () => {
+    const st = eveningState(ranged('23:30', 60), at(23, 0))
+    expect(st.kind).toBe('winding')
+    expect(st.minutesToBedtime).toBe(30)
+  })
+})

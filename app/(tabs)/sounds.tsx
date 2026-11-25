@@ -25,7 +25,7 @@ import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { FRAME_MAX_WIDTH, PopoverMenu, Slider } from '@/ui/rn/controls'
 import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
-import { tabBarClearance, useResponsiveLayout } from '@/ui/rn/hooks'
+import { scrollEndClearance, useResponsiveLayout } from '@/ui/rn/hooks'
 import { MixSheet, type StudioTab } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
 import { SoundGlyph } from '@/ui/rn/SoundGlyph'
@@ -178,7 +178,7 @@ export default function SoundsScreen() {
           {
             paddingHorizontal: sideMargin,
             paddingTop: insets.top + (isCompact ? 8 : 12),
-            paddingBottom: tabBarClearance(insets.bottom),
+            paddingBottom: scrollEndClearance(insets.bottom),
           },
         ]}
         showsVerticalScrollIndicator={false}

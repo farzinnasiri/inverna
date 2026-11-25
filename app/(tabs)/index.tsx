@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { Award, Moon, Pause, Play } from 'lucide-react-native'
@@ -38,7 +38,7 @@ const clock12 = (d: Date) => formatBedtime12h(formatHHMM(d.getHours(), d.getMinu
 
 /** Within 90 minutes of wind down starting, or winding down: the countdown shows and the check-in asks. */
 function nearBedtimeFor(evening: EveningState, now: Date): boolean {
-  if (evening.kind === 'winding') return true
+  if (evening.kind === 'winding' || evening.kind === 'asleepRange') return true
   return evening.kind === 'evening' && evening.windowStart !== null && evening.windowStart.getTime() - now.getTime() <= 90 * 60_000
 }
 
@@ -107,7 +107,12 @@ export default function HomeScreen() {
   type Hero = { big: string; unit?: string; phrase?: boolean; sub: string }
   const movedTonight = overrideActive(tonightBedtime, now) && !session
   let hero: Hero
-  if (evening.kind === 'past') {
+  if (evening.kind === 'asleepRange') {
+    // Inside their usual range: a normal night, so no countdown and no nagging.
+    hero = sleptTonight
+      ? { big: copy.restBig(name), phrase: true, sub: copy.restSub }
+      : { big: copy.rangeBig(name), phrase: true, sub: copy.rangeSub(evening.rangeEnd ? clock12(evening.rangeEnd) : bedLabel) }
+  } else if (evening.kind === 'past') {
     hero = sleptTonight
       ? { big: copy.restBig(name), phrase: true, sub: copy.restSub }
       : { big: copy.pastBig(name), phrase: true, sub: copy.pastSub(bedLabel) }
@@ -167,10 +172,11 @@ export default function HomeScreen() {
     }
   }
 
-  // Fixed layout, no scrolling: tiles keep their size, the dock sits above the
+  // Sized to fit one screen: tiles keep their size, the dock sits above the
   // tab bar, and the hero takes whatever height is left (its content is
-  // centred in it, so changing text never moves the tiles). Tiles shrink only
-  // on screens too short to fit everything (iPhone SE).
+  // centred in it, so changing text never moves the tiles). It still scrolls
+  // with a little give, like the other tabs, and on screens too short for
+  // everything (iPhone SE) the last row or two scroll into view.
   const sectionGap = isCompact ? 10 : 14
   const tileGap = isCompact ? 8 : 10
   const bottomReserve = tabBarClearance(insets.bottom)
@@ -185,7 +191,14 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={[styles.content, { paddingHorizontal: sideMargin, paddingTop: insets.top, paddingBottom: bottomReserve }]}>
+      <ScrollView
+        style={styles.scroll}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustsScrollIndicatorInsets={false}
+        alwaysBounceVertical
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.content, { paddingHorizontal: sideMargin, paddingTop: insets.top, paddingBottom: bottomReserve }]}
+      >
         <View style={[styles.frame, { gap: sectionGap }]}>
           {/* Hero: fills the space above the tiles; content centred, so the tiles never move. */}
           <Rise {...ARRIVE} delay={0} reduced={reduced} style={[styles.hero, { minHeight: HERO_MIN }]}>
@@ -364,7 +377,7 @@ export default function HomeScreen() {
           </GlassGroup>
           </Rise>
         </View>
-      </View>
+      </ScrollView>
       <TonightSheet open={tonightOpen} onClose={() => setTonightOpen(false)} />
     </View>
   )
@@ -376,8 +389,11 @@ const styles = StyleSheet.create({
     // The backdrop is drawn once behind all tabs (app/(tabs)/_layout.tsx).
     backgroundColor: 'transparent',
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  content: {
+    flexGrow: 1,
     alignItems: 'center',
   },
   frame: {

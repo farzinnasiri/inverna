@@ -94,6 +94,15 @@ export function tabBarClearance(bottomInset: number): number {
   return Math.max(bottomInset, 12) + (Platform.OS === 'web' ? 12 : 62 + 12)
 }
 
+/**
+ * Bottom padding for a tab that scrolls: like `tabBarClearance`, plus room for
+ * the soft fade iOS draws above the tab bar, so the last line can be scrolled
+ * fully clear of it instead of stopping half under the bar.
+ */
+export function scrollEndClearance(bottomInset: number): number {
+  return tabBarClearance(bottomInset) + (Platform.OS === 'web' ? 0 : 28)
+}
+
 /** How forgiving each difficulty starts out; winding down softens it further. */
 const DIFFICULTY_CALM: Record<Difficulty, number> = { easy: 0.7, medium: 0.3, hard: 0 }
 

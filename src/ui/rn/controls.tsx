@@ -56,17 +56,17 @@ export function Button({
 }) {
   const { color } = useTokenColors()
   const isSm = size === 'sm'
-  // Primary is brass ink on obsidian with a brass hairline, never a solid brass
-  // slab: it leads without shouting at night.
+  // Primary is brass ink on a brass wash with a full brass edge, never a solid
+  // brass slab: it is the obvious next step without shouting at night. (A
+  // 10% wash and half-strength edge disappeared under the night light.)
   const bg =
     variant === 'primary'
-      ? 'rgba(194, 161, 95, 0.10)'
+      ? 'rgba(194, 161, 95, 0.20)'
       : variant === 'quiet'
         ? 'rgba(22, 24, 31, 0.72)'
         : 'transparent'
-  const fg = variant === 'primary' ? color.accent : variant === 'quiet' ? color.ink : color.ink2
-  const borderColor =
-    variant === 'primary' ? 'rgba(194, 161, 95, 0.55)' : variant === 'quiet' ? 'rgba(255, 255, 255, 0.14)' : 'transparent'
+  const fg = variant === 'primary' ? color.accent : color.ink
+  const borderColor = variant === 'primary' ? color.accent : variant === 'quiet' ? 'rgba(255, 255, 255, 0.14)' : 'transparent'
 
   return (
     <Pressable
@@ -92,7 +92,15 @@ export function Button({
       ]}
     >
       {typeof children === 'string' ? (
-        <Text style={[styles.btnText, { color: fg, fontSize: isSm ? 15 : 16 }]}>{children}</Text>
+        <Text
+          style={[
+            styles.btnText,
+            { color: fg, fontSize: isSm ? 15 : 16 },
+            variant === 'primary' ? styles.btnTextPrimary : null,
+          ]}
+        >
+          {children}
+        </Text>
       ) : (
         children
       )}
@@ -811,6 +819,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: -0.1,
   },
+  btnTextPrimary: {
+    fontWeight: '600',
+  },
   iconBtn: {
     width: 44,
     height: 44,
@@ -981,6 +992,8 @@ const styles = StyleSheet.create({
   },
   sheetCard: {
     width: '100%',
+    // Shrinks to the 86% cap so long sheets scroll inside instead of running off screen.
+    flexShrink: 1,
     backgroundColor: '#0E1016',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,

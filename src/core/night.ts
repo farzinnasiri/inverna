@@ -14,17 +14,31 @@ export interface NightFilter {
 
 export interface Schedule {
   enabled: boolean
-  /** "HH:MM", 24h. */
+  /**
+   * "HH:MM", 24h. The early edge of the usual sleep range: when they most
+   * nights start falling asleep. Reminders, the check-in and wind down key
+   * off this.
+   */
   bedtime: string
+  /**
+   * How long the usual sleep range runs after `bedtime` ("most nights I fall
+   * asleep between 11:30 and 12:30" is 60). The "past bedtime" nudge waits for
+   * the late edge, so it doesn't nag on normal nights. Missing = 0 (one time).
+   */
+  rangeMinutes?: number
   /** Minutes before bedtime when dimming and acoustic descent begin (60m = 1 hour). */
   leadMinutes: number
   /** 0 = Sunday … 6 = Saturday. */
   days: number[]
 }
 
+/** The range onboarding and Settings set: one hour, slid along the night. */
+export const DEFAULT_RANGE_MIN = 60
+
 export const DEFAULT_SCHEDULE: Schedule = {
   enabled: true,
   bedtime: '23:00',
+  rangeMinutes: DEFAULT_RANGE_MIN,
   leadMinutes: 60,
   days: [0, 1, 2, 3, 4, 5, 6],
 }
@@ -54,6 +68,24 @@ export function formatBedtime12h(value: string): string {
   const h12 = h % 12 || 12
   const period = h < 12 ? 'AM' : 'PM'
   return `${h12}:${String(m).padStart(2, '0')} ${period}`
+}
+
+/** Minutes the sleep range runs past `bedtime` (0 when it's a single time). */
+export function rangeMinutesOf(schedule: Schedule): number {
+  return Math.max(0, Math.min(4 * 60, Math.round(schedule.rangeMinutes ?? 0)))
+}
+
+/** "HH:MM" of the late edge of the sleep range. */
+export function rangeEnd(schedule: Schedule): string {
+  const { h, m } = parseHHMM(schedule.bedtime)
+  const t = (h * 60 + m + rangeMinutesOf(schedule)) % 1440
+  return formatHHMM(Math.floor(t / 60), t % 60)
+}
+
+/** "11:30 PM – 12:30 AM", or one time when the range is empty. */
+export function formatRange(schedule: Schedule): string {
+  if (rangeMinutesOf(schedule) === 0) return formatBedtime12h(schedule.bedtime)
+  return `${formatBedtime12h(schedule.bedtime)} – ${formatBedtime12h(rangeEnd(schedule))}`
 }
 
 /**

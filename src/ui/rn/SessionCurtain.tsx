@@ -54,6 +54,7 @@ export function SessionCurtain() {
           lastLightsOut: formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes())),
           lastLightsOutNight: nightKey(d),
         })
+        useSettings.getState().recordSleep('lightsOut', d)
         finish()
         stopSound(3, { hideNotification: true })
       }

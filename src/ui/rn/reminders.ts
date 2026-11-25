@@ -21,7 +21,11 @@ export async function planRemindersNow({ ask = false }: { ask?: boolean } = {}) 
   return notifications.planReminders(st.schedule, messages(st.userName), { ask })
 }
 
-/** Keeps reminders in step with bedtime, name and the toggle, and tops them up whenever the app opens. */
+/**
+ * Keeps reminders in step with bedtime, name and the toggle, and tops them up
+ * whenever the app opens. Also notes when the app is left at night, for the
+ * learned sleep range.
+ */
 export function useReminderPlanner() {
   const schedule = useSettings((s) => s.schedule)
   const enabled = useSettings((s) => s.reminders)
@@ -35,6 +39,9 @@ export function useReminderPlanner() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void planRemindersNow()
+      // Leaving Lull at night is one hint of when they fall asleep (core/sleepRange).
+      // recordSleep ignores the daytime; a changed range re-plans the reminders above.
+      if (state === 'background' && useSettings.getState().onboarded) useSettings.getState().recordSleep('leftApp')
     })
     return () => sub.remove()
   }, [])

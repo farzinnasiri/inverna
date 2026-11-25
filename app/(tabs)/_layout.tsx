@@ -17,6 +17,9 @@ const CLEAR_CONTENT = { backgroundColor: 'transparent' } as const
 /**
  * Native iOS 26 Liquid Glass tab bar via `NativeTabs` (UIKit UITabBar).
  * - No tab bar `backgroundColor`, so Liquid Glass stays active.
+ * - `disableAutomaticContentInsets`: each screen pads itself for the status bar
+ *   and tab bar. Without it, react-native-screens switches the first ScrollView
+ *   in a tab back to UIKit's automatic insets and the top gap doubles.
  * - Works on iOS, Android and web.
  */
 export default function TabsLayout() {
@@ -38,17 +41,17 @@ export default function TabsLayout() {
         tintColor={color.accent}
         minimizeBehavior="never"
       >
-        <NativeTabs.Trigger name="index" contentStyle={CLEAR_CONTENT}>
+        <NativeTabs.Trigger name="index" contentStyle={CLEAR_CONTENT} disableAutomaticContentInsets>
           <NativeTabs.Trigger.Label>Play</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} />
         </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="sounds" contentStyle={CLEAR_CONTENT}>
+        <NativeTabs.Trigger name="sounds" contentStyle={CLEAR_CONTENT} disableAutomaticContentInsets>
           <NativeTabs.Trigger.Label>Sounds</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="waveform" />
         </NativeTabs.Trigger>
 
-        <NativeTabs.Trigger name="settings" contentStyle={CLEAR_CONTENT}>
+        <NativeTabs.Trigger name="settings" contentStyle={CLEAR_CONTENT} disableAutomaticContentInsets>
           <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf={{ default: 'gearshape', selected: 'gearshape.fill' }} />
         </NativeTabs.Trigger>

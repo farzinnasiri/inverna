@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   formatBedtime12h,
+  formatRange,
+  rangeMinutesOf,
   minutesUntilBedtime,
   nightKey,
   overrideActive,
@@ -46,8 +48,11 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
   const active = overrideActive(tonight, now)
   const current = active ? tonight.bedtime : schedule.bedtime
   const earliest = ribbonEarliest(now)
+  // Tonight keeps the usual range's length; the block slides as a whole.
+  const range = rangeMinutesOf(schedule)
+  const maxOffset = RIBBON_SPAN_MIN - range
 
-  const startOffset = () => Math.max(earliest, Math.min(RIBBON_SPAN_MIN, ribbonOffset(current)))
+  const startOffset = () => Math.max(earliest, Math.min(maxOffset, ribbonOffset(current)))
   const [offset, setOffset] = useState(startOffset)
   const [scope, setScope] = useState<Scope>('tonight')
 
@@ -58,7 +63,7 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
     setNow(n)
     const e = ribbonEarliest(n)
     const on = overrideActive(tonight, n)
-    setOffset(Math.max(e, Math.min(RIBBON_SPAN_MIN, ribbonOffset(on ? tonight.bedtime : schedule.bedtime))))
+    setOffset(Math.max(e, Math.min(maxOffset, ribbonOffset(on ? tonight.bedtime : schedule.bedtime))))
     setScope('tonight')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -70,7 +75,7 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
   const nowOnRibbon = nowOffset >= 0 && nowOffset <= RIBBON_SPAN_MIN
 
   const nudge = (mins: number) => {
-    const next = Math.max(earliest, Math.min(RIBBON_SPAN_MIN, offset + mins))
+    const next = Math.max(earliest, Math.min(maxOffset, offset + mins))
     if (next === offset) return
     if (hapticsOn) haptics.play('selection')
     setOffset(next)
@@ -99,7 +104,7 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
     <Sheet open={open} onClose={onClose} label="Tonight's bedtime">
       <View style={styles.head}>
         <Text style={[styles.kicker, { color: color.ink3 }]}>Tonight</Text>
-        <Text style={[styles.usual, { color: color.ink3 }]}>Usually {formatBedtime12h(schedule.bedtime)}</Text>
+        <Text style={[styles.usual, { color: color.ink3 }]}>Usually {formatRange(schedule)}</Text>
       </View>
 
       <Text style={[styles.time, { color: color.ink }]} accessibilityLiveRegion="polite">
@@ -111,6 +116,7 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
 
       <NightRibbon
         offset={offset}
+        rangeMinutes={range}
         earliest={earliest}
         nowAt={nowOnRibbon ? nowOffset : null}
         spanFrom={nowOnRibbon ? nowOffset : 0}

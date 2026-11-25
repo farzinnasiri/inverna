@@ -5,7 +5,7 @@ import { router } from 'expo-router'
 import { Check, ChevronLeft, Lock, Moon, Pause, Play, ThumbsDown, ThumbsUp, Volume2, Waves } from 'lucide-react-native'
 import { eveningState } from '@/core/evening'
 import type { GameId } from '@/core/games/catalog'
-import { formatBedtime12h, RIBBON_SPAN_MIN, ribbonBedtime, ribbonOffset } from '@/core/night'
+import { formatRange, rangeMinutesOf, RIBBON_SPAN_MIN, ribbonBedtime, ribbonOffset } from '@/core/night'
 import {
   EMPTY_PROFILE,
   GAME_STYLES,
@@ -124,7 +124,7 @@ export function Onboarding() {
     tap('medium')
     // A sound picked here keeps playing only if it's time for bed anyway.
     const kind = eveningState(currentSchedule(), new Date()).kind
-    if (useSound.getState().playing && kind !== 'winding' && kind !== 'past') stopSound(1.2)
+    if (useSound.getState().playing && kind !== 'winding' && kind !== 'asleepRange' && kind !== 'past') stopSound(1.2)
     const final = { ...profile, volume: useSound.getState().volume }
     set({
       onboarded: true,
@@ -159,8 +159,10 @@ export function Onboarding() {
   const next = () => (index === PAGES.length - 1 ? finish() : go(index + 1))
   const skip = () => (inSetup ? finish() : go(SETUP_START))
 
-  // Bedtime ribbon covers 8 PM to 3 AM; Settings has the full wheel.
-  const offset = Math.max(0, Math.min(RIBBON_SPAN_MIN, ribbonOffset(schedule.bedtime)))
+  // Bedtime ribbon covers 8 PM to 3 AM; Settings has the full wheel. The
+  // one-hour range slides along it; `offset` is its early edge.
+  const range = rangeMinutesOf(schedule)
+  const offset = Math.max(0, Math.min(RIBBON_SPAN_MIN - range, ribbonOffset(schedule.bedtime)))
   const setBedtime = (o: number) => {
     tap('selection')
     setSchedule({ bedtime: ribbonBedtime(o), enabled: true })
@@ -254,12 +256,19 @@ export function Onboarding() {
                   <Text
                     style={[styles.time, { color: color.ink }]}
                     accessibilityLiveRegion="polite"
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
                   >
-                    {formatBedtime12h(schedule.bedtime)}
+                    {formatRange(schedule)}
                   </Text>
                   </Rise>
                   <Rise delay={itemDelay(1)} reduced={reduced}>
-                    <NightRibbon offset={offset} spanFrom={offset - schedule.leadMinutes} onChange={setBedtime} />
+                    <NightRibbon
+                      offset={offset}
+                      rangeMinutes={range}
+                      spanFrom={offset - schedule.leadMinutes}
+                      onChange={setBedtime}
+                    />
                   </Rise>
                   <Rise delay={itemDelay(2)} reduced={reduced}>
                     <GlassSurface variant="card" radius={18} style={styles.row}>
@@ -624,7 +633,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   time: {
-    fontSize: 48,
+    fontSize: 36,
     fontWeight: '200',
     letterSpacing: -1.4,
     fontVariant: ['tabular-nums'],

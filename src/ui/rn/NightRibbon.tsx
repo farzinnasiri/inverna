@@ -10,14 +10,17 @@ const HOUR_MARKS = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({
 }))
 
 /** Raw ribbon position (minutes) snapped to 15 and kept on the ribbon. */
-function snap(raw: number): number {
-  return Math.min(RIBBON_SPAN_MIN, Math.max(0, Math.round(raw / 15) * 15))
+function snap(raw: number, max = RIBBON_SPAN_MIN): number {
+  return Math.min(max, Math.max(0, Math.round(raw / 15) * 15))
 }
 
 /**
  * The night from 8 PM to 3 AM with midnight marked. Drag the moon to pick a
  * bedtime; it snaps to 15 minutes with a soft tick. Positions are minutes
  * after 8 PM (see `ribbonOffset` in core/night).
+ *
+ * With `rangeMinutes`, the moon becomes a brass block that long (the usual
+ * sleep range): drag it along the night; `offset` is its early edge.
  *
  * - `earliest`: the moon can't go left of this (tonight can't end in the past).
  * - `spanFrom`: where the brass span starts; it runs to the moon.
@@ -29,23 +32,27 @@ export function NightRibbon({
   earliest = 0,
   spanFrom = 0,
   nowAt = null,
+  rangeMinutes = 0,
 }: {
   offset: number
   onChange: (offset: number) => void
   earliest?: number
   spanFrom?: number
   nowAt?: number | null
+  rangeMinutes?: number
 }) {
   const { color } = useTokenColors()
   const [trackW, setTrackW] = useState(0)
+  const maxOffset = RIBBON_SPAN_MIN - rangeMinutes
 
-  const live = useRef({ trackW, earliest, offset, onChange })
-  live.current = { trackW, earliest, offset, onChange }
+  const live = useRef({ trackW, earliest, offset, onChange, rangeMinutes })
+  live.current = { trackW, earliest, offset, onChange, rangeMinutes }
   const [pan] = useState(() => {
     const setFromX = (x: number) => {
-      const { trackW: w, earliest: e, offset: prev, onChange: emit } = live.current
+      const { trackW: w, earliest: e, offset: prev, onChange: emit, rangeMinutes: range } = live.current
       if (w <= 0) return
-      const next = Math.max(e, snap((x / w) * RIBBON_SPAN_MIN))
+      // The finger holds the middle of the range block (or the moon itself).
+      const next = Math.max(e, snap((x / w) * RIBBON_SPAN_MIN - range / 2, RIBBON_SPAN_MIN - range))
       if (next !== prev) emit(next)
     }
     // Anchor on where the finger landed, then follow the gesture's dx.
@@ -63,7 +70,7 @@ export function NightRibbon({
   })
 
   const nudge = (mins: number) => {
-    const next = Math.max(earliest, Math.min(RIBBON_SPAN_MIN, offset + mins))
+    const next = Math.max(earliest, Math.min(maxOffset, offset + mins))
     if (next !== offset) onChange(next)
   }
 
@@ -78,8 +85,13 @@ export function NightRibbon({
       onLayout={(e: LayoutChangeEvent) => setTrackW(Math.max(0, e.nativeEvent.layout.width))}
       accessible
       accessibilityRole="adjustable"
-      accessibilityLabel="Bedtime"
-      accessibilityValue={{ text: formatBedtime12h(ribbonBedtime(offset)) }}
+      accessibilityLabel={rangeMinutes > 0 ? 'Usual sleep range' : 'Bedtime'}
+      accessibilityValue={{
+        text:
+          rangeMinutes > 0
+            ? `${formatBedtime12h(ribbonBedtime(offset))} to ${formatBedtime12h(ribbonBedtime(offset + rangeMinutes))}`
+            : formatBedtime12h(ribbonBedtime(offset)),
+      }}
       accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
       onAccessibilityAction={(e) => nudge(e.nativeEvent.actionName === 'increment' ? 15 : -15)}
       {...pan.panHandlers}
@@ -113,7 +125,17 @@ export function NightRibbon({
         </View>
       ) : null}
 
-      {trackW > 0 ? (
+      {trackW > 0 && rangeMinutes > 0 ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.rangeBlock,
+            { left: thumbX, width: Math.max(34, x(rangeMinutes)), backgroundColor: color.accent },
+          ]}
+        >
+          <Moon size={16} strokeWidth={2} color={color.accentInk} />
+        </View>
+      ) : trackW > 0 ? (
         <View pointerEvents="none" style={[styles.thumb, { left: thumbX - 17 }]}>
           <View style={[styles.thumbDisc, { backgroundColor: color.accent }]}>
             <Moon size={16} strokeWidth={2} color={color.accentInk} />
@@ -196,6 +218,15 @@ const styles = StyleSheet.create({
     top: 8,
     width: 34,
     alignItems: 'center',
+  },
+  rangeBlock: {
+    position: 'absolute',
+    top: 8,
+    height: 34,
+    borderRadius: 17,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   thumbDisc: {
     width: 34,

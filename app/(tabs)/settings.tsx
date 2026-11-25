@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
 import { ChevronDown, ChevronRight, ChevronUp, Trash2 } from 'lucide-react-native'
-import { formatBedtime12h } from '@/core/night'
+import { formatRange } from '@/core/night'
 import { clearAll } from '@/core/storage'
 import { haptics, notifications } from '@/platform'
 import { about, settingsCopy } from '@/ui/copy'
@@ -11,7 +11,7 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { BedtimeWheel } from '@/ui/rn/BedtimeWheel'
 import { Button, FRAME_MAX_WIDTH, HoldButton, LightSlider, Sheet, Toggle } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
-import { tabBarClearance, useResponsiveLayout } from '@/ui/rn/hooks'
+import { scrollEndClearance, useResponsiveLayout } from '@/ui/rn/hooks'
 import { ScienceSheet } from '@/ui/rn/ScienceSheet'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
@@ -32,6 +32,7 @@ export default function SettingsScreen() {
   const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const setSchedule = useSettings((s) => s.setSchedule)
+  const learnedNights = useSettings((s) => s.rangeLearnedNights)
 
   const [editingBedtime, setEditingBedtime] = useState(false)
   const [reminderStatus, setReminderStatus] = useState<string | null>(null)
@@ -74,7 +75,7 @@ export default function SettingsScreen() {
           {
             paddingHorizontal: sideMargin,
             paddingTop: insets.top + (isCompact ? 12 : 20),
-            paddingBottom: tabBarClearance(insets.bottom),
+            paddingBottom: scrollEndClearance(insets.bottom),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -115,12 +116,17 @@ export default function SettingsScreen() {
               onPress={() => setEditingBedtime((e) => !e)}
               style={styles.row}
               accessibilityRole="button"
-              accessibilityLabel="Bedtime"
+              accessibilityLabel={`${settingsCopy.rangeLabel}, ${formatRange(schedule)}`}
             >
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Bedtime</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.rangeLabel}</Text>
+                <Text style={[styles.rowNote, { color: color.ink3 }]}>
+                  {learnedNights ? settingsCopy.rangeLearned(learnedNights) : settingsCopy.rangeNote}
+                </Text>
+              </View>
               <View style={styles.bedRight}>
-                <Text style={[styles.bedValue, { color: color.accent }]}>
-                  {formatBedtime12h(schedule.bedtime)}
+                <Text style={[styles.bedValue, { color: color.accent }]} numberOfLines={1}>
+                  {formatRange(schedule)}
                 </Text>
                 {editingBedtime ? (
                   <ChevronUp size={16} strokeWidth={1.65} color={color.ink3} />

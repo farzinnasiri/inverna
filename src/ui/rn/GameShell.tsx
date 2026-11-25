@@ -174,6 +174,7 @@ export function GameShell({
       useSession.getState().dismiss()
       const st = useSettings.getState()
       st.set({ lastLightsOutNight: nightKey(now) })
+      st.recordSleep('lightsOut', now)
       useSound.getState().playPreset(st.sessionPreset ?? 'theta-rain', 45)
     }
     stepOut()
