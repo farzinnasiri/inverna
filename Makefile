@@ -4,7 +4,8 @@ SHELL := /bin/bash
 PORT ?= 8081
 
 .PHONY: help install dev dev-portless expo-dev dev-client web start expo ios android check typecheck test build-web deploy doctor \
-	build-ios-dev build-ios-sim build-ios-preview build-ios-testflight submit-testflight builds credentials
+	build-ios-dev build-ios-sim build-ios-preview build-ios-beta submit-beta build-ios-release submit-release \
+	build-ios-testflight submit-testflight submit-latest builds credentials
 
 help: ## List available commands
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z0-9_-]+:.*## / {printf "make %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -40,24 +41,40 @@ android: ## Launch on Android Emulator
 
 # --- Cloud Builds via React Native Deploy (GitHub Actions) ----------------
 
-build-ios-dev: ## Cloud-build signed iPhone development build (expo-dev-client) on GitHub Actions
+# Three apps, side by side (see docs/RELEASES.md): Lull Dev, Lull Beta, Lull.
+
+build-ios-dev: ## Cloud-build Lull Dev, the dev client for your iPhone (com.oooflabs.lull.dev)
 	rnd build --platform ios --profile development-device
 
-build-ios-sim: ## Cloud-build iOS Simulator development build on GitHub Actions
+build-ios-sim: ## Cloud-build Lull Dev for the iOS Simulator
 	rnd build --platform ios --profile development
 
-build-ios-preview: ## Cloud-build standalone ad-hoc preview IPA on GitHub Actions
+build-ios-preview: ## Cloud-build an ad-hoc Lull Beta to install without TestFlight
 	rnd build --platform ios --profile preview
 
-build-ios-testflight: ## Cloud-build signed App Store / TestFlight IPA on GitHub Actions
+build-ios-beta: ## Cloud-build Lull Beta for TestFlight (com.oooflabs.lull.beta)
+	rnd build --platform ios --profile beta
+
+submit-beta: ## Upload the latest finished Lull Beta build to TestFlight
+	@$(MAKE) --no-print-directory submit-latest PROFILE=beta
+
+build-ios-release: ## Cloud-build Lull for App Review and the App Store (com.oooflabs.lull)
 	rnd build --platform ios --profile production
 
-submit-testflight: ## Download latest finished production IPA and submit to TestFlight via asc
-	@BUILD_ID=$$(rnd build:list --platform ios --profile production --status FINISHED --limit 1 --json | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')); const b = Array.isArray(d) ? d[0] : d?.builds?.[0]; console.log(b?.id ?? '');"); \
-	if [ -z "$$BUILD_ID" ]; then echo "No finished production iOS build found"; exit 1; fi; \
+submit-release: ## Upload the latest finished Lull build to App Store Connect
+	@$(MAKE) --no-print-directory submit-latest PROFILE=production
+
+build-ios-testflight: build-ios-beta ## Alias: TestFlight builds are Lull Beta now
+
+submit-testflight: submit-beta ## Alias: TestFlight uploads are Lull Beta now
+
+submit-latest:
+	@test -n "$(PROFILE)" || { echo "PROFILE is required"; exit 1; }
+	@BUILD_ID=$$(rnd build:list --platform ios --profile $(PROFILE) --status FINISHED --limit 1 --json | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')); const b = Array.isArray(d) ? d[0] : d?.builds?.[0]; console.log(b?.id ?? '');"); \
+	if [ -z "$$BUILD_ID" ]; then echo "No finished $(PROFILE) iOS build found"; exit 1; fi; \
 	rm -rf build && mkdir -p build && \
-	rnd build:download --build-id "$$BUILD_ID" --output build/lull.ipa && \
-	rnd submit --platform ios --profile production --path build/lull.ipa
+	rnd build:download --build-id "$$BUILD_ID" --output build/lull-$(PROFILE).ipa && \
+	rnd submit --platform ios --profile $(PROFILE) --path build/lull-$(PROFILE).ipa
 
 builds: ## List recent React Native Deploy builds
 	rnd build:list

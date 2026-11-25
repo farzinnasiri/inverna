@@ -9,23 +9,53 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
+      },
+      "env": {
+        "APP_VARIANT": "development"
       }
     },
     "development-device": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "beta"
+      }
+    },
+    "beta": {
+      "distribution": "store",
+      "env": {
+        "APP_VARIANT": "beta"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
+      }
     },
     "production": {
       "distribution": "store",
       "ios": {
         "buildConfiguration": "Release"
+      },
+      "env": {
+        "APP_VARIANT": "production"
       }
     }
   },
   "submit": {
+    "beta": {
+      "ios": {
+        "bundleIdentifier": "com.oooflabs.lull.beta",
+        "appleTeamId": "LFJY887CD3",
+        "ascApiKeyPath": "$HOME/.config/oooflabs/apple/AuthKey_Q6F666S4RG.p8",
+        "ascApiKeyId": "Q6F666S4RG",
+        "ascApiKeyIssuerId": "f282a20b-2313-4ca7-b771-69e0ea111692"
+      }
+    },
     "production": {
       "ios": {
         "bundleIdentifier": "com.oooflabs.lull",

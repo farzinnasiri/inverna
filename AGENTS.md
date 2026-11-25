@@ -4,6 +4,8 @@ Lull is an offline-first **Expo SDK 58 + React Native** app (iOS, Android, and W
 
 Read `docs/ARCHITECTURE.md`, `docs/DESIGN.md`, and `docs/REDESIGN_V2.md` before making major UI changes.
 
+Three iOS apps install side by side: Lull Dev, Lull Beta (TestFlight) and Lull (App Store), picked by `APP_VARIANT`. See `docs/RELEASES.md` before building, submitting or changing app IDs, icons or build numbers.
+
 ## Commands
 
 ```bash
