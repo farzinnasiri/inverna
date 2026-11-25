@@ -307,7 +307,9 @@ function stepPondOnce(state: PondState, dtMs: number, calm: number): PondState {
 
   if (target !== null) {
     const dTarget = dist(prevHead, target)
-    if (idleMs >= USER_TARGET_IDLE_MS || (dTarget < 0.036 && idleMs > 280)) {
+    // A slower koi (higher calm) gets proportionally longer to reach where you tapped.
+    const patienceMs = USER_TARGET_IDLE_MS / Math.max(0.35, speedScale)
+    if (idleMs >= patienceMs || (dTarget < 0.036 && idleMs > 280)) {
       target = null
       wanderTarget = pickWanderTarget(rng, prevHead)
       wanderTimerMs = 4500 + rng.next() * 3500

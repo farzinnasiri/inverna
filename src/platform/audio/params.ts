@@ -23,11 +23,41 @@ export function clamp(value: number, min: number, max: number): number {
  * Always anchoring `setValueAtTime(currentVal, safeNow)` immediately before
  * `linearRampToValueAtTime` makes ramps click-free on BOTH Web Audio and native C++.
  */
-export function rampParam(param: AudioParamLike, target: number, rampSeconds: number, now: number): void {
+/**
+ * Where a linear ramp we scheduled is at `now`. The native audio library's
+ * `param.value` does not follow automation (it keeps reporting the last value
+ * *set*), so callers that ramp a param repeatedly track it with this instead.
+ */
+export interface RampTrack {
+  from: number
+  to: number
+  t0: number
+  t1: number
+}
+
+export function trackedValue(track: RampTrack, now: number): number {
+  if (now >= track.t1) return track.to
+  if (now <= track.t0) return track.from
+  return track.from + ((track.to - track.from) * (now - track.t0)) / (track.t1 - track.t0)
+}
+
+/** Ramp a tracked param from where it really is now, and update the track. */
+export function rampTracked(param: AudioParamLike, track: RampTrack, target: number, rampSeconds: number, now: number): void {
+  const from = trackedValue(track, now)
+  const duration = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0)
+  rampParam(param, target, duration, now, from)
+  track.from = from
+  track.to = Number.isFinite(target) ? target : 0
+  track.t0 = now
+  track.t1 = now + duration
+}
+
+export function rampParam(param: AudioParamLike, target: number, rampSeconds: number, now: number, from?: number): void {
   const safeNow = Number.isFinite(now) ? Math.max(0, now) : 0
   const duration = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0)
   const safeTarget = Number.isFinite(target) ? target : 0
-  const currentVal = Number.isFinite(param.value) ? param.value : safeTarget
+  const currentVal =
+    from !== undefined && Number.isFinite(from) ? from : Number.isFinite(param.value) ? param.value : safeTarget
 
   try {
     if (typeof param.cancelAndHoldAtTime === 'function') {

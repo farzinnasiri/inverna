@@ -1,10 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { DEFAULT_PRESET_ID, PRESETS } from '@/core/sound/catalog'
+import { PRESETS } from '@/core/sound/catalog'
 import { harmonicKeyMeta } from '@/core/sound/harmonics'
 import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSettings } from '@/ui/state/settings'
-import { useSound } from '@/ui/state/sound'
+import { useAmbientToggle, useSound } from '@/ui/state/sound'
 import { Sheet, Slider, Toggle } from './controls'
 
 export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -17,16 +17,15 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
   const setVolume = useSound((s) => s.setVolume)
   const stop = useSound((s) => s.stop)
 
-  const sessionPreset = useSettings((s) => s.sessionPreset)
   const sleepTimer = useSettings((s) => s.sleepTimer)
   const sfx = useSettings((s) => s.sfx)
   const haptics = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const keyLabel = harmonicKeyMeta(harmonicKey).moodName
 
+  const ambient = useAmbientToggle()
   const toggleAmbient = (on: boolean) => {
-    if (on) playPreset(presetId ?? sessionPreset ?? DEFAULT_PRESET_ID, sleepTimer)
-    else stop(0.8)
+    if (on !== playing) ambient.toggle()
   }
 
   return (
@@ -34,7 +33,7 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
       <Text style={[styles.title, { color: color.ink }]}>Sound</Text>
 
       <View style={[styles.row, { borderBottomColor: color.line }]}>
-        <Text style={[styles.rowLabel, { color: color.ink }]}>Ambient</Text>
+        <Text style={[styles.rowLabel, { color: color.ink }]}>Sleep sound</Text>
         <Toggle checked={playing} onChange={toggleAmbient} label="Ambient sound" />
       </View>
 
@@ -69,8 +68,8 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
 
       <View style={[styles.row, { borderBottomColor: color.line }]}>
         <View>
-          <Text style={[styles.rowLabel, { color: color.ink }]}>Game cues</Text>
-          <Text style={[styles.caption, { color: color.ink3 }]}>Tuned to {keyLabel}</Text>
+          <Text style={[styles.rowLabel, { color: color.ink }]}>Game sounds</Text>
+          <Text style={[styles.caption, { color: color.ink3 }]}>Matches {keyLabel}</Text>
         </View>
         <Toggle
           checked={sfx}
@@ -78,7 +77,7 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
             set({ sfx: v })
             sound.setCuesEnabled(v)
           }}
-          label="Game cues"
+          label="Game sounds"
         />
       </View>
 

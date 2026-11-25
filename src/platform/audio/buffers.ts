@@ -994,10 +994,11 @@ export function createNoiseBufferBank(ctx: AudioContextLike): NoiseBufferBank {
           }
         }
         if (i < ALL_KINDS.length) {
-          setTimeout(next, 160)
+          // Each buffer is one uninterrupted JS turn; keep them well apart so taps stay responsive.
+          setTimeout(next, 900)
         }
       }
-      setTimeout(next, 240)
+      setTimeout(next, 3000)
     },
   }
 }

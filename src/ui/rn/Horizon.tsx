@@ -63,7 +63,6 @@ export function Horizon({
 const styles = StyleSheet.create({
   wrap: {
     width: '100%',
-    marginTop: 16,
     gap: 6,
   },
   track: {

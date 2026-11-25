@@ -10,7 +10,8 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
-import { ChevronRight, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
+import { ChevronRight, SlidersHorizontal, Sparkles, Timer, Volume2 } from 'lucide-react-native'
+import { soundsHelp } from '@/ui/copy'
 import {
   BANDS,
   DEFAULT_PRESET_ID,
@@ -24,17 +25,18 @@ import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { FRAME_MAX_WIDTH, PopoverMenu, Slider } from '@/ui/rn/controls'
-import { GlassSurface } from '@/ui/rn/Glass'
+import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { useResponsiveLayout } from '@/ui/rn/hooks'
 import { MixSheet, type StudioTab } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
 import { SoundGlyph } from '@/ui/rn/SoundGlyph'
 import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
-import { useSound } from '@/ui/state/sound'
+import { UNTIL_LIGHTS_OUT, useSound } from '@/ui/state/sound'
 
 const TIMER_OPTIONS = [
-  { value: 0, label: 'Until stopped' },
+  { value: UNTIL_LIGHTS_OUT, label: 'Until bedtime' },
+  { value: 0, label: 'Keep playing' },
   { value: 15, label: 'Fade out in 15 min' },
   { value: 30, label: 'Fade out in 30 min' },
   { value: 45, label: 'Fade out in 45 min' },
@@ -101,7 +103,7 @@ export default function SoundsScreen() {
 
   const currentId = activePresetId ?? selectedId
   const currentPreset = currentId === 'custom' ? null : (presetById(currentId) ?? PRESETS[0]!)
-  const currentName = currentPreset ? currentPreset.name : 'Custom mix'
+  const currentName = currentPreset ? currentPreset.name : 'Your mix'
   const displayMix = playing && activeMix ? activeMix : (currentPreset?.mix ?? customMix)
   const currentIcon: SoundIconId = currentPreset?.icon ?? inferIcon(displayMix)
 
@@ -154,10 +156,10 @@ export default function SoundsScreen() {
   const bandMeta = BANDS.find((b) => b.id === displayMix.band)
   const rhythmPillText =
     descent.depth === 'off'
-      ? `${descent.phaseLabel} · Tune`
+      ? `Tune rhythm`
       : `${bandMeta?.greek ?? 'θ'} ${descent.bandLabel} · ${descent.modHz.toFixed(1)} Hz`
 
-  const compactTimer = sleepTimer > 0 ? `${sleepTimer}m` : 'Off'
+  const compactTimer = sleepTimer === UNTIL_LIGHTS_OUT ? 'Bedtime' : sleepTimer > 0 ? `${sleepTimer}m` : 'Off'
 
   return (
     <View style={styles.root}>
@@ -183,12 +185,12 @@ export default function SoundsScreen() {
                 setTimerOpen(true)
               }}
               accessibilityRole="button"
-              accessibilityLabel="Sleep fade-out timer"
+              accessibilityLabel="Sleep timer"
               style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
             >
               <GlassSurface variant="pill" radius={999} interactive style={styles.topChip}>
-                <Timer size={14} strokeWidth={1.7} color={sleepTimer > 0 ? color.accent : color.ink3} />
-                <Text style={[styles.topChipText, { color: sleepTimer > 0 ? color.ink : color.ink3 }]}>
+                <Timer size={14} strokeWidth={1.7} color={sleepTimer !== 0 ? color.accent : color.ink3} />
+                <Text style={[styles.topChipText, { color: sleepTimer !== 0 ? color.ink : color.ink3 }]}>
                   {compactTimer}
                 </Text>
               </GlassSurface>
@@ -259,8 +261,9 @@ export default function SoundsScreen() {
                 {PRESET_PAGES.map((pg) => {
                   const pageItems = PRESETS.filter((p) => p.page === pg.id)
                   return (
-                    <View
+                    <GlassGroup
                       key={pg.id}
+                      spacing={0}
                       style={[styles.gridPage, { width: pagerWidth || '100%', gap: isCompact ? 9 : 10 }]}
                     >
                       {pageItems.map((item) => {
@@ -282,7 +285,6 @@ export default function SoundsScreen() {
                               variant="card"
                               radius={18}
                               accent={live || selected}
-                              interactive
                               style={[styles.presetCard, { minHeight: isCompact ? 62 : 68 }]}
                             >
                               <View style={styles.presetTop}>
@@ -308,7 +310,7 @@ export default function SoundsScreen() {
                           </Pressable>
                         )
                       })}
-                    </View>
+                    </GlassGroup>
                   )
                 })}
               </ScrollView>
@@ -347,13 +349,24 @@ export default function SoundsScreen() {
             </View>
             <Text style={[styles.volPct, { color: color.accent }]}>{Math.round(volume * 100)}%</Text>
           </GlassSurface>
+
+          {/* Two questions, then two sounds to try. */}
+          <Pressable
+            onPress={() => useNav.getState().setCheckIn('sound')}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.helpRow, { opacity: pressed ? 0.7 : 1 }]}
+          >
+            <Sparkles size={15} strokeWidth={1.7} color={color.accent} />
+            <Text style={[styles.helpText, { color: color.ink2 }]}>{soundsHelp.link}</Text>
+            <ChevronRight size={15} strokeWidth={1.7} color={color.ink3} />
+          </Pressable>
         </View>
       </ScrollView>
 
       <PopoverMenu
         open={timerOpen}
         onClose={() => setTimerOpen(false)}
-        label="Sleep fade-out timer"
+        label="Sleep timer"
         options={TIMER_OPTIONS}
         value={sleepTimer}
         onSelect={(m) => {
@@ -516,6 +529,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 12,
+  },
+  helpRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 44,
+    marginTop: 4,
+  },
+  helpText: {
+    fontSize: 14.5,
+    fontWeight: '500',
   },
   volPct: {
     fontSize: 13,

@@ -13,6 +13,7 @@ import { Shuffle, Undo2 } from 'lucide-react-native'
 import {
   createDrift,
   inPlaceCount,
+  isSolvable,
   isSolved,
   moveDirection,
   nextPuzzle,
@@ -52,6 +53,16 @@ const COMPLETION_DELAY_MS = 460
 const MAX_UNDO = 24
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 
+/** A real tile permutation 0..n-1 that can still be solved. */
+function isBoard(tiles: unknown, size: 3 | 4): tiles is number[] {
+  const len = size * size
+  if (!Array.isArray(tiles) || tiles.length !== len) return false
+  const seen = new Set(tiles)
+  if (seen.size !== len) return false
+  for (let i = 0; i < len; i++) if (!seen.has(i)) return false
+  return isSolvable(tiles, size)
+}
+
 function isValidSave(value: unknown): value is DriftSave {
   if (!value || typeof value !== 'object') return false
   const v = value as Partial<DriftSave>
@@ -59,12 +70,10 @@ function isValidSave(value: unknown): value is DriftSave {
   const s = v.state
   const sizeValid = s.size === 3 || s.size === 4
   if (!sizeValid) return false
-  const len = s.size * s.size
   return (
-    Array.isArray(s.tiles) &&
-    s.tiles.length === len &&
-    Array.isArray(s.initialTiles) &&
-    s.initialTiles.length === len &&
+    isBoard(s.tiles, s.size) &&
+    isBoard(s.initialTiles, s.size) &&
+    (v.undoStack === undefined || Array.isArray(v.undoStack)) &&
     typeof s.moves === 'number' &&
     typeof s.puzzleNumber === 'number' &&
     typeof s.solved === 'boolean' &&
@@ -165,7 +174,7 @@ function DriftPlateView({
 
 export function DriftScreen({ onExit }: GameScreenProps) {
   const { color } = useTokenColors()
-  const calm = useCalm()
+  const calm = useCalm('drift')
   const { cue, haptic } = useFeedback()
   const reduceMotion = useReducedMotion()
 
@@ -178,7 +187,13 @@ export function DriftScreen({ onExit }: GameScreenProps) {
   const [rawSave, setSave] = useGameSave<DriftSave>('drift', fallback)
   const save = isValidSave(rawSave) ? rawSave : fallback
   const state = save.state
-  const undoStack = useMemo(() => save.undoStack ?? [], [save.undoStack])
+  const undoStack = useMemo(
+    () =>
+      (save.undoStack ?? []).filter(
+        (u) => u && typeof u.moves === 'number' && isBoard(u.tiles, state.size),
+      ),
+    [save.undoStack, state.size],
+  )
 
   const [paused, setPaused] = useState(false)
   const [showCompletion, setShowCompletion] = useState(state.solved)
@@ -436,14 +451,6 @@ export function DriftScreen({ onExit }: GameScreenProps) {
     return out
   }, [state])
 
-  const howTo = useMemo(
-    () => [
-      'Tap any tile in the same row or column as the open space to slide the line smoothly toward it.',
-      'You can also swipe anywhere on the board or use arrow keys and WASD.',
-      `Order the numbered plates from 1 to ${totalTiles}. A quiet brass dot lights when a plate rests at home.`,
-    ],
-    [totalTiles],
-  )
 
   return (
     <GameShell
@@ -458,7 +465,6 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       onPauseChange={setPaused}
       onRestart={doRestartCurrent}
       onExit={onExit}
-      howTo={howTo}
       controls={
         <GameControlBar>
           <GameActionButton

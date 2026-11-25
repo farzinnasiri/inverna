@@ -56,10 +56,6 @@ const NOTE_ROWS = [
   [7, 8, 9],
 ] as const
 
-const HOW_TO = [
-  'Fill every row, column, and 3×3 box with the digits one through nine.',
-  'Toggle Notes to jot candidates in pencil; matching notes clear automatically when you place a digit.',
-] as const
 
 function isValidSave(value: unknown): value is NineSave {
   if (!value || typeof value !== 'object') return false
@@ -386,7 +382,6 @@ export function NineScreen({ onExit }: GameScreenProps) {
       onPauseChange={setPaused}
       onRestart={handleRestart}
       onExit={onExit}
-      howTo={HOW_TO}
       controls={started && (
         <View style={[styles.controlsWrap, { gap: isCompact ? 4 : 6, maxWidth: contentWidth }]}>
           <View style={styles.keyRow}>
@@ -432,7 +427,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
           </View>
 
           <Pressable accessibilityRole="button" onPress={chooseNewPuzzle} disabled={isPaused} style={styles.newPuzzle}>
-            <Text style={[styles.actionBtnText, { color: color.ink2 }]}>New Puzzle</Text>
+            <Text style={[styles.actionBtnText, { color: color.ink2 }]}>New puzzle</Text>
           </Pressable>
           {KEYPAD_ROWS.map((digits) => (
             <View key={digits[0]} style={styles.keyRow}>

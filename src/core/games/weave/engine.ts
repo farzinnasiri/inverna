@@ -89,7 +89,7 @@ export const WEAVE_PUZZLES: readonly WeavePuzzleDef[] = [
     pattern: [
       '..#..',
       '..##.',
-      '..###',
+      '.####',
       '#####',
       '.###.',
     ],
@@ -227,7 +227,7 @@ export const WEAVE_PUZZLES: readonly WeavePuzzleDef[] = [
       '.###.##',
       '.##.###',
       '.#.###.',
-      '#......',
+      '##.....',
     ],
   },
 
@@ -254,7 +254,7 @@ export const WEAVE_PUZZLES: readonly WeavePuzzleDef[] = [
     pattern: [
       '..#.#...',
       '...#....',
-      '.####...',
+      '.#####..',
       '######.#',
       '##.###.#',
       '########',

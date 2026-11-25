@@ -55,8 +55,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-splash-screen',
       {
-        image: './assets/images/icon.png',
-        imageWidth: 120,
+        // The Lull Line, centred; LaunchVeil picks up at the same size and spot.
+        image: './assets/images/splash-mark.png',
+        imageWidth: 160,
         backgroundColor: '#000000',
       },
     ],

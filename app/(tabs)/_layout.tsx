@@ -1,5 +1,7 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs'
+import { Redirect } from 'expo-router'
+import { NativeTabs } from 'expo-router/native-tabs'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { useSettings } from '@/ui/state/settings'
 
 /**
  * Authentic native iOS 26 Liquid Glass tab bar via `NativeTabs` (UIKit UITabBar).
@@ -9,6 +11,9 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
  */
 export default function TabsLayout() {
   const { color } = useTokenColors()
+  const onboarded = useSettings((s) => s.onboarded)
+  // First run (or after "Clear data"): meet Lull first.
+  if (!onboarded) return <Redirect href="/onboarding" />
 
   return (
     <NativeTabs

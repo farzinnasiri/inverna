@@ -192,3 +192,23 @@ describe('pond engine', () => {
     expect(nextA).toEqual(nextB)
   })
 })
+
+describe('pond calm never makes a bud harder to reach', () => {
+  it('one tap reaches the bud at high calm as it does at low calm', async () => {
+    const { createPond, tapPond, tickPond } = await import('./engine')
+    let s = createPond({ seed: 1, calm: 0 })
+    for (let i = 0; i < 1000; i++) s = tickPond(s, 16, 0)
+    const bud = s.buds[s.nextBud]!
+    const tapped = tapPond(s, bud.x, bud.y)
+    const reach = (calm: number) => {
+      let t = tapped
+      for (let i = 0; i < 2000; i++) {
+        t = tickPond(t, 16, calm)
+        if (t.gathered > tapped.gathered) return true
+      }
+      return false
+    }
+    expect(reach(0)).toBe(true)
+    expect(reach(1)).toBe(true)
+  })
+})

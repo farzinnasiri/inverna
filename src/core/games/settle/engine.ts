@@ -850,7 +850,8 @@ export function tickSettle(state: SettleState, dtMs: number, calm: number): Sett
   const nowGrounded = !canPlace(next.board, type, x, curY + 1, rotation)
   return {
     ...next,
-    active: { type, x, y: curY, rotation },
+    // Keep the same object while the piece hasn't moved so screens can skip re-rendering.
+    active: curY === y ? next.active : { type, x, y: curY, rotation },
     gravityTimerMs: nowGrounded ? 0 : gravityTimerMs,
     lockTimerMs: 0,
     lockResets,

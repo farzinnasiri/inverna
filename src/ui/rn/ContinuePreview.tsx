@@ -18,7 +18,7 @@ const KINDLE_RAMP: Record<number, string> = {
   2048: '#DCE0E6',
 }
 
-/** Static native SVG miniature preview of a saved board (Continue tile & Onboarding Step 2). */
+/** Static native SVG miniature preview of a saved board (Play's lead tile). */
 export function ContinuePreview({ id, demo, size = 48 }: { id: GameId; demo?: boolean; size?: number }) {
   const { color, pieces } = useTokenColors()
 

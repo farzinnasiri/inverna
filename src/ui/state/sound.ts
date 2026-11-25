@@ -1,10 +1,11 @@
 import { create } from 'zustand'
 import { computeDescent, type DescentSnapshot } from '@/core/sound/arc'
-import { DEFAULT_PRESET_ID, presetById, type Mix, type SoundIconId } from '@/core/sound/catalog'
+import { minutesUntilBedtime } from '@/core/night'
+import { DEFAULT_PRESET_ID, isSilent, presetById, type Mix, type SoundIconId } from '@/core/sound/catalog'
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { sound } from '@/platform'
 import { useSession } from './session'
-import { useSettings } from './settings'
+import { currentSchedule, useSettings } from './settings'
 
 interface SoundState {
   playing: boolean
@@ -24,6 +25,16 @@ interface SoundState {
 }
 
 const SLEEP_FADE_SECONDS = 12
+
+/** Sleep-timer choice meaning "fade out at tonight's lights out". */
+export const UNTIL_LIGHTS_OUT = -1
+
+/** Minutes until the sound should fade (0 = no timer) for a timer choice. */
+export function resolveTimer(choice: number): number {
+  if (choice !== UNTIL_LIGHTS_OUT) return Math.max(0, choice)
+  const until = minutesUntilBedtime(currentSchedule(), new Date())
+  return until !== null && until > 0 && until <= 12 * 60 ? until : 0
+}
 
 const timerToStopAt = (minutes: number | undefined) => (minutes && minutes > 0 ? Date.now() + minutes * 60_000 : null)
 
@@ -57,7 +68,7 @@ function buildDescentSnapshot(presetId: string | null, now = new Date()): Descen
   const session = useSession.getState().session
   const preset = presetById(presetId ?? settings.sessionPreset ?? DEFAULT_PRESET_ID)
   return computeDescent({
-    schedule: settings.schedule,
+    schedule: currentSchedule(now),
     now,
     session,
     preset,
@@ -66,8 +77,9 @@ function buildDescentSnapshot(presetId: string | null, now = new Date()): Descen
   })
 }
 
-function nowPlayingSubtitle(hint: string, mins: number): string {
-  return mins > 0 ? `${hint} · ${mins}m timer` : hint
+function nowPlayingSubtitle(hint: string, choice: number): string {
+  if (choice === UNTIL_LIGHTS_OUT) return resolveTimer(choice) > 0 ? `${hint} (stops at bedtime)` : hint
+  return choice > 0 ? `${hint} (${choice} min timer)` : hint
 }
 
 export const useSound = create<SoundState>()((set, get) => {
@@ -75,10 +87,13 @@ export const useSound = create<SoundState>()((set, get) => {
     sound.cancelSleepFade?.()
     set({ playing: false, stopAt: null })
   })
-  sound.onExternalPlay?.(() => {
-    const mins = useSettings.getState().sleepTimer
+  sound.onExternalPlay?.((mix) => {
+    const mins = resolveTimer(useSettings.getState().sleepTimer)
     syncNativeSleepFade(mins)
-    set({ playing: true, stopAt: timerToStopAt(mins) })
+    // The engine resumes the last mix that made sound, which may not be the
+    // store's if the mix was turned all the way down since.
+    const current = get().mix
+    set({ playing: true, stopAt: timerToStopAt(mins), ...(current && isSilent(current) ? { mix } : null) })
   })
 
   const initialPreset = presetById(useSettings.getState().sessionPreset ?? DEFAULT_PRESET_ID)
@@ -100,13 +115,14 @@ export const useSound = create<SoundState>()((set, get) => {
       const preset = presetById(id)
       if (!preset) return
       void sound.unlock()
-      const mins = timerMinutes ?? useSettings.getState().sleepTimer
+      const choice = timerMinutes ?? useSettings.getState().sleepTimer
+      const mins = resolveTimer(choice)
       const descent = buildDescentSnapshot(preset.id)
       sound.setHarmonicKey?.(preset.harmonicKey)
       sound.setDescent?.(descent, 0.6)
       sound.setNowPlayingMeta?.({
         title: preset.name,
-        subtitle: nowPlayingSubtitle(preset.hint, mins),
+        subtitle: nowPlayingSubtitle(preset.hint, choice),
         icon: preset.icon,
         scene: preset.scene,
       })
@@ -124,16 +140,23 @@ export const useSound = create<SoundState>()((set, get) => {
     },
 
     playMix: (mix, timerMinutes) => {
+      // Nothing to hear: stopped, not "playing" silence.
+      if (isSilent(mix)) {
+        get().stop()
+        set({ mix, presetId: null })
+        return
+      }
       void sound.unlock()
-      const mins = timerMinutes ?? useSettings.getState().sleepTimer
+      const choice = timerMinutes ?? useSettings.getState().sleepTimer
+      const mins = resolveTimer(choice)
       const key = mix.harmonicKey ?? get().harmonicKey ?? DEFAULT_HARMONIC_KEY
       const descent = buildDescentSnapshot(null)
       const icon = inferIconFromMix(mix)
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(descent, 0.6)
       sound.setNowPlayingMeta?.({
-        title: 'Custom mix',
-        subtitle: nowPlayingSubtitle('Your layered blend', mins),
+        title: 'Your mix',
+        subtitle: nowPlayingSubtitle('Custom sleep sound', choice),
         icon,
       })
       sound.setMaster(get().volume, 0.5)
@@ -156,11 +179,18 @@ export const useSound = create<SoundState>()((set, get) => {
       if (get().playing) {
         const mins = useSettings.getState().sleepTimer
         sound.setNowPlayingMeta?.({
-          title: 'Custom mix',
-          subtitle: nowPlayingSubtitle('Your layered blend', mins),
+          title: 'Your mix',
+          subtitle: nowPlayingSubtitle('Custom sleep sound', mins),
           icon: inferIconFromMix(nextMix),
         })
         sound.setMix(nextMix, 0.25)
+      }
+      // Turning every layer down stops the sound in the engine; say so here too,
+      // or Play shows a sound that isn't playing and the sleep timer keeps running.
+      if (get().playing && isSilent(nextMix)) {
+        sound.cancelSleepFade?.()
+        set({ mix: nextMix, presetId: null, harmonicKey: key, playing: false, stopAt: null })
+        return
       }
       set({ mix: nextMix, presetId: null, harmonicKey: key })
     },
@@ -171,12 +201,13 @@ export const useSound = create<SoundState>()((set, get) => {
       set({ volume })
     },
 
-    setTimer: (minutes) => {
+    setTimer: (choice) => {
+      const minutes = resolveTimer(choice)
       if (get().playing) {
         const preset = get().presetId ? presetById(get().presetId!) : null
         sound.setNowPlayingMeta?.({
-          title: preset?.name ?? 'Custom mix',
-          subtitle: nowPlayingSubtitle(preset?.hint ?? 'Your layered blend', minutes),
+          title: preset?.name ?? 'Your mix',
+          subtitle: nowPlayingSubtitle(preset?.hint ?? 'Custom sleep sound', choice),
           icon: preset?.icon ?? inferIconFromMix(get().mix),
           scene: preset?.scene,
         })
@@ -205,3 +236,23 @@ export const useSound = create<SoundState>()((set, get) => {
     },
   }
 })
+
+/**
+ * One-tap ambient sound control shared by Play, the game top bar and the game
+ * Sound sheet: plays the last chosen sound (or tonight's preset) or fades it out.
+ */
+export function useAmbientToggle(): { playing: boolean; name: string; icon: SoundIconId; toggle: () => void } {
+  const playing = useSound((s) => s.playing)
+  const presetId = useSound((s) => s.presetId)
+  const sessionPreset = useSettings((s) => s.sessionPreset)
+  const id = presetId ?? sessionPreset ?? DEFAULT_PRESET_ID
+  const preset = presetById(id)
+  const name = preset?.name ?? 'Sound'
+  const icon: SoundIconId = preset?.icon ?? 'rain'
+  const toggle = () => {
+    const st = useSound.getState()
+    if (st.playing) st.stop(0.8)
+    else st.playPreset(id, useSettings.getState().sleepTimer)
+  }
+  return { playing, name, icon, toggle }
+}

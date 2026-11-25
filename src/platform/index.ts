@@ -7,7 +7,7 @@ import type { SoundEngine } from '@/core/sound/engine'
 import { deviceStorage } from './storage'
 import { deviceHaptics, type HapticsAdapter } from './haptics'
 import { createPlatformSoundEngine } from './sound'
-import { scheduleBedtimeReminder, cancelBedtimeReminder } from './notifications'
+import { clearReminders, downloadReminderCalendar, onReminderOpened, planReminders } from './notifications'
 
 let booted = false
 
@@ -20,6 +20,8 @@ export function bootPlatform(): void {
 export const sound: SoundEngine = createPlatformSoundEngine()
 export const haptics: HapticsAdapter = deviceHaptics
 export const notifications = {
-  scheduleBedtimeReminder,
-  cancelBedtimeReminder,
+  planReminders,
+  clearReminders,
+  onReminderOpened,
+  downloadReminderCalendar,
 }

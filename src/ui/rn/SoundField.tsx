@@ -1,17 +1,54 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import Animated, { useAnimatedProps, useFrameCallback, useSharedValue } from 'react-native-reanimated'
 import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
+import { useIsFocused } from 'expo-router'
 import type { Mix, SoundIconId } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { GlassSurface } from './Glass'
 import { useReducedMotion } from './hooks'
 import { SoundGlyph } from './SoundGlyph'
 
+const AnimatedPath = Animated.createAnimatedComponent(Path)
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
+
+const VB = 260
+const C = VB / 2
+const RING_FRAME = 1 / 30
+
+/** Static watch-bezel geometry, computed once. */
+const BEZEL_TICKS = Array.from({ length: 48 }, (_, i) => {
+  const a = (i / 48) * Math.PI * 2
+  const major = i % 4 === 0
+  const r1 = 118
+  const r2 = major ? 126 : 122
+  return { x1: C + Math.cos(a) * r1, y1: C + Math.sin(a) * r1, x2: C + Math.cos(a) * r2, y2: C + Math.sin(a) * r2, major }
+})
+
+function ringPath(idx: number, phase: number, playing: boolean, norm: number, waves: number, pad: number): string {
+  'worklet'
+  const baseR = 48 + idx * 26 + (playing ? Math.sin(phase - idx * 0.65) * 4.5 : 0)
+  let d = ''
+  const steps = 48
+  for (let i = 0; i <= steps; i++) {
+    const a = (i / steps) * Math.PI * 2
+    const wobble =
+      Math.sin(a * (3 + idx) + phase * (1.45 + idx * 0.28)) * (2.6 + norm * 5.2) * (playing ? 1 : 0.28) +
+      Math.cos(a * 5 - phase * 0.85) * (1.3 + waves * 3.5 + pad * 1.5)
+    const r = baseR + wobble
+    d += `${i === 0 ? 'M' : 'L'} ${(C + Math.cos(a) * r).toFixed(1)} ${(C + Math.sin(a) * r).toFixed(1)} `
+  }
+  return d + 'Z'
+}
+
 /**
  * Watchmaker Acoustic Dial:
  * - Precision watch bezel ticks + 3 breathing 0.1 Hz harmonic wave rings
  * - Clean floating center icon (no heavy medallion circle) directly inside the acoustic field
  * - Swipe left/right to glide between soundscapes, tap to play/pause
+ *
+ * The rings breathe on the UI thread at 30 fps, only while playing and on screen;
+ * paused, they rest still.
  */
 export function SoundField({
   mix,
@@ -32,20 +69,25 @@ export function SoundField({
 }) {
   const { color } = useTokenColors()
   const reduced = useReducedMotion()
-  const [phase, setPhase] = useState(0)
-  const onSwipeRef = useRef(onSwipe)
-  onSwipeRef.current = onSwipe
+  const focused = useIsFocused()
+  const onSwipeRef = useSharedRef(onSwipe)
 
+  const phase = useSharedValue(0)
+  const acc = useSharedValue(0)
+  const rate = Math.PI * 2 * Math.max(0.06, breathHz)
+  const ringClock = useFrameCallback((frame) => {
+    'worklet'
+    acc.set(acc.get() + (frame.timeSincePreviousFrame ?? 16) / 1000)
+    if (acc.get() < RING_FRAME * 0.9) return
+    phase.set(phase.get() + acc.get() * rate)
+    acc.set(0)
+  }, false)
+  const animate = playing && focused && !reduced
   useEffect(() => {
-    if (reduced) return
-    const stepRad = Math.PI * 2 * Math.max(0.06, breathHz) * 0.045
-    const id = setInterval(() => {
-      setPhase((p) => p + (playing ? stepRad : 0.012))
-    }, 45)
-    return () => clearInterval(id)
-  }, [playing, reduced, breathHz])
+    ringClock.setActive(animate)
+  }, [animate, ringClock])
 
-  const panResponder = useRef(
+  const [panResponder] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 16 && Math.abs(g.dx) > Math.abs(g.dy),
@@ -55,12 +97,10 @@ export function SoundField({
         }
       },
     }),
-  ).current
+  )
 
   const { width, height } = useWindowDimensions()
   const size = Math.min(212, Math.max(174, Math.round(Math.min(width - 134, height * 0.245))))
-  const vb = 260
-  const c = vb / 2
   const l = mix.layers
   const activeEnergy =
     (l.rain ?? 0) +
@@ -73,41 +113,14 @@ export function SoundField({
     (mix.padGain ?? 0) * 0.8 +
     (mix.band ? mix.bandGain : 0)
   const norm = Math.min(1, activeEnergy / 2.4)
-  const breathWave = Math.sin(phase)
+  const waves = l.waves ?? 0
+  const pad = mix.padGain ?? 0
 
-  // 3 organic watchmaker acoustic rings breathing in sync with the 0.1 Hz resonance swell
-  const rings = [0, 1, 2].map((idx) => {
-    const baseR = 48 + idx * 26 + (playing ? Math.sin(phase - idx * 0.65) * 4.5 : 0)
-    const pts: string[] = []
-    const steps = 48
-    for (let i = 0; i <= steps; i++) {
-      const a = (i / steps) * Math.PI * 2
-      const wobble =
-        Math.sin(a * (3 + idx) + phase * (1.45 + idx * 0.28)) * (2.6 + norm * 5.2) * (playing ? 1 : 0.28) +
-        Math.cos(a * 5 - phase * 0.85) * (1.3 + (l.waves ?? 0) * 3.5 + (mix.padGain ?? 0) * 1.5)
-      const r = baseR + wobble
-      const x = c + Math.cos(a) * r
-      const y = c + Math.sin(a) * r
-      pts.push(`${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`)
-    }
-    pts.push('Z')
-    return pts.join(' ')
-  })
-
-  // Precision watchmaker bezel ticks
-  const bezelTicks = Array.from({ length: 48 }, (_, i) => {
-    const a = (i / 48) * Math.PI * 2
-    const major = i % 4 === 0
-    const r1 = 118
-    const r2 = major ? 126 : 122
-    return {
-      x1: c + Math.cos(a) * r1,
-      y1: c + Math.sin(a) * r1,
-      x2: c + Math.cos(a) * r2,
-      y2: c + Math.sin(a) * r2,
-      major,
-    }
-  })
+  const ring0 = useAnimatedProps(() => ({ d: ringPath(0, phase.get(), playing, norm, waves, pad) }))
+  const ring1 = useAnimatedProps(() => ({ d: ringPath(1, phase.get(), playing, norm, waves, pad) }))
+  const ring2 = useAnimatedProps(() => ({ d: ringPath(2, phase.get(), playing, norm, waves, pad) }))
+  const halo = useAnimatedProps(() => ({ r: playing ? 86 + Math.sin(phase.get()) * 8 : 74 }))
+  const ringProps = [ring0, ring1, ring2]
 
   const iconSize = Math.round(size * 0.19)
 
@@ -125,7 +138,7 @@ export function SoundField({
           accent={playing}
           style={[styles.orb, { width: size, height: size }]}
         >
-          <Svg width={size} height={size} viewBox={`0 0 ${vb} ${vb}`}>
+          <Svg width={size} height={size} viewBox={`0 0 ${VB} ${VB}`}>
             <Defs>
               <RadialGradient id="dialCoreHalo" cx="50%" cy="50%" r="50%">
                 <Stop offset="0%" stopColor={color.accent} stopOpacity={playing ? 0.26 : 0.08} />
@@ -134,9 +147,9 @@ export function SoundField({
               </RadialGradient>
             </Defs>
 
-            <Circle cx={c} cy={c} r={playing ? 86 + breathWave * 8 : 74} fill="url(#dialCoreHalo)" />
+            <AnimatedCircle cx={C} cy={C} animatedProps={halo} fill="url(#dialCoreHalo)" />
 
-            {bezelTicks.map((tk, i) => (
+            {BEZEL_TICKS.map((tk, i) => (
               <Line
                 key={i}
                 x1={tk.x1}
@@ -149,10 +162,10 @@ export function SoundField({
               />
             ))}
 
-            {rings.map((d, i) => (
-              <Path
+            {ringProps.map((animatedProps, i) => (
+              <AnimatedPath
                 key={i}
-                d={d}
+                animatedProps={animatedProps}
                 fill="none"
                 stroke={i === 1 ? color.accent : color.ink2}
                 strokeWidth={i === 1 ? 1.55 : 1}
@@ -205,3 +218,10 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 })
+
+/** Latest value in a ref without re-creating handlers. */
+function useSharedRef<T>(value: T): { current: T } {
+  const [ref] = useState(() => ({ current: value }))
+  ref.current = value
+  return ref
+}

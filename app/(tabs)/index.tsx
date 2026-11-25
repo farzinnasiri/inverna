@@ -2,26 +2,28 @@ import { useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { Award, Compass, Moon } from 'lucide-react-native'
-import { GAMES, type GameId, type GameMeta } from '@/core/games/catalog'
+import { Award, Moon, Pause, Play } from 'lucide-react-native'
+import { GAMES, GAMES_BY_INTENT, type GameId, type GameMeta, type NightIntent } from '@/core/games/catalog'
 import { bestFor, formatBestCompact } from '@/core/highscores'
-import { formatBedtime12h, minutesUntilBedtime, parseHHMM } from '@/core/night'
-import { sessionElapsed, sessionProgress } from '@/core/session'
+import { eveningState, windowProgress, type EveningState } from '@/core/evening'
+import { formatBedtime12h, formatHHMM, nightKey, overrideActive } from '@/core/night'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { greeting, play as copy } from '@/ui/copy'
 import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { ContinuePreview } from '@/ui/rn/ContinuePreview'
 import { FRAME_MAX_WIDTH } from '@/ui/rn/controls'
 import { GameGlyph } from '@/ui/rn/GameGlyph'
-import { GlassSurface } from '@/ui/rn/Glass'
+import { SoundGlyph } from '@/ui/rn/SoundGlyph'
+import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { Horizon } from '@/ui/rn/Horizon'
 import { useResponsiveLayout } from '@/ui/rn/hooks'
-import { todayNightKey } from '@/ui/rn/NightCheckIn'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
-import { useSettings, type DayFeeling, type NightIntent } from '@/ui/state/settings'
-import { useSound } from '@/ui/state/sound'
+import { useCurrentSchedule, useSettings } from '@/ui/state/settings'
+import { useAmbientToggle, useSound } from '@/ui/state/sound'
+import { TonightSheet } from '@/ui/rn/TonightSheet'
 
 const TILE_MORPH = LinearTransition.springify()
   .damping(22)
@@ -29,82 +31,57 @@ const TILE_MORPH = LinearTransition.springify()
   .mass(0.9)
   .reduceMotion(ReduceMotion.System)
 
-function formatDurationHero(mins: number): { num: string; unit: string } {
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+const clock12 = (d: Date) => formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes()))
+
+/** Within 90 minutes of wind down starting, or winding down: the countdown shows and the check-in asks. */
+function nearBedtimeFor(evening: EveningState, now: Date): boolean {
+  if (evening.kind === 'winding') return true
+  return evening.kind === 'evening' && evening.windowStart !== null && evening.windowStart.getTime() - now.getTime() <= 90 * 60_000
+}
+
+/** "43" (minutes, said in the line below), or "2h 10m". */
+function countdown(mins: number): { num: string; unit: string } {
   if (mins < 60) return { num: String(Math.max(1, mins)), unit: 'min' }
   const h = Math.floor(mins / 60)
   const m = mins % 60
-  if (m === 0) return { num: `${h}h`, unit: '' }
-  return { num: `${h}h ${m}m`, unit: '' }
+  return { num: m === 0 ? `${h}h` : `${h}h ${m}m`, unit: '' }
 }
 
-function horizonProgress(minsUntil: number | null, windowHours = 3): number {
-  if (minsUntil === null) return 0.5
-  const total = windowHours * 60
-  if (minsUntil > total) return 0.04
-  if (minsUntil <= 0) return 0.98
-  return Math.min(0.98, Math.max(0.04, 1 - minsUntil / total))
-}
-
-function horizonStartLabel(bedtime: string, windowHours = 3): string {
-  const { h, m } = parseHHMM(bedtime)
-  const startH = (h - windowHours + 24) % 24
-  return formatBedtime12h(`${startH}:${String(m).padStart(2, '0')}`)
-}
-
-const ORDER_BY_INTENT: Record<NightIntent, readonly GameId[]> = {
-  melt: ['pond', 'hue', 'lanterns', 'drift', 'patience', 'thread', 'weave', 'nine', 'kindle', 'cascade', 'settle', 'chime', 'rally'],
-  focus: ['nine', 'weave', 'thread', 'drift', 'kindle', 'patience', 'hue', 'pond', 'lanterns', 'settle', 'cascade', 'chime', 'rally'],
-  light: ['settle', 'kindle', 'cascade', 'chime', 'rally', 'thread', 'patience', 'drift', 'hue', 'pond', 'nine', 'weave', 'lanterns'],
-}
-
-function curateGames(
-  intent: NightIntent | null,
-  day: DayFeeling | null,
-  lastGame: GameId | null,
-): { ordered: GameMeta[]; wideIds: Set<GameId> } {
-  const effectiveIntent: NightIntent =
-    intent ?? (day === 'heavy' ? 'melt' : day === 'restless' ? 'focus' : day === 'bright' ? 'light' : 'melt')
-  const order = ORDER_BY_INTENT[effectiveIntent]
+/** Tonight's games: the check-in's pick leads; otherwise the last game played, then slow games. */
+function curateGames(intent: NightIntent | null, lastGame: GameId | null): { ordered: GameMeta[]; wideIds: Set<GameId> } {
   const byId = new Map(GAMES.map((g) => [g.id, g]))
-  const base = order.map((id) => byId.get(id)!).filter(Boolean)
-
-  // If the user explicitly picked a mood intent, lead with its #1 match; otherwise highlight their last game if set.
-  let leadId: GameId = base[0]!.id
-  if (!intent && lastGame && byId.has(lastGame)) {
-    leadId = lastGame
-  }
+  const base = GAMES_BY_INTENT[intent ?? 'melt'].map((id) => byId.get(id)!).filter(Boolean)
+  const leadId: GameId = !intent && lastGame && byId.has(lastGame) ? lastGame : base[0]!.id
   const ordered = [byId.get(leadId)!, ...base.filter((g) => g.id !== leadId)]
-  // 1st item (row 1 wide) and 7th item (row 3 wide) form a pixel-aligned 3-column bento:
-  // Row 1: [2-col, 1-col] | Row 2: [1, 1, 1] | Row 3: [1-col, 2-col] | Row 4: [1, 1, 1] | Row 5: [1, 1, 1]
-  const wideIds = new Set<GameId>([ordered[0]!.id, ordered[6]!.id])
-  return { ordered, wideIds }
+  // Rows: [2, 1] | [1, 1, 1] | [1, 2] | [1, 1, 1] | [1, 1, 1]
+  return { ordered, wideIds: new Set<GameId>([ordered[0]!.id, ordered[6]!.id]) }
 }
 
-function moodSummary(day: DayFeeling | null, intent: NightIntent | null): string | null {
-  if (!intent && !day) return null
-  if (intent === 'melt') return 'Curated to melt away'
-  if (intent === 'focus') return 'Curated for quiet focus'
-  if (intent === 'light') return 'Curated for a light note'
-  return 'Tonight check-in'
-}
+/** Rows in the bento above (13 games, two of them wide). */
+const GRID_ROWS = 5
+/** The floating native tab bar. */
+const TAB_BAR_H = 62
+const DOCK_H = 56
 
 export default function HomeScreen() {
   const router = useRouter()
-  const { insets, isCompact, isLarge, sideMargin } = useResponsiveLayout()
+  const { height, insets, isCompact, isLarge, sideMargin } = useResponsiveLayout()
   const { color } = useTokenColors()
 
   const onboarded = useSettings((s) => s.onboarded)
-  const schedule = useSettings((s) => s.schedule)
+  const name = useSettings((s) => s.userName)
   const lastGame = useSettings((s) => s.lastGame)
   const hapticsOn = useSettings((s) => s.haptics)
   const lastCheckInDate = useSettings((s) => s.lastCheckInDate)
-  const tonightDay = useSettings((s) => s.tonightDay)
   const tonightIntent = useSettings((s) => s.tonightIntent)
-  const lastLightsOut = useSettings((s) => s.lastLightsOut)
+  const lastLightsOutNight = useSettings((s) => s.lastLightsOutNight)
+  const tonightBedtime = useSettings((s) => s.tonightBedtime)
   const setSettings = useSettings((s) => s.set)
 
   const setWindDownOpen = useNav((s) => s.setWindDownOpen)
-  const setCheckInOpen = useNav((s) => s.setCheckInOpen)
+  const checkInOpen = useNav((s) => s.checkIn !== null)
+  const setCheckIn = useNav((s) => s.setCheckIn)
   const session = useSession((s) => s.session)
   const dismissSession = useSession((s) => s.dismiss)
   const stopSound = useSound((s) => s.stop)
@@ -112,49 +89,60 @@ export default function HomeScreen() {
 
   const [now, setNow] = useState(() => new Date())
   const [gridW, setGridW] = useState(0)
+  const [tonightOpen, setTonightOpen] = useState(false)
+  const schedule = useCurrentSchedule(now)
+  const ambient = useAmbientToggle()
 
+  // Re-read the clock the moment a wind down starts or ends, not at the next tick.
   useEffect(() => {
+    setNow(new Date())
     const id = setInterval(() => setNow(new Date()), session ? 10_000 : 30_000)
     return () => clearInterval(id)
   }, [session])
 
-  // Gently prompt Nightly Check-in once per evening (19:00..04:59) after onboarding.
-  useEffect(() => {
-    if (!onboarded) return
-    const hr = now.getHours()
-    const isNightWindow = hr >= 19 || hr < 5
-    if (isNightWindow && lastCheckInDate !== todayNightKey(now)) {
-      const timer = setTimeout(() => setCheckInOpen(true), 450)
-      return () => clearTimeout(timer)
+  // Bedtime is the pivot: what Play says depends on where tonight stands.
+  const evening = eveningState(schedule, now, session?.startedAt ?? null)
+  const bedLabel = evening.bedtime ? clock12(evening.bedtime) : ''
+  const sleptTonight = lastLightsOutNight === nightKey(now)
+  const askingPastBedtime = evening.kind === 'past' && !sleptTonight
+  const winding = evening.kind === 'winding' && evening.windowStart !== null
+
+  // One idea per state: the big line, and one short line under it.
+  type Hero = { big: string; unit?: string; phrase?: boolean; sub: string }
+  const movedTonight = overrideActive(tonightBedtime, now) && !session
+  let hero: Hero
+  if (evening.kind === 'past') {
+    hero = sleptTonight
+      ? { big: copy.restBig(name), phrase: true, sub: copy.restSub }
+      : { big: copy.pastBig(name), phrase: true, sub: copy.pastSub(bedLabel) }
+  } else if (evening.kind === 'morning') {
+    hero = { big: greeting(now.getHours(), name), phrase: true, sub: copy.morningSub }
+  } else if (evening.kind === 'none') {
+    hero = { big: copy.noBedtimeBig, phrase: true, sub: copy.noBedtimeSub }
+  } else if (evening.kind === 'day' || (evening.kind === 'evening' && !nearBedtimeFor(evening, now))) {
+    hero = {
+      big: evening.kind === 'day' ? copy.daytimeBig(name) : greeting(now.getHours(), name),
+      phrase: true,
+      sub: movedTonight ? copy.tonightBedtimeIs(bedLabel) : copy.bedtimeIs(bedLabel),
     }
-  }, [onboarded, lastCheckInDate, now, setCheckInOpen])
+  } else {
+    // Close to bed: a countdown, and what the number means.
+    const mins = evening.minutesToBedtime ?? 0
+    const d = countdown(mins)
+    hero = { big: d.num, unit: d.unit, sub: d.unit ? copy.minutesUntilBed(mins) : copy.untilBed }
+  }
 
-  const minsUntil = minutesUntilBedtime(schedule, now)
-  const inEveningWindow = minsUntil !== null && minsUntil <= 180
-  const sessProgress = session ? sessionProgress(session, now.getTime()) : null
-  const sessRemainingMs = session
-    ? Math.max(0, session.minutes * 60_000 - sessionElapsed(session, now.getTime()) * 1000)
-    : null
+  // Near bedtime, ask the two check-in questions once a night (opening Play
+  // in the 90 minutes before wind down, or during it).
+  const nearBedtime = nearBedtimeFor(evening, now)
+  useEffect(() => {
+    if (!onboarded || !nearBedtime || checkInOpen) return
+    if (lastCheckInDate === nightKey(now)) return
+    const timer = setTimeout(() => setCheckIn('tonight'), 600)
+    return () => clearTimeout(timer)
+  }, [onboarded, nearBedtime, lastCheckInDate, now, checkInOpen, setCheckIn])
 
-  const hero =
-    sessRemainingMs !== null
-      ? { num: String(Math.max(1, Math.ceil(sessRemainingMs / 60_000))), unit: 'min' }
-      : minsUntil !== null
-        ? formatDurationHero(minsUntil)
-        : { num: formatBedtime12h(schedule.bedtime), unit: '' }
-
-  const heroSub = session
-    ? 'winding down'
-    : inEveningWindow
-      ? `to lights out · ${formatBedtime12h(schedule.bedtime)}`
-      : schedule.enabled
-        ? `until ${formatBedtime12h(schedule.bedtime)}`
-        : 'bedtime'
-
-  const { ordered, wideIds } = useMemo(
-    () => curateGames(tonightIntent, tonightDay, lastGame),
-    [tonightIntent, tonightDay, lastGame],
-  )
+  const { ordered, wideIds } = useMemo(() => curateGames(tonightIntent, lastGame), [tonightIntent, lastGame])
 
   const launchGame = (id: GameId) => {
     if (hapticsOn) haptics.play('light')
@@ -162,12 +150,29 @@ export default function HomeScreen() {
     router.push(`/game/${id}`)
   }
 
-  const tileHeight = isCompact ? 80 : isLarge ? 94 : 88
+  const toggleWindDown = () => {
+    if (hapticsOn) haptics.play('light')
+    if (session) {
+      dismissSession()
+      stopSound(1.2)
+      // Stopping early returns tonight to the usual bedtime.
+      setSettings({ tonightBedtime: null })
+    } else {
+      setWindDownOpen(true)
+    }
+  }
+
+  // Every region gets a fixed share of the screen, so nothing moves when the
+  // hero's text changes: hero, then the grid, then the dock above the tab bar.
+  const heroH = Math.round(clamp(height * 0.2, 150, 190))
+  const sectionGap = isCompact ? 10 : 14
   const tileGap = isCompact ? 8 : 10
-  // Exact 3-column mathematical widths so wide (2-col) and single (1-col) tiles align to the pixel!
+  const bottomReserve = Math.max(insets.bottom, 12) + (Platform.OS === 'web' ? 12 : TAB_BAR_H + 10)
+  const gridAvail = height - insets.top - 8 - heroH - sectionGap * 2 - DOCK_H - bottomReserve
+  const tileHeight = Math.floor(clamp((gridAvail - tileGap * (GRID_ROWS - 1)) / GRID_ROWS, 66, isLarge ? 100 : 92))
   const colW = gridW > 0 ? Math.floor((gridW - tileGap * 2) / 3) : 104
   const wideW = colW * 2 + tileGap
-  const moodText = moodSummary(tonightDay, tonightIntent)
+  const bigSize = isCompact ? 44 : 54
 
   return (
     <View style={styles.root}>
@@ -176,100 +181,71 @@ export default function HomeScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          {
-            paddingHorizontal: sideMargin,
-            paddingTop: insets.top + (isCompact ? 10 : 18),
-            paddingBottom: Platform.OS === 'ios' ? 24 : Math.max(insets.bottom, 16) + 88,
-          },
+          { paddingHorizontal: sideMargin, paddingTop: insets.top + 8, paddingBottom: bottomReserve },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.frame, { gap: isCompact ? 16 : 22 }]}>
-          <View style={styles.hero}>
-            <View style={styles.clockRow}>
-              <Text style={[styles.clockNum, { color: color.ink, fontSize: isCompact ? 42 : 52 }]}>
-                {hero.num}
-              </Text>
-              {hero.unit ? (
-                <Text style={[styles.clockUnit, { color: color.ink2, fontSize: isCompact ? 17 : 20 }]}>
-                  {hero.unit}
-                </Text>
-              ) : null}
-            </View>
-            <Text style={[styles.sub, { color: color.ink2 }]}>{heroSub}</Text>
-
-            {session || inEveningWindow ? (
-              <Horizon
-                progress={sessProgress !== null ? sessProgress : horizonProgress(minsUntil)}
-                startLabel={session ? 'Now' : horizonStartLabel(schedule.bedtime)}
-                endLabel={session ? `${session.minutes}m` : formatBedtime12h(schedule.bedtime)}
-              />
-            ) : lastLightsOut ? (
-              <Text style={[styles.quietNote, { color: color.ink3 }]}>
-                Lights out {lastLightsOut} last night
-              </Text>
-            ) : null}
-
-            <View style={styles.actionRow}>
-              {session ? (
-                <Pressable
-                  onPress={() => {
-                    if (hapticsOn) haptics.play('light')
-                    dismissSession()
-                    stopSound(1.2)
-                  }}
-                  style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
-                >
-                  <GlassSurface variant="pill" radius={21} accent interactive style={styles.windBtn}>
-                    <Text style={[styles.windLabel, { color: color.accent }]}>End wind down</Text>
-                  </GlassSurface>
-                </Pressable>
-              ) : (
-                <Pressable
-                  onPress={() => {
-                    if (hapticsOn) haptics.play('light')
-                    setWindDownOpen(true)
-                  }}
-                  style={({ pressed }) => [
-                    {
-                      opacity: pressed ? 0.86 : 1,
-                      transform: [{ scale: pressed ? 0.97 : 1 }],
-                    },
-                  ]}
-                >
-                  <GlassSurface variant="pill" radius={21} accent interactive style={styles.windBtn}>
-                    <Moon size={15} strokeWidth={1.7} color={color.accent} />
-                    <Text style={[styles.windLabel, { color: color.ink }]}>Wind down</Text>
-                  </GlassSurface>
-                </Pressable>
-              )}
-
-              <Pressable
-                onPress={() => {
-                  if (hapticsOn) haptics.play('light')
-                  setCheckInOpen(true)
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="Tonight mood check-in"
-                style={({ pressed }) => [
-                  {
-                    opacity: pressed ? 0.86 : 1,
-                    transform: [{ scale: pressed ? 0.97 : 1 }],
-                  },
+        <View style={[styles.frame, { gap: sectionGap }]}>
+          {/* Hero: a fixed-height region. Its content changes; its size never does. */}
+          <View style={[styles.hero, { height: heroH }]}>
+            <Pressable
+              onPress={() => {
+                if (session) return
+                if (hapticsOn) haptics.play('light')
+                setTonightOpen(true)
+              }}
+              disabled={Boolean(session)}
+              accessibilityRole="button"
+              accessibilityLabel={`${hero.big} ${hero.sub}`}
+              accessibilityHint="Change tonight's bedtime"
+              style={({ pressed }) => [styles.heroTap, { opacity: pressed ? 0.78 : 1 }]}
+            >
+              <Text
+                style={[
+                  hero.phrase ? styles.phrase : styles.big,
+                  { color: color.ink, fontSize: hero.phrase ? (isCompact ? 28 : 32) : bigSize },
                 ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
-                <GlassSurface variant="pill" radius={21} interactive style={styles.moodBtn}>
-                  <Compass size={14} strokeWidth={1.65} color={moodText ? color.accent : color.ink2} />
-                  <Text style={[styles.moodLabel, { color: color.ink2 }]} numberOfLines={1}>
-                    {moodText ?? "Tonight's mood"}
-                  </Text>
-                </GlassSurface>
-              </Pressable>
+                {hero.big}
+              </Text>
+              <Text style={[styles.sub, { color: color.ink2 }]} numberOfLines={1}>
+                {hero.sub}
+              </Text>
+            </Pressable>
+
+            {/* Accessory slot: the wind-down timeline, or the two choices past bedtime. */}
+            <View style={styles.accessory}>
+              {winding && evening.windowStart ? (
+                <Horizon progress={windowProgress(evening, now)} startLabel={clock12(evening.windowStart)} endLabel={bedLabel} />
+              ) : askingPastBedtime ? (
+                <View style={styles.choices}>
+                  <Pressable onPress={toggleWindDown} accessibilityRole="button" style={styles.choice}>
+                    <GlassSurface variant="pill" radius={20} accent style={styles.choicePill}>
+                      <Text style={[styles.choiceText, { color: color.accent }]}>{copy.pastWindDown}</Text>
+                    </GlassSurface>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      if (hapticsOn) haptics.play('light')
+                      setTonightOpen(true)
+                    }}
+                    accessibilityRole="button"
+                    style={styles.choice}
+                  >
+                    <GlassSurface variant="pill" radius={20} style={styles.choicePill}>
+                      <Text style={[styles.choiceText, { color: color.ink }]}>{copy.pastChange}</Text>
+                    </GlassSurface>
+                  </Pressable>
+                </View>
+              ) : null}
             </View>
           </View>
 
-          {/* Pixel-aligned 3-column bento that smoothly morphs & reorders via Reanimated */}
-          <View
+          {/* Tiles size themselves to the space left, so the grid ends above the dock. */}
+          <GlassGroup
+            spacing={0}
             style={[styles.bentoWrap, { gap: tileGap }]}
             onLayout={(e: LayoutChangeEvent) => {
               const w = Math.floor(e.nativeEvent.layout.width)
@@ -280,54 +256,33 @@ export default function HomeScreen() {
               const wide = wideIds.has(game.id)
               const isLead = idx === 0
               const isLastPlayed = lastGame === game.id
-              const showScore = game.id !== 'pond'
-              const best = showScore ? bestFor(highScores, game.id) : null
-              const compactBest = showScore ? formatBestCompact(game.id, best) : null
-              const hasPreview =
-                isLead && ['kindle', 'hue', 'cascade', 'thread'].includes(game.id)
+              const best = game.id !== 'pond' ? bestFor(highScores, game.id) : null
+              const compactBest = game.id !== 'pond' ? formatBestCompact(game.id, best) : null
+              const hasPreview = isLead && ['kindle', 'hue', 'cascade', 'thread'].includes(game.id)
+              const roomy = tileHeight >= 80
 
               return (
-                <Animated.View
-                  key={game.id}
-                  layout={TILE_MORPH}
-                  style={{ width: wide ? wideW : colW }}
-                >
+                <Animated.View key={game.id} layout={TILE_MORPH} style={{ width: wide ? wideW : colW }}>
                   <Pressable
                     onPress={() => launchGame(game.id)}
                     accessibilityRole="button"
-                    accessibilityLabel={
-                      compactBest ? `${game.name}, best ${compactBest}` : game.name
-                    }
-                    style={({ pressed }) => [
-                      {
-                        opacity: pressed ? 0.86 : 1,
-                        transform: [{ scale: pressed ? 0.97 : 1 }],
-                      },
-                    ]}
+                    accessibilityLabel={compactBest ? `${game.name}, best ${compactBest}` : game.name}
+                    style={({ pressed }) => [{ opacity: pressed ? 0.86 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                   >
-                    <GlassSurface
-                      variant="card"
-                      radius={20}
-                      accent={isLead}
-                      interactive
-                      style={[styles.tile, { height: tileHeight }]}
-                    >
+                    <GlassSurface variant="card" radius={20} accent={isLead} style={[styles.tile, { height: tileHeight }]}>
                       <View style={styles.tileTop}>
                         <View style={styles.tileArt}>
-                          {hasPreview ? <ContinuePreview id={game.id} size={isCompact ? 34 : 38} /> : null}
-                          {!hasPreview && <GameGlyph id={game.id} size={wide ? 30 : 28} />}
+                          {hasPreview ? <ContinuePreview id={game.id} size={roomy ? 36 : 30} /> : null}
+                          {!hasPreview && <GameGlyph id={game.id} size={roomy ? (wide ? 30 : 28) : 24} />}
                         </View>
-
                         {compactBest ? (
                           <View style={styles.bestTag}>
                             <Award size={10} strokeWidth={1.8} color={color.accent} />
-                            <Text style={[styles.bestTagText, { color: color.ink2 }]}>
-                              {compactBest}
-                            </Text>
+                            <Text style={[styles.bestTagText, { color: color.ink2 }]}>{compactBest}</Text>
                           </View>
                         ) : isLastPlayed ? (
                           <View style={styles.continueTag}>
-                            <Text style={[styles.continueText, { color: color.accent }]}>Resume</Text>
+                            <Text style={[styles.continueText, { color: color.accent }]}>Continue</Text>
                           </View>
                         ) : wide ? (
                           <Text style={[styles.tileTag, { color: color.ink3 }]} numberOfLines={1}>
@@ -351,9 +306,61 @@ export default function HomeScreen() {
                 </Animated.View>
               )
             })}
-          </View>
+          </GlassGroup>
+
+          {/* Dock, in thumb reach: wind down on the left, tonight's sound on the right. */}
+          <GlassGroup spacing={0} style={styles.dock}>
+            <Pressable
+              onPress={toggleWindDown}
+              accessibilityRole="button"
+              accessibilityLabel={session ? copy.endWindDown : copy.windDown}
+              style={({ pressed }) => [styles.dockSlot, { transform: [{ scale: pressed ? 0.97 : 1 }] }]}
+            >
+              <GlassSurface variant="pill" radius={DOCK_H / 2} accent style={styles.dockPill}>
+                <Moon size={17} strokeWidth={1.7} color={color.accent} />
+                <Text style={[styles.dockLabel, { color: session ? color.accent : color.ink }]} numberOfLines={1}>
+                  {session ? copy.endWindDown : copy.windDown}
+                </Text>
+              </GlassSurface>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                if (hapticsOn) haptics.play('light')
+                ambient.toggle()
+              }}
+              onLongPress={() => {
+                if (hapticsOn) haptics.play('medium')
+                router.push('/sounds')
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={ambient.playing ? `Pause ${ambient.name}` : `Play ${ambient.name}`}
+              accessibilityHint="Long press to choose another sound"
+              style={({ pressed }) => [styles.dockSlot, { transform: [{ scale: pressed ? 0.97 : 1 }] }]}
+            >
+              <GlassSurface variant="pill" radius={DOCK_H / 2} accent={ambient.playing} style={[styles.dockPill, styles.soundPill]}>
+                <View style={[styles.soundIcon, { backgroundColor: ambient.playing ? color.accentWash : 'rgba(255,255,255,0.06)' }]}>
+                  <SoundGlyph icon={ambient.icon} size={17} color={ambient.playing ? color.accent : color.ink2} />
+                </View>
+                <Text
+                  style={[styles.dockLabel, styles.soundName, { color: color.ink }]}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.78}
+                >
+                  {ambient.name}
+                </Text>
+                {ambient.playing ? (
+                  <Pause size={16} strokeWidth={2} color={color.accent} fill={color.accent} />
+                ) : (
+                  <Play size={16} strokeWidth={2} color={color.ink2} fill={color.ink2} />
+                )}
+              </GlassSurface>
+            </Pressable>
+          </GlassGroup>
         </View>
       </ScrollView>
+      <TonightSheet open={tonightOpen} onClose={() => setTonightOpen(false)} />
     </View>
   )
 }
@@ -377,61 +384,58 @@ const styles = StyleSheet.create({
   },
   hero: {
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  clockRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
+  heroTap: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    paddingHorizontal: 12,
   },
-  clockNum: {
+  kicker: {
+    fontSize: 15,
+    fontWeight: '500',
+    height: 20,
+  },
+  big: {
     fontWeight: '200',
-    letterSpacing: -1.8,
+    letterSpacing: -1.6,
     fontVariant: ['tabular-nums'],
+    textAlign: 'center',
   },
-  clockUnit: {
+  phrase: {
     fontWeight: '300',
-    letterSpacing: -0.3,
+    letterSpacing: -0.6,
+    textAlign: 'center',
+    marginVertical: 8,
+  },
+  unit: {
+    fontWeight: '300',
+    letterSpacing: -0.2,
   },
   sub: {
-    fontSize: 14,
-    fontWeight: '400',
-    marginTop: 2,
+    fontSize: 15,
+    height: 20,
   },
-  quietNote: {
-    fontSize: 12.5,
-    fontWeight: '400',
-    marginTop: 8,
+  accessory: {
+    alignSelf: 'stretch',
+    height: 44,
+    justifyContent: 'flex-end',
   },
-  actionRow: {
+  choices: {
     flexDirection: 'row',
+    gap: 10,
+  },
+  choice: {
+    flex: 1,
+  },
+  choicePill: {
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginTop: 14,
-    flexWrap: 'wrap',
   },
-  windBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    height: 42,
-    paddingHorizontal: 18,
-  },
-  windLabel: {
+  choiceText: {
     fontSize: 14,
     fontWeight: '600',
-    letterSpacing: -0.1,
-  },
-  moodBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 42,
-    paddingHorizontal: 14,
-  },
-  moodLabel: {
-    fontSize: 13.5,
-    fontWeight: '500',
   },
   bentoWrap: {
     flexDirection: 'row',
@@ -440,7 +444,7 @@ const styles = StyleSheet.create({
   },
   tile: {
     paddingHorizontal: 13,
-    paddingVertical: 11,
+    paddingVertical: 10,
     justifyContent: 'space-between',
   },
   tileTop: {
@@ -494,5 +498,42 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '500',
     letterSpacing: -0.15,
+  },
+  dock: {
+    flexDirection: 'row',
+    gap: 10,
+    height: DOCK_H,
+  },
+  dockSlot: {
+    flex: 1,
+  },
+  dockPill: {
+    height: DOCK_H,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    paddingHorizontal: 16,
+  },
+  soundPill: {
+    justifyContent: 'flex-start',
+    gap: 8,
+    paddingLeft: 10,
+    paddingRight: 16,
+  },
+  soundIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dockLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  soundName: {
+    flex: 1,
   },
 })

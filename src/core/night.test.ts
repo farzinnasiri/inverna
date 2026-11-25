@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bedtimeSide,
   combineFilters,
   DEFAULT_SCHEDULE,
+  effectiveSchedule,
   lightToFilter,
   minutesUntilBedtime,
+  nightKey,
   nightPhase,
+  ribbonBedtime,
+  ribbonEarliest,
+  ribbonOffset,
   scheduledLight,
   scheduleFilter,
+  type Schedule,
 } from './night'
 
 describe('night schedule & filter', () => {
@@ -46,5 +53,79 @@ describe('night schedule & filter', () => {
       warmth: 1,
       dim: 0.5,
     })
+  })
+})
+
+describe('tonight-only bedtime', () => {
+  const usual: Schedule = { enabled: true, bedtime: '23:00', leadMinutes: 60, days: [0, 1, 2, 3, 4, 5, 6] }
+
+  it('keys the night by its evening until 06:00', () => {
+    expect(nightKey(new Date(2026, 10, 24, 23, 30))).toBe('2026-11-24')
+    expect(nightKey(new Date(2026, 10, 25, 0, 30))).toBe('2026-11-24')
+    expect(nightKey(new Date(2026, 10, 25, 5, 59))).toBe('2026-11-24')
+    expect(nightKey(new Date(2026, 10, 25, 6, 1))).toBe('2026-11-25')
+  })
+
+  it('moves tonight only and expires on its own', () => {
+    const evening = new Date(2026, 10, 24, 22, 0)
+    const override = { night: nightKey(evening), bedtime: '00:30' }
+    const tonight = effectiveSchedule(usual, override, evening)
+    expect(tonight.bedtime).toBe('00:30')
+    expect(minutesUntilBedtime(tonight, evening)).toBe(150)
+    const tomorrow = new Date(2026, 10, 25, 21, 0)
+    expect(effectiveSchedule(usual, override, tomorrow)).toBe(usual)
+  })
+
+  it('applies even when the usual schedule is off', () => {
+    const evening = new Date(2026, 10, 24, 22, 0)
+    const off = { ...usual, enabled: false }
+    expect(minutesUntilBedtime(off, evening)).toBeNull()
+    const s = effectiveSchedule(off, { night: nightKey(evening), bedtime: '23:15' }, evening)
+    expect(minutesUntilBedtime(s, evening)).toBe(75)
+  })
+})
+
+describe('bedtime ribbon', () => {
+  it('maps bedtimes onto the 8 PM – 3 AM ribbon', () => {
+    expect(ribbonOffset('20:00')).toBe(0)
+    expect(ribbonOffset('23:00')).toBe(180)
+    expect(ribbonOffset('00:30')).toBe(270)
+    expect(ribbonOffset('03:00')).toBe(420)
+    expect(ribbonOffset('19:30')).toBe(-30)
+    expect(ribbonOffset('12:30')).toBeLessThan(0)
+  })
+
+  it('snaps and clamps back to a bedtime', () => {
+    expect(ribbonBedtime(268)).toBe('00:30')
+    expect(ribbonBedtime(-40)).toBe('20:00')
+    expect(ribbonBedtime(999)).toBe('03:00')
+  })
+
+  it('never offers a slot that has already passed', () => {
+    expect(ribbonEarliest(new Date(2026, 10, 24, 23, 31))).toBe(225)
+    expect(ribbonEarliest(new Date(2026, 10, 24, 23, 30))).toBe(225)
+    expect(ribbonEarliest(new Date(2026, 10, 24, 15, 0))).toBe(0)
+  })
+
+  it('says which side of midnight a bedtime falls', () => {
+    expect(bedtimeSide('00:30')).toBe('after midnight')
+    expect(bedtimeSide('12:30')).toBe('this afternoon')
+    expect(bedtimeSide('23:00')).toBe('this evening')
+  })
+})
+
+describe('upcoming wind downs', () => {
+  it('lists one start per night, an hour before bed, soonest first', async () => {
+    const { upcomingWindDowns } = await import('./night')
+    const now = new Date(2026, 10, 24, 12, 0)
+    const starts = upcomingWindDowns({ enabled: true, bedtime: '23:00', leadMinutes: 60, days: [0, 1, 2, 3, 4, 5, 6] }, now, 3)
+    expect(starts.map((d) => [d.getDate(), d.getHours()])).toEqual([[24, 22], [25, 22], [26, 22]])
+  })
+
+  it('skips tonight once its wind down has begun', async () => {
+    const { upcomingWindDowns } = await import('./night')
+    const now = new Date(2026, 10, 24, 22, 30)
+    const [first] = upcomingWindDowns({ enabled: true, bedtime: '23:00', leadMinutes: 60, days: [0, 1, 2, 3, 4, 5, 6] }, now, 1)
+    expect(first?.getDate()).toBe(25)
   })
 })

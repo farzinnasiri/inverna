@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
-import { formatBedtime12h, formatHHMM } from '@/core/night'
+import { formatBedtime12h, formatHHMM, nightKey } from '@/core/night'
 import { sessionDone, sessionLevels } from '@/core/session'
 import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
@@ -50,13 +50,18 @@ export function SessionCurtain() {
       }
       if (sessionDone(session, now) && !ended) {
         const d = new Date(now)
-        useSettings.getState().set({ lastLightsOut: formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes())) })
+        useSettings.getState().set({
+          lastLightsOut: formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes())),
+          lastLightsOutNight: nightKey(d),
+        })
         finish()
         stopSound(3, { hideNotification: true })
       }
     }
 
     tick()
+    // Nothing to watch: no wind-down session and no sleep timer running.
+    if (!session && !(playing && stopAt)) return
     const id = setInterval(tick, 1000)
     const appSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') tick()
@@ -82,7 +87,7 @@ export function SessionCurtain() {
       {ended && (
         <View style={styles.restWrap}>
           <Text style={[styles.restTitle, { color: color.ink2 }]}>Goodnight</Text>
-          <Text style={[styles.restHint, { color: color.ink4 }]}>Tap anywhere to wake</Text>
+          <Text style={[styles.restHint, { color: color.ink4 }]}>Tap anywhere to return</Text>
         </View>
       )}
     </Pressable>

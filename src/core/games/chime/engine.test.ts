@@ -416,7 +416,8 @@ describe('Chime engine', () => {
 
       const restarted = restartLevel(next, 0.7)
       expect(restarted.levelIndex).toBe(1)
-      expect(restarted.score).toBe(0)
+      // Restarting a wall keeps the totals carried in from earlier walls.
+      expect(restarted.score).toBe(130)
       expect(restarted.ball.attached).toBe(true)
     })
 
@@ -451,5 +452,19 @@ describe('Chime engine', () => {
       expect(stripped.ball.attached).toBe(true)
       expect(JSON.parse(JSON.stringify(stripped))).toEqual(stripped)
     })
+  })
+})
+
+describe('chime restart keeps earlier walls', () => {
+  it('restarting wall 2 returns to the totals carried in from wall 1', async () => {
+    const { createChime, nextLevel, restartLevel } = await import('./engine')
+    const first = { ...createChime({ seed: 4, calm: 0 }), score: 120, bricksBroken: 14, boardsCleared: 1 }
+    const second = nextLevel(first, 0)
+    expect(second.score).toBe(120)
+    const played = { ...second, score: 180, bricksBroken: 20 }
+    const restarted = restartLevel(played, 0)
+    expect(restarted.levelIndex).toBe(second.levelIndex)
+    expect(restarted.score).toBe(120)
+    expect(restarted.bricksBroken).toBe(14)
   })
 })

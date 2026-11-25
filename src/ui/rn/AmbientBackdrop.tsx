@@ -1,7 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
-import { useFocusEffect } from 'expo-router'
+import { useIsFocused } from 'expo-router'
 import Animated, {
+  cancelAnimation,
   Easing,
   ReduceMotion,
   useAnimatedStyle,
@@ -188,16 +189,23 @@ const SceneAtmosphere = memo(function SceneAtmosphere({
  * - Scene: one living Skia scene per sound (SkiaBackdrop). On a sound change it
  *   morphs: a soft front grows out of the dial and the shapes behind it turn
  *   into the new scene's shapes.
- * Nothing renders while the tab is out of focus.
+ * Out of focus (another tab, or a game on top) it stays mounted but still:
+ * repeats are cancelled and the scene clock stops, so coming back is instant
+ * with nothing rebuilt. All tabs share one scene simulation.
  */
-export function AmbientBackdrop() {
-  const [isFocused, setIsFocused] = useState(true)
-  useFocusEffect(
-    useCallback(() => {
-      setIsFocused(true)
-      return () => setIsFocused(false)
-    }, []),
-  )
+export function AmbientBackdrop({
+  presetId,
+  still = false,
+  dim = 1,
+}: {
+  /** Show this sound's scene instead of the one playing or saved (onboarding pages). */
+  presetId?: string
+  /** Colour only: no particles and no drifting, so it costs next to nothing (behind games). */
+  still?: boolean
+  /** 0..1 overall strength. */
+  dim?: number
+} = {}) {
+  const isFocused = useIsFocused()
   const { width, height } = useWindowDimensions()
   const playing = useSound((s) => s.playing)
   const soundMix = useSound((s) => s.mix)
@@ -207,9 +215,9 @@ export function AmbientBackdrop() {
   const savedPreset = useSettings((s) => s.sessionPreset)
   const reduced = useReducedMotion()
 
-  const activePresetId = soundPreset ?? savedPreset ?? DEFAULT_PRESET_ID
-  const activeMix = soundMix ?? presetById(activePresetId)?.mix ?? null
-  const backdrop = resolveBackdrop(playing ? soundPreset : activePresetId, activeMix)
+  const activePresetId = presetId ?? soundPreset ?? savedPreset ?? DEFAULT_PRESET_ID
+  const activeMix = presetId ? (presetById(presetId)?.mix ?? null) : (soundMix ?? presetById(activePresetId)?.mix ?? null)
+  const backdrop = resolveBackdrop(presetId ?? (playing ? soundPreset : activePresetId), activeMix)
   const family = paletteFamily(backdrop)
 
   // Slow crossfade between the outgoing and incoming colour family.
@@ -260,7 +268,11 @@ export function AmbientBackdrop() {
   }, [playing, intensitySV])
 
   useEffect(() => {
-    if (reduced || !isFocused) return
+    const all = [driftA, driftB, breath, causticSpin]
+    if (reduced || still || !isFocused) {
+      all.forEach((v) => cancelAnimation(v))
+      return
+    }
     driftA.set(
       withRepeat(
         withTiming(1, { duration: 15000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
@@ -289,7 +301,8 @@ export function AmbientBackdrop() {
         false,
       ),
     )
-  }, [reduced, isFocused, driftA, driftB, breath, causticSpin])
+    return () => all.forEach((v) => cancelAnimation(v))
+  }, [reduced, still, isFocused, driftA, driftB, breath, causticSpin])
 
   const orbW = Math.max(width, 390) * 1.32
   const orbH = Math.max(height * 0.62, 480)
@@ -344,12 +357,9 @@ export function AmbientBackdrop() {
     opacity: fadeProgress.get(),
   }))
 
-  if (!isFocused) {
-    return <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.wrap]} />
-  }
-
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.wrap]}>
+      <View style={[StyleSheet.absoluteFill, dim < 1 ? { opacity: dim } : null]}>
       {familyPair.prev && (
         <Animated.View style={[StyleSheet.absoluteFill, prevCrossfadeStyle]}>
           <SceneAtmosphere
@@ -382,7 +392,17 @@ export function AmbientBackdrop() {
           causticLowerStyle={causticLowerStyle}
         />
       </Animated.View>
-      <SkiaBackdrop backdrop={backdrop} playing={playing} breathHz={breathHz} descent={descent} reduced={reduced} />
+      {still ? null : (
+        <SkiaBackdrop
+          backdrop={backdrop}
+          playing={playing}
+          breathHz={breathHz}
+          descent={descent}
+          reduced={reduced}
+          active={isFocused}
+        />
+      )}
+      </View>
     </View>
   )
 }

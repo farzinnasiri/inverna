@@ -116,28 +116,36 @@ const WEB_GLASS_STYLE =
     ? ({ backdropFilter: 'blur(22px) saturate(140%)', WebkitBackdropFilter: 'blur(22px) saturate(140%)' } as unknown as ViewStyle)
     : null
 
+/**
+ * Groups glass surfaces into one native container (iOS 26), which renders
+ * them together in one pass instead of one glass view each. Use it around any
+ * set of repeated glass cards. Keep `spacing` below the gap between cards, or
+ * neighbouring cards start to melt into each other.
+ */
 export function GlassGroup({
   spacing = 12,
   style,
   children,
   pointerEvents,
+  onLayout,
 }: {
   spacing?: number
   style?: StyleProp<ViewStyle>
   children: ReactNode
   pointerEvents?: ViewProps['pointerEvents']
+  onLayout?: ViewProps['onLayout']
 }) {
   const native = getNativeGlassBinding()
   if (native) {
     const NativeContainer = native.GlassContainer
     return (
-      <NativeContainer spacing={spacing} pointerEvents={pointerEvents} style={style}>
+      <NativeContainer spacing={spacing} pointerEvents={pointerEvents} style={style} onLayout={onLayout}>
         {children}
       </NativeContainer>
     )
   }
   return (
-    <View pointerEvents={pointerEvents} style={style}>
+    <View pointerEvents={pointerEvents} style={style} onLayout={onLayout}>
       {children}
     </View>
   )

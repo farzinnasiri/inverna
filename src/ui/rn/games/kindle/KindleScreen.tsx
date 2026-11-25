@@ -47,11 +47,6 @@ const SLOTS = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => i)
 const MILESTONE_DURATION_MS = 3200
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 
-const HOW_TO = [
-  'Swipe in any direction — or use arrow keys or WASD — to slide every tile across the board.',
-  'Matching tiles combine into a brighter tile. Reach 2048 and keep going as long as you like.',
-  'If the board fills up, undo a few steps or tap Make room to clear the two lowest tiles.',
-] as const
 
 function isValidTile(v: unknown): v is Tile {
   if (!v || typeof v !== 'object') return false
@@ -366,9 +361,19 @@ function KindleTileView({
   )
 }
 
+function atRest(s: KindleState): KindleState {
+  return {
+    ...s,
+    tiles: s.tiles.map((t) => ({ id: t.id, value: t.value, row: t.row, col: t.col })),
+    extinguished: undefined,
+    justReached2048: false,
+    lastMergeMax: 0,
+  }
+}
+
 export function KindleScreen({ onExit }: GameScreenProps) {
   const { color } = useTokenColors()
-  const calm = useCalm()
+  const calm = useCalm('kindle')
   const { cue, haptic } = useFeedback()
   const reduceMotion = useReducedMotion()
 
@@ -380,7 +385,11 @@ export function KindleScreen({ onExit }: GameScreenProps) {
   }))
   const [rawSave, setSave] = useGameSave<KindleSave>('kindle', fallback)
   const save = isValidSave(rawSave) ? rawSave : fallback
-  const state = save.state
+  // A restored board shows at rest: don't replay the last merge, spawn or
+  // "make room" from the previous visit. Live states pass through untouched.
+  const restoredRef = useRef(save.state)
+  const restingState = useMemo(() => atRest(save.state), [save.state])
+  const state = save.state === restoredRef.current ? restingState : save.state
 
   const [paused, setPaused] = useState(false)
   const [milestoneNotice, setMilestoneNotice] = useState(false)
@@ -460,6 +469,9 @@ export function KindleScreen({ onExit }: GameScreenProps) {
         plays: valid.plays,
       }
     })
+    // Undoing back past 2048 takes the "keep going" notice with it.
+    if (milestoneTimerRef.current) clearTimeout(milestoneTimerRef.current)
+    setMilestoneNotice(false)
     cue('undo', 0.7)
     haptic('light')
   }, [cue, haptic, setSave, fallback])
@@ -629,7 +641,6 @@ export function KindleScreen({ onExit }: GameScreenProps) {
       onPauseChange={setPaused}
       onRestart={doRestart}
       onExit={onExit}
-      howTo={HOW_TO}
       controls={
         <GameControlBar>
           <GameActionButton
@@ -701,7 +712,7 @@ export function KindleScreen({ onExit }: GameScreenProps) {
                     { backgroundColor: color.surface2, borderColor: color.line },
                   ]}
                 >
-                  <Text style={[styles.noticeText, { color: color.ink }]}>2048 · keep going</Text>
+                  <Text style={[styles.noticeText, { color: color.ink }]}>You reached 2048. Keep going if you like.</Text>
                 </View>
               ) : null}
             </View>

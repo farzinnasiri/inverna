@@ -59,12 +59,6 @@ const DEFAULT_SAVE: SettleSave = {
   plays: 1,
 }
 
-const HOW_TO = [
-  'Fit falling stones into full rows. The pace stays steady and slows gently during a wind-down.',
-  'Use the left pads to move and lower stones. Rotate and hard drop are on the right.',
-  'On the board, tap to turn, drag to slide, swipe down to drop, or swipe up to hold.',
-  'Endless makes room at the top by dissolving bottom rows. Classic ends when a new stone cannot fit.',
-] as const
 
 const MODE_OPTIONS: readonly { value: SettleMode; label: string }[] = [
   { value: 'endless', label: 'Endless' },
@@ -210,9 +204,18 @@ function PadButton({
   )
 }
 
+/** True when a tick only advanced the invisible gravity/lock timers. */
+function onlyTimersChanged(a: SettleState, b: SettleState): boolean {
+  for (const k of Object.keys(b) as (keyof SettleState)[]) {
+    if (k === 'gravityTimerMs' || k === 'lockTimerMs') continue
+    if (a[k] !== b[k]) return false
+  }
+  return true
+}
+
 export function SettleScreen({ onExit }: GameScreenProps) {
   const { isCompact } = useResponsiveLayout()
-  const calm = useCalm()
+  const calm = useCalm('settle')
   const { cue, haptic } = useFeedback()
   const reduceMotion = useReducedMotion()
   const tokens = useTokenColors()
@@ -235,7 +238,13 @@ export function SettleScreen({ onExit }: GameScreenProps) {
   const playingRef = useRef(playing)
   playingRef.current = playing
   const changePaused = (nextPaused: boolean) => {
-    if (nextPaused) playingRef.current = false
+    if (nextPaused) {
+      playingRef.current = false
+      // Checkpoint on every pause (including backgrounding), not only on exit:
+      // the falling piece, hold and bag survive the app being killed.
+      const snapshot = stateRef.current
+      setSaved((prev) => ({ ...prev, state: snapshot, bestLines: Math.max(prev.bestLines, snapshot.lines) }))
+    }
     setPaused(nextPaused)
   }
 
@@ -307,7 +316,9 @@ export function SettleScreen({ onExit }: GameScreenProps) {
         const next = tickSettle(prev, dtMs, calm)
         if (next !== prev) {
           stateRef.current = next
-          setState(next)
+          // Gravity and lock timers tick every frame but draw nothing: only
+          // re-render when something on screen actually moved.
+          if (!onlyTimersChanged(prev, next)) setState(next)
         }
       },
       [calm],
@@ -581,7 +592,7 @@ export function SettleScreen({ onExit }: GameScreenProps) {
       ]}
       commitScore={started}
       ready={started}
-      readyHint="Move and lower stones with your left thumb, then rotate and drop with your right."
+      readyHint="Tap to rotate, drag to move, or use the buttons below."
       readyExtra={<Segmented label="Mode" options={MODE_OPTIONS} value={state.mode} onChange={changeMode} />}
       onReady={() => {
         if (stateRef.current.gameOver) handleRestart()
@@ -591,7 +602,6 @@ export function SettleScreen({ onExit }: GameScreenProps) {
       onPauseChange={changePaused}
       onRestart={handleRestart}
       onExit={handleExit}
-      howTo={HOW_TO}
       controls={
         <GlassSurface variant="chrome" radius={24} style={[styles.deck, { paddingBottom: isCompact ? 6 : 14 }]}>
           <View style={styles.moveCluster}>

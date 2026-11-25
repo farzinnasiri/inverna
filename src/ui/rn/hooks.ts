@@ -10,7 +10,7 @@ import { haptics, sound } from '@/platform'
 import type { HapticIntent } from '@/platform/haptics'
 import { useHighScores } from '@/ui/state/highscores'
 import { useSession } from '@/ui/state/session'
-import { useSettings } from '@/ui/state/settings'
+import { useSettings, type Difficulty } from '@/ui/state/settings'
 
 /**
  * Cross-platform requestAnimationFrame loop (iOS, Android, Web).
@@ -38,7 +38,15 @@ export function useGameLoop(callback: (dtMs: number) => void, running: boolean):
 /** Per-game JSON persistence via universal sync KeyValueStore (`expo-sqlite` on native, `localStorage` on web). */
 export function useGameSave<T>(id: GameId, fallback: T): [T, (next: T | ((prev: T) => T)) => void] {
   const key = `game:${id}`
-  const [value, setValue] = useState<T>(() => readJSON<T>(key, fallback))
+  const [value, setValue] = useState<T>(() => {
+    const stored = readJSON<T>(key, fallback)
+    // A stored `null` or a value of the wrong shape must never brick a game.
+    if (stored === null || stored === undefined) return fallback
+    if (fallback !== null && typeof fallback === 'object' && (typeof stored !== 'object' || Array.isArray(stored) !== Array.isArray(fallback))) {
+      return fallback
+    }
+    return stored
+  })
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {
       setValue((prev) => {
@@ -78,21 +86,30 @@ export function useHighScore(
   return { best, formattedBest, isNewBest }
 }
 
-/** Wind-down calm level 0..1. Re-evaluates every 5s. */
-export function useCalm(): number {
+/** How forgiving each difficulty starts out; winding down softens it further. */
+const DIFFICULTY_CALM: Record<Difficulty, number> = { easy: 0.7, medium: 0.3, hard: 0 }
+
+/**
+ * Calm level 0..1 for a game: its difficulty sets the floor, and an active wind
+ * down eases it the rest of the way as bedtime nears. Re-evaluates every 5s.
+ * Without `gameId` it's the wind-down level alone.
+ */
+export function useCalm(gameId?: GameId): number {
   const session = useSession((s) => s.session)
-  const [calm, setCalm] = useState(() => (session ? sessionLevels(session, Date.now()).calm : 0))
+  const difficulty = useSettings((s) => (gameId ? (s.difficulty[gameId] ?? 'medium') : null))
+  const [windDown, setWindDown] = useState(() => (session ? sessionLevels(session, Date.now()).calm : 0))
   useEffect(() => {
     if (!session) {
-      setCalm(0)
+      setWindDown(0)
       return
     }
-    const update = () => setCalm(sessionLevels(session, Date.now()).calm)
+    const update = () => setWindDown(sessionLevels(session, Date.now()).calm)
     update()
     const id = setInterval(update, 5000)
     return () => clearInterval(id)
   }, [session])
-  return calm
+  const base = difficulty ? DIFFICULTY_CALM[difficulty] : 0
+  return base + (1 - base) * windDown
 }
 
 /** Sound cue + haptic feedback respecting user settings. */

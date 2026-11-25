@@ -87,10 +87,17 @@ function DrumColumn({
   const lastModIdxRef = useRef(selectedIndex)
   const activeRowRef = useRef(activeRow)
   const draggingRef = useRef(false)
+  // Last value handed to onSelect: drags only tick; the choice is saved once the wheel settles.
+  const committedRef = useRef(selectedIndex)
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current)
+  }, [])
   const mountedRef = useRef(false)
 
   useEffect(() => {
     lastModIdxRef.current = selectedIndex
+    committedRef.current = selectedIndex
     if (!draggingRef.current) {
       const targetRow = centerRowFor(selectedIndex)
       activeRowRef.current = targetRow
@@ -107,7 +114,7 @@ function DrumColumn({
     }
   }, [selectedIndex, loop, baseLen])
 
-  const commitOffset = (y: number, recenter: boolean) => {
+  const commitOffset = (y: number, recenter: boolean, commit = recenter) => {
     const rawRow = Math.round(y / ITEM_H)
     const clampedRow = Math.max(0, Math.min(displayRows.length - 1, rawRow))
     const modIdx = loop ? ((clampedRow % baseLen) + baseLen) % baseLen : clampedRow
@@ -120,6 +127,9 @@ function DrumColumn({
     if (modIdx !== lastModIdxRef.current) {
       lastModIdxRef.current = modIdx
       if (hapticsOn) haptics.play('light')
+    }
+    if (commit && modIdx !== committedRef.current) {
+      committedRef.current = modIdx
       onSelect(modIdx)
     }
 
@@ -158,11 +168,22 @@ function DrumColumn({
         onScroll={handleScroll}
         scrollEventThrottle={16}
         onMomentumScrollEnd={handleMomentumEnd}
+        onMomentumScrollBegin={() => {
+          if (settleTimer.current) clearTimeout(settleTimer.current)
+        }}
         onScrollEndDrag={(e) => {
+          const y = e.nativeEvent.contentOffset.y
           if (Platform.OS === 'web') {
             draggingRef.current = false
-            commitOffset(e.nativeEvent.contentOffset.y, true)
+            commitOffset(y, true)
+            return
           }
+          // A lift without momentum never fires onMomentumScrollEnd: settle here instead.
+          if (settleTimer.current) clearTimeout(settleTimer.current)
+          settleTimer.current = setTimeout(() => {
+            draggingRef.current = false
+            commitOffset(y, true)
+          }, 140)
         }}
       >
         {displayRows.map((row, rowIdx) => {
@@ -179,6 +200,9 @@ function DrumColumn({
                 if (row.modIdx !== lastModIdxRef.current) {
                   lastModIdxRef.current = row.modIdx
                   if (hapticsOn) haptics.play('light')
+                }
+                if (row.modIdx !== committedRef.current) {
+                  committedRef.current = row.modIdx
                   onSelect(row.modIdx)
                 }
               }}

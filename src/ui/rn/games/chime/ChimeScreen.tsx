@@ -16,10 +16,20 @@ import {
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { GlassSurface } from '@/ui/rn/Glass'
+import { Segmented } from '@/ui/rn/controls'
+import { gameDoor } from '@/ui/copy'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
+
+type ChimeMode = 'endless' | 'classic'
+const MODE_OPTIONS: readonly { value: ChimeMode; label: string }[] = [
+  { value: 'endless', label: gameDoor.endless },
+  { value: 'classic', label: gameDoor.classic },
+]
 
 interface ChimeSave {
   version: 1
+  /** Endless flows straight into the next wall; Classic stops to show each cleared wall. */
+  mode?: ChimeMode
   state: ChimeState | null
   bestScore: number
   boardsCleared: number
@@ -42,11 +52,6 @@ const DEFAULT_SAVE: ChimeSave = {
   plays: 1,
 }
 
-const HOW_TO = [
-  'Tap anywhere or press Space to release the brass ball from the paddle.',
-  'Drag across the court or along the rail below it to guide the ball back up. Missing the ball gently returns it to your paddle.',
-  'Reinforced brass stones take two hits.',
-] as const
 
 const KEY_NUDGE_STEP = 0.055
 const TAP_DRAG_THRESHOLD_PX = 6
@@ -194,7 +199,7 @@ function motionFrame(state: ChimeState) {
 
 export function ChimeScreen({ onExit }: GameScreenProps) {
   const { isCompact } = useResponsiveLayout()
-  const calm = useCalm()
+  const calm = useCalm('chime')
   const { cue, haptic } = useFeedback()
   const tokens = useTokenColors()
   const { color, pieces } = tokens
@@ -216,6 +221,11 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
   const [paused, setPaused] = useState(false)
   const [started, setStarted] = useState(false)
   const playing = started && !paused
+  // After a wall clears and its debris has fallen, stop the frame loop and the
+  // save timer until the next wall starts.
+  const [settled, setSettled] = useState(false)
+  const mode: ChimeMode = saved.mode ?? 'endless'
+  const running = playing && !settled
   const [courtSize, setCourtSize] = useState({ w: 0, h: 0 })
   const [wallVersion, setWallVersion] = useState(0)
   const frame = useSharedValue(motionFrame(initialStateRef.current))
@@ -273,12 +283,12 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
   }, [uiMeta.solved, persist])
 
   useEffect(() => {
-    if (!playing) return
+    if (!running) return
     const timer = setInterval(() => {
       if (saveDirty.current) persist(stateRef.current)
     }, 2000)
     return () => clearInterval(timer)
-  }, [playing, persist])
+  }, [running, persist])
 
   // Simulate on JS and send only the moving pieces to Reanimated.
   useGameLoop(
@@ -314,10 +324,14 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
         }
 
         updateMotion()
+        if (next.solved && next.shards.length === 0 && next.rings.length === 0) {
+          if (saveDirty.current) persist(next)
+          setSettled(true)
+        }
       },
-      [cue, haptic, updateMotion, syncUiMeta],
+      [cue, haptic, updateMotion, syncUiMeta, persist],
     ),
-    playing,
+    running,
   )
 
   const handleLaunch = useCallback(() => {
@@ -336,6 +350,7 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
   const handleNextLevel = useCallback(() => {
     const next = nextLevel(stateRef.current, calmRef.current)
     stateRef.current = next
+    setSettled(false)
     gestureRef.current = null
     setWallVersion((version) => version + 1)
     syncUiMeta(next)
@@ -345,10 +360,18 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
     persist(next, true)
   }, [cue, haptic, persist, updateMotion, syncUiMeta])
 
+  // Endless: a cleared wall gives way to the next one after a breath.
+  useEffect(() => {
+    if (mode !== 'endless' || !started || !settled || !uiMeta.solved) return
+    const t = setTimeout(handleNextLevel, 900)
+    return () => clearTimeout(t)
+  }, [mode, started, settled, uiMeta.solved, handleNextLevel])
+
   const handleRestart = useCallback(() => {
     playingRef.current = false
     setStarted(false)
     const next = restartLevel(stateRef.current, calmRef.current)
+    setSettled(false)
     stateRef.current = next
     gestureRef.current = null
     setWallVersion((version) => version + 1)
@@ -526,13 +549,14 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
       ]}
       commitScore={started}
       ready={started}
-      readyHint="Tap to launch and drag the rail to steer. Reinforced brass stones take two hits."
+      readyExtra={
+        <Segmented label="Mode" options={MODE_OPTIONS} value={mode} onChange={(m) => setSaved((prev) => ({ ...prev, mode: m }))} />
+      }
       onReady={() => setStarted(true)}
       paused={paused}
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
       onExit={handleExit}
-      howTo={HOW_TO}
     >
       <View style={[styles.playArea, { gap: isCompact ? 8 : 12 }]}>
         <GlassSurface variant="card" radius={18} style={styles.courtFrame}>
@@ -606,9 +630,9 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
       </View>
 
       <Completion
-        open={started && uiMeta.solved}
+        open={started && uiMeta.solved && mode === 'classic'}
         gameId="chime"
-        title={`Cleared · ${uiMeta.patternName}`}
+        title={`Wall cleared`}
         line={`Score ${uiMeta.score}`}
         actionLabel="Next wall"
         onAction={handleNextLevel}

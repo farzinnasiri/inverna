@@ -76,6 +76,37 @@ export function bedtimeAround(schedule: Schedule, now: Date): { previous: Date |
   return { previous, next }
 }
 
+/**
+ * Which night a moment belongs to, as YYYY-MM-DD of the evening. The night
+ * runs until 06:00, so 12:30 AM still belongs to the evening before.
+ */
+export function nightKey(now: Date): string {
+  const d = new Date(now.getTime() - 6 * 3600_000)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** A bedtime that applies to one night only, then expires by itself. */
+export interface BedtimeOverride {
+  /** nightKey() of the night it applies to. */
+  night: string
+  /** "HH:MM", 24h. */
+  bedtime: string
+}
+
+export function overrideActive(override: BedtimeOverride | null | undefined, now: Date): override is BedtimeOverride {
+  return Boolean(override && override.night === nightKey(now))
+}
+
+/**
+ * The schedule in force right now: the usual one, or tonight's bedtime when
+ * the user changed it just for tonight. A tonight-only bedtime also applies
+ * when the usual schedule is off or skips tonight.
+ */
+export function effectiveSchedule(schedule: Schedule, override: BedtimeOverride | null | undefined, now: Date): Schedule {
+  if (!overrideActive(override, now)) return schedule
+  return { ...schedule, enabled: true, bedtime: override.bedtime, days: [0, 1, 2, 3, 4, 5, 6] }
+}
+
 /** Minutes until the next bedtime, or null if the schedule is off. */
 export function minutesUntilBedtime(schedule: Schedule, now: Date): number | null {
   if (!schedule.enabled || schedule.days.length === 0) return null
@@ -135,4 +166,61 @@ export function combineFilters(...filters: NightFilter[]): NightFilter {
     (acc, f) => ({ warmth: Math.max(acc.warmth, clamp01(f.warmth)), dim: Math.max(acc.dim, clamp01(f.dim)) }),
     { warmth: 0, dim: 0 },
   )
+}
+
+/* ---------------------------------------------------------- bedtime ribbon */
+
+/** The Play bedtime ribbon spans 8:00 PM to 3:00 AM, in 15-minute steps. */
+export const RIBBON_START_MIN = 20 * 60
+export const RIBBON_SPAN_MIN = 7 * 60
+export const RIBBON_STEP_MIN = 15
+
+/** Minutes after 8:00 PM for a "HH:MM" bedtime (may fall outside 0..span). */
+export function ribbonOffset(bedtime: string): number {
+  const { h, m } = parseHHMM(bedtime)
+  const off = (h * 60 + m - RIBBON_START_MIN + 1440) % 1440
+  // Times late in the day before 8 PM read as "earlier than the ribbon", not "tomorrow".
+  return off > RIBBON_SPAN_MIN + 6 * 60 ? off - 1440 : off
+}
+
+/** "HH:MM" for an offset on the ribbon, snapped to 15 minutes and kept on the ribbon. */
+export function ribbonBedtime(offset: number): string {
+  const snapped = Math.round(offset / RIBBON_STEP_MIN) * RIBBON_STEP_MIN
+  const clamped = Math.min(RIBBON_SPAN_MIN, Math.max(0, snapped))
+  const t = (RIBBON_START_MIN + clamped) % 1440
+  return formatHHMM(Math.floor(t / 60), t % 60)
+}
+
+/** The first 15-minute slot on the ribbon that is still ahead of `now`. */
+export function ribbonEarliest(now: Date): number {
+  const off = ribbonOffset(formatHHMM(now.getHours(), now.getMinutes()))
+  if (off < 0 || off > RIBBON_SPAN_MIN) return 0
+  return Math.min(RIBBON_SPAN_MIN, Math.ceil((off + 1) / RIBBON_STEP_MIN) * RIBBON_STEP_MIN)
+}
+
+/** "after midnight" / "this evening" / "this afternoon": says which side of midnight a bedtime is. */
+export function bedtimeSide(bedtime: string): string {
+  const { h } = parseHHMM(bedtime)
+  if (h < 6) return 'after midnight'
+  if (h < 12) return 'in the morning'
+  if (h < 18) return 'this afternoon'
+  return 'this evening'
+}
+
+/**
+ * When the next `count` wind downs start (bedtime minus the lead time), soonest
+ * first, skipping any that already began. Used to schedule one reminder a night.
+ */
+export function upcomingWindDowns(schedule: Schedule, now: Date, count: number): Date[] {
+  if (!schedule.enabled || schedule.days.length === 0) return []
+  const out: Date[] = []
+  let cursor = now
+  for (let guard = 0; out.length < count && guard < count * 3; guard++) {
+    const { next } = bedtimeAround(schedule, cursor)
+    if (!next) break
+    const start = new Date(next.getTime() - schedule.leadMinutes * 60_000)
+    if (start.getTime() > now.getTime()) out.push(start)
+    cursor = new Date(next.getTime() + 60_000)
+  }
+  return out
 }

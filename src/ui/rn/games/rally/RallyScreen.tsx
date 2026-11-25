@@ -15,6 +15,7 @@ import {
   tickRally,
   type RallyDifficulty,
   type RallyState,
+  AI_PADDLE_WIDTH,
 } from '@/core/games/rally/engine'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
@@ -40,11 +41,6 @@ const DIFFICULTY_OPTIONS: readonly { value: RallyDifficulty; label: string }[] =
   { value: 'hard', label: 'Hard' },
 ]
 
-const HOW_TO = [
-  'Drag anywhere across the court or along the bottom rail to glide your ivory paddle.',
-  'Strike the brass ball off-center to angle your return, or tap to serve immediately.',
-  'Choose Easy, Medium, or Hard before starting.',
-] as const
 
 function isDifficulty(v: unknown): v is RallyDifficulty {
   return v === 'easy' || v === 'medium' || v === 'hard'
@@ -381,8 +377,9 @@ export function RallyScreen({ onExit }: GameScreenProps) {
   const ballStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: frame.value.x * w - ballR }, { translateY: frame.value.y * h - ballR }],
   }))
+  const aiPaddleW = AI_PADDLE_WIDTH * w
   const aiStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: frame.value.ai * w - paddleW / 2 }],
+    transform: [{ translateX: frame.value.ai * w - aiPaddleW / 2 }],
   }))
   const playerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: frame.value.player * w - paddleW / 2 }],
@@ -391,6 +388,7 @@ export function RallyScreen({ onExit }: GameScreenProps) {
     transform: [{ translateX: Math.max(0, Math.min(railWidth - 24, frame.value.player * railWidth - 12)) }],
   }))
   const paddleShape = { width: paddleW, height: paddleH, borderRadius: paddleH / 2 }
+  const aiPaddleShape = { width: aiPaddleW, height: paddleH, borderRadius: paddleH / 2 }
 
   return (
     <GameShell
@@ -401,13 +399,12 @@ export function RallyScreen({ onExit }: GameScreenProps) {
       ]}
       commitScore={started}
       ready={started}
-      readyHint="Drag on the rail below the court to steer your paddle."
+      readyHint="Drag the bar below to move your paddle."
       onReady={() => setStarted(true)}
       paused={paused}
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
       onExit={handleExit}
-      howTo={HOW_TO}
       readyExtra={
         <View style={styles.controlsWrap}>
           <Segmented
@@ -468,7 +465,7 @@ export function RallyScreen({ onExit }: GameScreenProps) {
                     fontSize: scoreSize, lineHeight: scoreSize,
                   }]}>{score}</Text>
                 ))}
-                <Animated.View style={[styles.moving, paddleShape, { top: aiTop, backgroundColor: pieces.clay }, aiStyle]} />
+                <Animated.View style={[styles.moving, aiPaddleShape, { top: aiTop, backgroundColor: pieces.clay }, aiStyle]} />
                 <Animated.View style={[styles.moving, styles.playerPaddle, paddleShape, { top: playerTop, backgroundColor: color.ink2 }, playerStyle]}>
                   <View style={{ width: notchW, height: notchH, borderRadius: notchH / 2, backgroundColor: color.accent }} />
                 </Animated.View>

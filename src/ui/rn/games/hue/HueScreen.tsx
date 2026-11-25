@@ -28,7 +28,7 @@ import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { GlassSurface } from '@/ui/rn/Glass'
-import { useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
+import { useCalm, useFeedback, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
 
 type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
 const RotateCcw = _RotateCcw as unknown as LucideSvgIcon
@@ -43,10 +43,27 @@ const DIFFICULTY_CALM: Record<HueDifficulty, number> = {
   classic: 0.1,  // 5×6 full mosaic
 }
 
+/** Highest calm each difficulty may soften to while keeping its board family (see layoutForPuzzle). */
+const DIFFICULTY_CALM_MAX: Record<HueDifficulty, number> = {
+  cozy: 1,
+  medium: 0.71,
+  classic: 0.44,
+}
+
+/**
+ * Your difficulty picks the board; wind-down calm only softens it within that
+ * tier (Classic can ease from 5×6 to 5×5 but never turns into Cozy).
+ */
+function tierCalm(difficulty: HueDifficulty, sessionCalm: number): number {
+  const lo = DIFFICULTY_CALM[difficulty]
+  const hi = DIFFICULTY_CALM_MAX[difficulty]
+  return lo + (hi - lo) * Math.min(1, Math.max(0, sessionCalm))
+}
+
 const DIFFICULTY_OPTIONS: readonly { value: HueDifficulty; label: string }[] = [
-  { value: 'cozy', label: 'Cozy 4×4' },
-  { value: 'medium', label: 'Medium 4×5' },
-  { value: 'classic', label: 'Classic' },
+  { value: 'cozy', label: 'Easy' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'classic', label: 'Hard' },
 ]
 
 interface HueSave {
@@ -76,10 +93,6 @@ const BEZEL_PADDING = 5
 const BEZEL_BORDER = 1
 const BEZEL_INSET = BEZEL_PADDING + BEZEL_BORDER
 
-const HOW_TO = [
-  'Arrange the middle tiles so each row and column flows smoothly between the anchored brass edges.',
-  'Tap two tiles — or drag one onto another — to swap them. Tap Hint anytime to highlight a pair.',
-] as const
 
 function isValidSave(value: unknown): value is HueSave {
   if (!value || typeof value !== 'object') return false
@@ -142,6 +155,9 @@ export function HueScreen({ onExit }: GameScreenProps) {
   const stateRef = useRef(state)
   stateRef.current = state
   const difficultyRef = useRef(difficulty)
+  const sessionCalm = useCalm()
+  const sessionCalmRef = useRef(sessionCalm)
+  sessionCalmRef.current = sessionCalm
   difficultyRef.current = difficulty
   const pausedRef = useRef(paused)
   const selectedRef = useRef(selectedIndex)
@@ -336,7 +352,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
     selectTile(null)
     setFocusedIndex(null)
     setShowCompletion(false)
-    const next = nextPuzzle(stateRef.current, DIFFICULTY_CALM[difficultyRef.current])
+    const next = nextPuzzle(stateRef.current, tierCalm(difficultyRef.current, sessionCalmRef.current))
     stateRef.current = next
     setSave((prev) => ({
       version: 2,
@@ -363,7 +379,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
       difficultyRef.current = nextDiff
       const next = createHue({
         seed: Date.now() >>> 0,
-        calm: DIFFICULTY_CALM[nextDiff],
+        calm: tierCalm(nextDiff, sessionCalmRef.current),
         puzzleNumber: stateRef.current.puzzleNumber,
         paletteIndex: stateRef.current.paletteIndex,
       })
@@ -543,7 +559,6 @@ export function HueScreen({ onExit }: GameScreenProps) {
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
       onExit={onExit}
-      howTo={HOW_TO}
       controls={
         <View style={styles.bar}>
           <View style={styles.diffRow}>
@@ -704,7 +719,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
         open={showCompletion}
         gameId="hue"
         title="Solved"
-        line={`In harmony · ${state.paletteTitle}`}
+        line={`${state.paletteTitle} complete`}
         actionLabel="Next palette"
         onAction={handleNextPalette}
       />

@@ -393,6 +393,33 @@ describe('createNeuroSoundEngine — lifecycle, soft-clipper & native compatibil
     vi.advanceTimersByTime(400)
     expect(contexts[0]!.sources.every((s) => s.stopped)).toBe(true)
   })
+
+  it('resumes the last audible mix on remote Play after the mix was turned all the way down', () => {
+    let remote: { onPause: () => void; onPlay: () => void; isPlaying: () => boolean } | null = null
+    const resumed: Mix[] = []
+    const engine = createNeuroSoundEngine({
+      createContext: () => new MockAudioContext({ initialState: 'running' }),
+      hooks: {
+        bindRemoteControls: (handlers) => {
+          remote = handlers
+          return () => {}
+        },
+      },
+    })
+    engine.onExternalPlay?.((mix) => resumed.push(mix))
+    const audible = PRESETS[0]!.mix
+    engine.setMix(audible, 0.2)
+    expect(remote!.isPlaying()).toBe(true)
+
+    engine.setMix(SILENT_MIX, 0.2)
+    vi.advanceTimersByTime(400)
+    expect(remote!.isPlaying()).toBe(false)
+
+    // A headphone tap used to be ignored here, forever.
+    remote!.onPlay()
+    expect(engine.isRunning).toBe(true)
+    expect(resumed).toEqual([audible])
+  })
 })
 
 describe('createNeuroSoundEngine — background-safe layers, harmonic pad & AM descent', () => {
@@ -571,8 +598,8 @@ describe('createNeuroSoundEngine — scale-quantized harmonic game cues', () => 
       }
     }
 
-    // Shared stereo bloom delay bus is wired
-    expect(contexts[0]!.delays.length).toBe(2)
+    // Two stereo bloom buses: game cues, and the ambient motif (which sits behind the ambient gate)
+    expect(contexts[0]!.delays.length).toBe(4)
 
     // Muting cues prevents any new oscillators
     engine.setCuesEnabled(false)

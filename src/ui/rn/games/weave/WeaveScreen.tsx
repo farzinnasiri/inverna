@@ -43,10 +43,6 @@ const TOOL_OPTIONS = [
   { value: 'mark' as const, label: 'Mark' },
 ]
 
-const HOW_TO = [
-  'Each number shows a consecutive run of filled cells in that row or column.',
-  'Drag across cells to weave smoothly. Switch to Mark to rule out empty cells.',
-] as const
 
 const BOARD_INSET = 6
 const CLUE_GUTTER = 6
@@ -107,7 +103,7 @@ function walkCells(
 export function WeaveScreen({ onExit }: GameScreenProps) {
   const { color, pieces } = useTokenColors()
   const { isCompact, contentWidth } = useResponsiveLayout()
-  const calm = useCalm()
+  const calm = useCalm('weave')
   const { cue, haptic } = useFeedback()
 
   const [fallback] = useState<WeaveSave>(() => ({
@@ -488,13 +484,12 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
       score={save.completed}
       stats={[
         { label: 'Pattern', value: state.puzzleNumber },
-        { label: 'Woven', value: `${progress.filled}/${progress.total}` },
+        { label: 'Filled', value: `${progress.filled}/${progress.total}` },
       ]}
       paused={paused}
       onPauseChange={setPaused}
       onRestart={handleRestart}
       onExit={onExit}
-      howTo={HOW_TO}
       controls={
         <View style={styles.controlsBar}>
           <GlassSurface variant="pill" radius={16} style={styles.toolSegment}>
@@ -708,7 +703,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
         open={showCompletion}
         gameId="weave"
         title={state.title}
-        line={`${state.rows}×${state.cols} woven`}
+        line={`Picture complete`}
         actionLabel="Next pattern"
         onAction={handleNext}
       />

@@ -4,12 +4,15 @@
  * the UI thread.
  *
  * Cost control:
- * - The simulation and redraw run at 30 fps (FRAME), not the display rate.
+ * - The simulation and redraw run at 30 fps while playing and ~20 fps idle,
+ *   not the display rate.
  * - The field shader renders at ~1 pixel per 1.5pt and is scaled up by the
  *   compositor; everything in it is soft, so the upscale is invisible.
  * - Particles are one drawAtlas call; paints and transforms are reused.
- * - The parent unmounts this when the tab loses focus; the frame callback stops
- *   with it. With Reduce Motion on, nothing animates: scenes switch instantly.
+ * - One simulation (and sprite atlas) is shared by the backdrops of every tab
+ *   and survives remounts, so switching tabs rebuilds nothing. Only the focused
+ *   tab's clock runs (`active`); hidden tabs keep their last frame and draw
+ *   nothing. With Reduce Motion on, nothing animates: scenes switch instantly.
  *
  * Default export so the web build can lazy-load it after CanvasKit is ready.
  */
@@ -31,7 +34,7 @@ import {
   StrokeJoin,
   createPicture,
 } from '@shopify/react-native-skia'
-import { useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated'
+import { makeMutable, useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated'
 import { sceneIndex, type BackdropId } from '@/core/backdrop/scenes'
 import { createSim, frontEdge, prewarm, simSnap, simStep, type MotifCue, type Sim, type SimEnv } from '@/core/backdrop/sim'
 import { onMotifPhrase } from '@/platform/audio/motifEvents'
@@ -46,9 +49,14 @@ export interface BackdropCanvasProps {
   /** 0..1 through the bedtime descent; motion slows as it deepens. */
   descent: number
   reduced: boolean
+  /** False while this tab is hidden: the clock stops and nothing redraws. */
+  active: boolean
 }
 
-const FRAME = 1 / 30
+const FRAME_PLAYING = 1 / 30
+const FRAME_IDLE = 1 / 20
+/** Seconds simulated before the very first frame; spawns are already spread out. */
+const FIRST_PREWARM = 3
 const FIELD_PT_PER_PX = 1.5
 
 const fieldEffect = Skia.RuntimeEffect.Make(FIELD_SKSL)
@@ -73,7 +81,22 @@ interface RenderState {
   acc: number
 }
 
-export default function BackdropCanvas({ backdrop, playing, breathHz, descent, reduced }: BackdropCanvasProps) {
+/** Shared by every BackdropCanvas instance (one per tab), so tab switches reuse it. */
+const sharedState = makeMutable<RenderState | null>(null)
+/** Latest classical motif phrase, published once for all instances. */
+const sharedCue = makeMutable<MotifCue | null>(null)
+let cueId = 0
+let cueSubscribed = false
+function subscribeMotifCues() {
+  if (cueSubscribed) return
+  cueSubscribed = true
+  onMotifPhrase((phrase) => {
+    cueId += 1
+    sharedCue.set({ id: cueId, kind: phrase.style, notes: phrase.notes })
+  })
+}
+
+export default function BackdropCanvas({ backdrop, playing, breathHz, descent, reduced, active }: BackdropCanvasProps) {
   const { width: W, height: H } = useWindowDimensions()
   const scene = sceneIndex(backdrop)
   const seed = useMemo(() => Date.now() >>> 0, [])
@@ -82,8 +105,9 @@ export default function BackdropCanvas({ backdrop, playing, breathHz, descent, r
   const dims = useSharedValue({ W, H })
   const reducedSV = useSharedValue(reduced)
   const env = useSharedValue<SimEnv>({ timeScale: 1, intensity: 1, breathHz })
-  const cue = useSharedValue<MotifCue | null>(null)
-  const state = useSharedValue<RenderState | null>(null)
+  const frameInterval = useSharedValue(playing ? FRAME_PLAYING : FRAME_IDLE)
+  const state = sharedState
+  const cue = sharedCue
   const tick = useSharedValue(0)
 
   useEffect(() => {
@@ -101,22 +125,17 @@ export default function BackdropCanvas({ backdrop, playing, breathHz, descent, r
       intensity: playing ? 1 : 0.72,
       breathHz,
     })
-  }, [playing, descent, breathHz, env])
-  useEffect(() => {
-    let id = 0
-    return onMotifPhrase((phrase) => {
-      id += 1
-      cue.set({ id, kind: phrase.style, notes: phrase.notes })
-    })
-  }, [cue])
+    frameInterval.set(playing ? FRAME_PLAYING : FRAME_IDLE)
+  }, [playing, descent, breathHz, env, frameInterval])
+  useEffect(subscribeMotifCues, [])
 
-  useFrameCallback((frame) => {
+  const clock = useFrameCallback((frame) => {
     'worklet'
     const d = dims.get()
     let rs = state.get()
     if (!rs || rs.sim.W !== d.W || rs.sim.H !== d.H) {
       const sim = createSim(d.W, d.H, target.get(), seed)
-      prewarm(sim, 9)
+      prewarm(sim, FIRST_PREWARM)
       rs = { sim, gfx: rs?.gfx ?? null, acc: 0 }
       state.set(rs)
       tick.set(tick.get() + 1)
@@ -132,12 +151,19 @@ export default function BackdropCanvas({ backdrop, playing, breathHz, descent, r
       return
     }
     rs.acc += Math.min(0.25, (frame.timeSincePreviousFrame ?? 16) / 1000)
-    if (rs.acc < FRAME) return
+    // 0.9: tick on every 2nd vsync at 60 Hz (4th at 120 Hz) instead of jittering to the 3rd.
+    if (rs.acc < frameInterval.get() * 0.9) return
     const dt = Math.min(rs.acc, 0.1)
     rs.acc = 0
     simStep(s, dt, env.get(), target.get(), cue.get())
     tick.set(tick.get() + 1)
-  })
+  }, false)
+
+  useEffect(() => {
+    clock.setActive(active)
+    // Coming back into view: draw the shared scene where it is now.
+    if (active) tick.set(tick.get() + 1)
+  }, [active, clock, tick])
 
   const pictureBounds = useMemo(() => Skia.XYWHRect(0, 0, W, H), [W, H])
   const picture = useDerivedValue(() => {

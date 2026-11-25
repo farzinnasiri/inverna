@@ -66,6 +66,8 @@ export const BALL_RADIUS = 0.016
 export const PADDLE_HALF_HEIGHT = 0.01
 export const BASE_PADDLE_WIDTH = 0.21
 export const CALM_PADDLE_BONUS = 0.055
+/** The opponent's paddle never widens with calm: calm should only ever help you. */
+export const AI_PADDLE_WIDTH = BASE_PADDLE_WIDTH
 export const TRAIL_LENGTH = 7
 export const MAX_RIPPLES = 12
 export const INITIAL_SERVE_DELAY_MS = 900
@@ -100,10 +102,11 @@ const PROFILES: Record<RallyDifficulty, DifficultyProfile> = {
     aiReactY: 0.78,
     aiIdleFollow: 0.14,
   },
+  // Medium sits closer to Easy: a slower ball that speeds up more gently.
   medium: {
-    baseSpeed: 0.54,
-    speedPerHit: 0.013,
-    maxSpeed: 0.76,
+    baseSpeed: 0.5,
+    speedPerHit: 0.0105,
+    maxSpeed: 0.68,
     aiMaxSpeed: 0.58,
     aiDeadzone: 0.018,
     aiAimSpread: 0.03,
@@ -312,7 +315,9 @@ export function tickRally(state: RallyState, dtMs: number, calm: number): RallyS
   const paddleWidth = paddleWidthFor(c)
   const halfW = paddleWidth * 0.5
   const speedScale = calmSpeedScale(c)
-  const aiCalmFactor = 0.45 + 0.55 * speedScale
+  // The AI slows at least as much as the ball does, a little more at high calm.
+  const aiCalmFactor = speedScale * (1 - 0.12 * c)
+  const aiHalfW = AI_PADDLE_WIDTH * 0.5
 
   const rng = createRng(state.rngState)
 
@@ -321,7 +326,7 @@ export function tickRally(state: RallyState, dtMs: number, calm: number): RallyS
   const playerDir = state.playerDir
   let playerVel = state.playerVel
 
-  let aiX = clamp(state.aiX, halfW, 1 - halfW)
+  let aiX = clamp(state.aiX, aiHalfW, 1 - aiHalfW)
   let aiAimOffset = state.aiAimOffset
 
   let bx = state.ball.x
@@ -390,13 +395,13 @@ export function tickRally(state: RallyState, dtMs: number, calm: number): RallyS
     } else {
       desiredAiX = 0.5 + (bx - 0.5) * profile.aiIdleFollow
     }
-    desiredAiX = clamp(desiredAiX, halfW, 1 - halfW)
+    desiredAiX = clamp(desiredAiX, aiHalfW, 1 - aiHalfW)
 
     const aiDiff = desiredAiX - aiX
     if (Math.abs(aiDiff) > profile.aiDeadzone) {
       const maxMove = profile.aiMaxSpeed * aiCalmFactor * dt
       const move = clamp(aiDiff, -maxMove, maxMove)
-      aiX = clamp(aiX + move, halfW, 1 - halfW)
+      aiX = clamp(aiX + move, aiHalfW, 1 - aiHalfW)
     }
 
     // 3. Age and expire impact ripples
@@ -518,8 +523,8 @@ export function tickRally(state: RallyState, dtMs: number, calm: number): RallyS
       const denom = by - prevBy
       const t = Math.abs(denom) > 1e-6 ? clamp((aiContactY - prevBy) / denom, 0, 1) : 1
       const hitX = prevBx + (bx - prevBx) * t
-      if (Math.abs(hitX - aiX) <= halfW + BALL_RADIUS * 0.85) {
-        const offset = clamp((hitX - aiX) / halfW, -1, 1)
+      if (Math.abs(hitX - aiX) <= aiHalfW + BALL_RADIUS * 0.85) {
+        const offset = clamp((hitX - aiX) / aiHalfW, -1, 1)
         const angle = offset * MAX_BOUNCE_ANGLE
         rally += 1
         if (rally > bestRally) bestRally = rally

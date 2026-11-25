@@ -33,10 +33,6 @@ const BOARD_MAX_WIDTH = 392
 const MISMATCH_DELAY_MS = 850
 const COMPLETION_DELAY_MS = 520
 
-const HOW_TO = [
-  'Turn two cards to reveal their astronomical sigils and find matching pairs.',
-  'If two sigils differ, wait a breath or tap a third card immediately to keep going.',
-] as const
 
 function isValidCard(v: unknown): v is LanternCard {
   if (!v || typeof v !== 'object') return false
@@ -66,8 +62,24 @@ function isValidSave(v: unknown): v is LanternsSave {
     (st.totalPairs === 6 || st.totalPairs === 8) &&
     typeof st.puzzleNumber === 'number' &&
     typeof st.solved === 'boolean' &&
-    typeof st.rngState === 'number'
+    typeof st.rngState === 'number' &&
+    pendingValid(st)
   )
+}
+
+/** firstIndex / mismatchPair must exist (null is fine) and agree with the face-up cards. */
+function pendingValid(st: Partial<LanternsSave['state']>): boolean {
+  const cards = st.cards ?? []
+  const inRange = (i: unknown) => typeof i === 'number' && Number.isInteger(i) && i >= 0 && i < cards.length
+  const openCard = (i: number) => cards[i]!.flipped && !cards[i]!.matched
+  if (st.firstIndex === undefined || st.mismatchPair === undefined) return false
+  if (st.firstIndex !== null && !(inRange(st.firstIndex) && openCard(st.firstIndex))) return false
+  if (st.mismatchPair !== null) {
+    const p = st.mismatchPair
+    if (!Array.isArray(p) || p.length !== 2 || !inRange(p[0]) || !inRange(p[1]) || p[0] === p[1]) return false
+    if (!openCard(p[0]) || !openCard(p[1])) return false
+  }
+  return true
 }
 
 /* --- 12 Bespoke Watchmaker Astronomical SVG Sigils ----------------------- */
@@ -354,7 +366,7 @@ function LanternTile({
 
 export function LanternsScreen({ onExit }: GameScreenProps) {
   const { color, pieces } = useTokenColors()
-  const calm = useCalm()
+  const calm = useCalm('lanterns')
   const { cue, haptic } = useFeedback()
   const reducedMotion = useReducedMotion()
   const { frameWidth, sideMargin, usableHeight, isCompact } = useResponsiveLayout()
@@ -582,7 +594,6 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
       onPauseChange={setPaused}
       onRestart={handleRestart}
       onExit={onExit}
-      howTo={HOW_TO}
       controls={
         <View style={styles.progressWrap}>
           <View

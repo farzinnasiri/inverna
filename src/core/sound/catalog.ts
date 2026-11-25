@@ -48,16 +48,16 @@ export const LAYERS: readonly LayerMeta[] = [
   { id: 'rain', name: 'Rain', short: 'Rain', hint: 'Steady rain on a roof' },
   { id: 'waves', name: 'Waves', short: 'Waves', hint: 'Slow surf, long breaths' },
   { id: 'fire', name: 'Hearth', short: 'Fire', hint: 'Low fire, warm embers' },
-  { id: 'wind', name: 'Wind', short: 'Wind', hint: 'Twilight air currents' },
-  { id: 'brown', name: 'Brown noise', short: 'Brown', hint: 'Deep, velvet sub-rumble' },
-  { id: 'pink', name: 'Pink noise', short: 'Pink', hint: 'Warm masking floor' },
-  { id: 'white', name: 'White noise', short: 'White', hint: 'Softened broadband mask' },
+  { id: 'wind', name: 'Wind', short: 'Wind', hint: 'Soft night wind' },
+  { id: 'brown', name: 'Brown noise', short: 'Brown', hint: 'Deep, soft rumble' },
+  { id: 'pink', name: 'Pink noise', short: 'Pink', hint: 'Soft, warm hush' },
+  { id: 'white', name: 'White noise', short: 'White', hint: 'Soft, even static' },
 ]
 
 export const BANDS: readonly BandMeta[] = [
-  { id: 'delta', name: 'Delta', greek: 'δ', hz: 2, hint: 'Deep slow-wave pulse', restful: true },
-  { id: 'theta', name: 'Theta', greek: 'θ', hz: 5, hint: 'Drowsy twilight drift', restful: true },
-  { id: 'alpha', name: 'Alpha', greek: 'α', hz: 8.5, hint: 'Calm evening unwind', restful: true },
+  { id: 'delta', name: 'Delta', greek: 'δ', hz: 2, hint: 'Slowest pulse, for deep sleep', restful: true },
+  { id: 'theta', name: 'Theta', greek: 'θ', hz: 5, hint: 'Slow pulse, for drifting off', restful: true },
+  { id: 'alpha', name: 'Alpha', greek: 'α', hz: 8.5, hint: 'Gentle pulse, for relaxing', restful: true },
 ]
 
 export function normalizeBand(band: BandId | null | undefined): SleepBandId | null {
@@ -129,13 +129,13 @@ export const PRESETS: readonly Preset[] = [
   {
     id: 'theta-rain',
     name: 'Theta rain',
-    hint: 'Soft rain & felt fifths',
+    hint: 'Soft rain & quiet chords',
     page: 0,
     scene: 'rain',
     icon: 'rain',
     harmonicKey: 'd-dorian',
     descentRange: [7.6, 5.0, 2.4],
-    badge: 'Flagship',
+    badge: 'Popular',
     mix: {
       layers: { rain: 0.56, pink: 0.16 },
       padGain: 0.64,
@@ -258,7 +258,7 @@ export const PRESETS: readonly Preset[] = [
   {
     id: 'ink-reverie',
     name: 'Ink reverie',
-    hint: 'Warm hush & alpha drift',
+    hint: 'Soft rain & gentle keys',
     page: 1,
     scene: 'reverie',
     icon: 'feather',

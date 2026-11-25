@@ -4,7 +4,7 @@ import { combineFilters, lightToFilter, scheduledLight } from '@/core/night'
 import { sessionLevels } from '@/core/session'
 import { applyTokens } from '@/design/tokens'
 import { useSession } from '@/ui/state/session'
-import { useSettings } from '@/ui/state/settings'
+import { useCurrentSchedule, useSettings } from '@/ui/state/settings'
 
 /**
  * Computes the current effective dim opacity & warmth from user light + bedtime schedule + session.
@@ -13,9 +13,9 @@ import { useSettings } from '@/ui/state/settings'
 export function useNightFilterMetrics(): { warmth: number; dimOpacity: number } {
   const light = useSettings((s) => s.light)
   const followBedtime = useSettings((s) => s.followBedtime)
-  const schedule = useSettings((s) => s.schedule)
   const session = useSession((s) => s.session)
   const [now, setNow] = useState(() => Date.now())
+  const schedule = useCurrentSchedule(new Date(now))
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), session ? 2000 : 30_000)

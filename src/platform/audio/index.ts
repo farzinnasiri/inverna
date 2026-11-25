@@ -8,7 +8,7 @@ import { createClassicalMotifController, type ClassicalMotifController } from '.
 import { createCueBloomBus, playHarmonicCue, type CueBloomBus } from './cues'
 import { createAmbientLayer, type AmbientLayer } from './layers'
 import { createAsymmetricBreathWave, createHarmonicPadController, type HarmonicPadController } from './pad'
-import { clamp, rampParam, safeDisconnect, safeStop } from './params'
+import { clamp, rampParam, rampTracked, safeDisconnect, safeStop, type RampTrack } from './params'
 import type {
   AudioContextLike,
   AudioNodeLike,
@@ -27,7 +27,12 @@ export interface NeuroEngineHooks {
   /** Called when ambient sound plays, pauses, or fully stops (Lock Screen / Dynamic Island). */
   onNowPlayingUpdate?: (meta: NowPlayingMeta | null, state: NowPlayingState) => void
   /** Wire OS remote pause/play events back into the engine. */
-  bindRemoteControls?: (handlers: { onPause: () => void; onPlay: () => void }) => () => void
+  bindRemoteControls?: (handlers: {
+    onPause: () => void
+    onPlay: () => void
+    /** True while ambient sound is playing (not paused or stopped). */
+    isPlaying: () => boolean
+  }) => () => void
 }
 
 export interface CreateNeuroSoundEngineOptions {
@@ -56,6 +61,7 @@ interface AudioGraph {
   sleepFadeGain: GainNodeLike
   masterGain: GainNodeLike
   cueBloom: CueBloomBus
+  motifBloom: CueBloomBus
   limiter: DynamicsCompressorNodeLike | null
   softClipper: WaveShaperNodeLike | null
   pad: HarmonicPadController
@@ -94,8 +100,15 @@ export function createNeuroSoundEngine({
   let unlocked = false
   let cuesEnabled = true
   let masterVolume = 0.85
+  // Ramps on these two params are tracked here: the native `param.value` does
+  // not follow automation, so ramping "from param.value" would jump.
+  const masterTrack: RampTrack = { from: masterVolume, to: masterVolume, t0: 0, t1: 0 }
+  const gateTrack: RampTrack = { from: 1, to: 1, t0: 0, t1: 0 }
+  let idleSuspendTimer: ReturnType<typeof setTimeout> | null = null
   let activeKey: HarmonicKeyId = DEFAULT_HARMONIC_KEY
   let lastMix: Mix | null = null
+  /** The last mix that made sound, for remote Play after the mix was turned all the way down. */
+  let lastAudibleMix: Mix | null = null
   let cueStep = 0
   let nowPlayingMeta: NowPlayingMeta | null = {
     title: 'Theta rain',
@@ -126,7 +139,7 @@ export function createNeuroSoundEngine({
   const activeLayers = new Map<LayerId, AmbientLayer>()
   const layerTeardownTimers = new Map<LayerId, ReturnType<typeof setTimeout>>()
   const externalPauseListeners = new Set<() => void>()
-  const externalPlayListeners = new Set<() => void>()
+  const externalPlayListeners = new Set<(mix: Mix) => void>()
   let stopTimer: ReturnType<typeof setTimeout> | null = null
   let remoteBound = false
 
@@ -173,10 +186,12 @@ export function createNeuroSoundEngine({
         for (const fn of externalPauseListeners) fn()
       },
       onPlay: () => {
-        if (running || !lastMix || isSilent(lastMix)) return
-        applyMix(lastMix, 1.0)
-        for (const fn of externalPlayListeners) fn()
+        if (running || !lastAudibleMix) return
+        const mix = lastAudibleMix
+        applyMix(mix, 1.0)
+        for (const fn of externalPlayListeners) fn(mix)
       },
+      isPlaying: () => running,
     })
   }
 
@@ -270,6 +285,8 @@ export function createNeuroSoundEngine({
         ambientGateGain.gain.setValueAtTime(1, t0)
         sleepFadeGain.gain.setValueAtTime(1, t0)
         masterGain.gain.setValueAtTime(masterVolume, t0)
+        Object.assign(masterTrack, { from: masterVolume, to: masterVolume, t0, t1: t0 })
+        Object.assign(gateTrack, { from: 1, to: 1, t0, t1: t0 })
       } catch {
         /* mock fallback */
       }
@@ -334,7 +351,10 @@ export function createNeuroSoundEngine({
       )
 
       const binaural = createBinauralController(ctx, ambientGateGain)
-      const classical = createClassicalMotifController(ctx, cueBloom.input)
+      // The piano/strings motif is part of the ambient sound, not a game cue: its own
+      // bloom feeds the ambient gate, so stopping and the sleep fade silence it too.
+      const motifBloom = createCueBloomBus(ctx, ambientGateGain)
+      const classical = createClassicalMotifController(ctx, motifBloom.input)
 
       graph = {
         ctx,
@@ -351,6 +371,7 @@ export function createNeuroSoundEngine({
         sleepFadeGain,
         masterGain,
         cueBloom,
+        motifBloom,
         limiter,
         softClipper,
         pad,
@@ -393,6 +414,7 @@ export function createNeuroSoundEngine({
     rampParam(g.textureAmDepth.gain, texAmAmp, ramp, now)
 
     g.cueBloom.setWarmth(descent.cueBloomCutoffHz, ramp)
+    g.motifBloom.setWarmth(descent.cueBloomCutoffHz, ramp)
 
     if (running && lastMix?.classicalMotif) {
       g.classical.update({
@@ -484,15 +506,13 @@ export function createNeuroSoundEngine({
     }
 
     if (safeFade <= 0.002) {
-      rampParam(g.ambientGateGain.gain, 0, 0, g.ctx.currentTime)
+      rampTracked(g.ambientGateGain.gain, gateTrack, 0, 0, g.ctx.currentTime)
       disposeAllAmbientNow()
-      if (hideNotification && g.ctx.state === 'running' && typeof g.ctx.suspend === 'function') {
-        void g.ctx.suspend().catch(() => {})
-      }
+      suspendWhenIdle(g, 0)
       return
     }
 
-    rampParam(g.ambientGateGain.gain, 0, safeFade, g.ctx.currentTime)
+    rampTracked(g.ambientGateGain.gain, gateTrack, 0, safeFade, g.ctx.currentTime)
     g.pad.stop(safeFade)
     g.binaural.stop(safeFade)
 
@@ -500,15 +520,26 @@ export function createNeuroSoundEngine({
       stopTimer = null
       if (running) return
       disposeAllAmbientNow()
-      if (hideNotification && g.ctx.state === 'running' && typeof g.ctx.suspend === 'function') {
-        void g.ctx.suspend().catch(() => {})
-      }
+      // Stopped means silent: suspend the whole graph so nothing (motif tails,
+      // cue echoes, a stray voice) can keep sounding, and the CPU can rest.
+      suspendWhenIdle(g, 0)
     }, Math.ceil(safeFade * 1000) + 120)
+  }
+
+  /** Suspend the audio context after `delayMs` unless ambient sound starts again. */
+  const suspendWhenIdle = (g: AudioGraph, delayMs: number) => {
+    if (idleSuspendTimer) clearTimeout(idleSuspendTimer)
+    idleSuspendTimer = setTimeout(() => {
+      idleSuspendTimer = null
+      if (running || g.ctx.state !== 'running' || typeof g.ctx.suspend !== 'function') return
+      void g.ctx.suspend().catch(() => {})
+    }, delayMs)
   }
 
   const applyMix = (mix: Mix, fadeSeconds = 1.5) => {
     const safeFade = Math.max(0, Number.isFinite(fadeSeconds) ? fadeSeconds : 1.5)
     lastMix = mix
+    if (!isSilent(mix)) lastAudibleMix = mix
     if (mix.harmonicKey) {
       activeKey = mix.harmonicKey
     }
@@ -526,6 +557,10 @@ export function createNeuroSoundEngine({
 
     clearStopTimer()
     running = true
+    if (idleSuspendTimer) {
+      clearTimeout(idleSuspendTimer)
+      idleSuspendTimer = null
+    }
 
     if (g.ctx.state !== 'running' && g.ctx.state !== 'closed') {
       void resumeContext(g.ctx)
@@ -536,7 +571,7 @@ export function createNeuroSoundEngine({
       }
     })
 
-    rampParam(g.ambientGateGain.gain, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
+    rampTracked(g.ambientGateGain.gain, gateTrack, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
     // If a previous sleep timer already faded sleepFadeGain down, bring it back cleanly on play
     if ((g.sleepFadeGain.gain.value ?? 1) < 0.99) {
       clearSleepFadeOnGraph(g, Math.min(safeFade, 0.35))
@@ -628,7 +663,7 @@ export function createNeuroSoundEngine({
       masterVolume = clamp(volume, 0, 1)
       if (!graph) return
       const safeRamp = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0.2)
-      rampParam(graph.masterGain.gain, masterVolume, safeRamp, graph.ctx.currentTime)
+      rampTracked(graph.masterGain.gain, masterTrack, masterVolume, safeRamp, graph.ctx.currentTime)
     },
 
     scheduleSleepFade(delaySeconds: number, fadeSeconds = 12) {
@@ -667,6 +702,8 @@ export function createNeuroSoundEngine({
         } catch {
           // Never throw from feedback cues.
         }
+        // Cues with no ambient sound wake the graph briefly, then let it sleep again.
+        if (!running) suspendWhenIdle(g, 4000)
       }
 
       if (g.ctx.state === 'running') {

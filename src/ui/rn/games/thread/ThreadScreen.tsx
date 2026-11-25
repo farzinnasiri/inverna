@@ -64,10 +64,6 @@ const BEZEL_PADDING = 4
 const BEZEL_BORDER = 1
 const BEZEL_INSET = BEZEL_PADDING + BEZEL_BORDER
 
-const HOW_TO = [
-  'Drag from any shape to connect it to its matching pair.',
-  'Fill every cell on the board. Crossing another path trims it cleanly so you can reroute anytime.',
-] as const
 
 function isValidSave(value: unknown): value is ThreadSave {
   if (!value || typeof value !== 'object') return false
@@ -275,7 +271,7 @@ function extendAlongSegment(state: ThreadState, stroke: Stroke, to: Point, side:
 export function ThreadScreen({ onExit }: GameScreenProps) {
   const tokens = useTokenColors()
   const { color } = tokens
-  const calm = useCalm()
+  const calm = useCalm('thread')
   const reducedMotion = useReducedMotion()
   const { cue, haptic } = useFeedback()
 
@@ -353,26 +349,10 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
     setPaused(nextPaused)
   }, [cancelStroke])
 
-  const [panResponder] = useState(() =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
-      onPanResponderGrant: (event) => {
-        const prev = stateRef.current
-        if (pausedRef.current || prev.solved) return
-        const origin = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
-        const cell = cellFromPoint(origin, gridSizeRef.current, prev.size)
-        if (!cell) return
-
-        const pending = startPath(prev, cell)
-        if (!pending.activeColor) return
-
-        // Touching an existing thread alone should never trim it.
-        strokeRef.current = { origin, previous: origin, previousCell: cell, pending }
-      },
-      onPanResponderStart: (_, g) => {
-        if (g.numberActiveTouches > 1) cancelStroke()
-      },
-      onPanResponderMove: (_, g) => {
+  const [panResponder] = useState(() => {
+    // Extends the active thread to the finger. Used on every move and once more
+    // on release, so a fast stroke that ends in a cell is never committed one short.
+    const extendTo = (g: { dx: number; dy: number }) => {
         const stroke = strokeRef.current
         if (!stroke || pausedRef.current) return
         const prev = stroke.pending ?? stateRef.current
@@ -401,8 +381,31 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
           cueRef.current('tap', 0.42)
           hapticRef.current('selection')
         }
+      }
+
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
+      onPanResponderGrant: (event) => {
+        const prev = stateRef.current
+        if (pausedRef.current || prev.solved) return
+        const origin = { x: event.nativeEvent.locationX, y: event.nativeEvent.locationY }
+        const cell = cellFromPoint(origin, gridSizeRef.current, prev.size)
+        if (!cell) return
+
+        const pending = startPath(prev, cell)
+        if (!pending.activeColor) return
+
+        // Touching an existing thread alone should never trim it.
+        strokeRef.current = { origin, previous: origin, previousCell: cell, pending }
       },
-      onPanResponderRelease: () => {
+      onPanResponderStart: (_, g) => {
+        if (g.numberActiveTouches > 1) cancelStroke()
+      },
+      onPanResponderMove: (_, g) => extendTo(g),
+      onPanResponderRelease: (_, g) => {
+        if (!strokeRef.current) return
+        extendTo(g)
+        // Solved by that final segment: extendTo already completed the board.
         if (!strokeRef.current) return
         strokeRef.current = null
 
@@ -422,8 +425,8 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
         }
       },
       onPanResponderTerminate: cancelStroke,
-    }),
-  )
+    })
+  })
 
   /* --- Board actions ------------------------------------------------------ */
 
@@ -565,7 +568,6 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
       onPauseChange={handlePauseChange}
       onRestart={handleClear}
       onExit={onExit}
-      howTo={HOW_TO}
       controls={
         <GameControlBar>
           <GameActionButton
@@ -718,7 +720,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
 
         <Text style={[styles.note, { color: color.ink2 }]}>
           {allPairsConnected && !state.solved
-            ? `Fill the remaining ${remainingCells} ${remainingCells === 1 ? 'cell' : 'cells'}`
+            ? `${remainingCells} empty ${remainingCells === 1 ? 'square' : 'squares'} left to cover`
             : ' '}
         </Text>
       </View>

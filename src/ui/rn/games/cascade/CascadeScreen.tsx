@@ -58,10 +58,6 @@ const DEFAULT_SAVE: CascadeSave = {
   plays: 1,
 }
 
-const HOW_TO = [
-  'Tap any group of two or more matching tiles to release them from the mosaic.',
-  'Larger clusters score more. When no pairs remain, the final tiles tumble away into black.',
-] as const
 
 const CANVAS_BOTTOM_OVERFLOW = 96
 const BEZEL_RADIUS = 18
@@ -173,7 +169,7 @@ function buildPerimeterPath(
 export function CascadeScreen({ onExit }: GameScreenProps) {
   const { isCompact } = useResponsiveLayout()
   const bezelPad = isCompact ? 4 : 5
-  const calm = useCalm()
+  const calm = useCalm('cascade')
   const { cue, haptic } = useFeedback()
   const reduceMotion = useReducedMotion()
   const tokens = useTokenColors()
@@ -243,6 +239,11 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     [setSaved],
   )
 
+  // The tumbling loop runs only while tiles or effects are moving; a still
+  // board costs nothing. Anything that changes the board wakes it.
+  const [animating, setAnimating] = useState(true)
+  const wake = useCallback(() => setAnimating(true), [])
+
   // 60fps rigid-body tumbling & settling loop
   useGameLoop(
     useCallback(
@@ -250,7 +251,11 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
         const prev = stateRef.current
         const effectiveDt = reducedMotionRef.current ? dtMs * 1.35 : dtMs
         const next = tickCascade(prev, effectiveDt, calmRef.current)
-        if (next !== prev) {
+        if (next === prev) {
+          setAnimating(false)
+          return
+        }
+        {
           stateRef.current = next
           if (prev.falling.length > 0 && next.falling.length === 0) {
             syncUiMeta(next)
@@ -260,7 +265,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
       },
       [redraw, syncUiMeta],
     ),
-    !paused,
+    !paused && animating,
   )
 
   const cellFromLocalPoint = useCallback((x: number, y: number): CellCoord | null => {
@@ -287,10 +292,13 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     (row: number, col: number) => {
       if (pausedRef.current) return
       const prev = stateRef.current
+      // While tiles are still tumbling, what you see isn't where they are yet: wait for them to land.
+      if (prev.falling.length > 0) return
       const next = tapCell(prev, row, col)
       if (next === prev) return
 
       stateRef.current = next
+      wake()
       previewKeysRef.current = new Set()
       syncUiMeta(next)
       redraw()
@@ -404,6 +412,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     if (next === prev) return
 
     stateRef.current = next
+    wake()
     previewKeysRef.current = new Set()
     pressedRef.current = null
     syncUiMeta(next)
@@ -416,6 +425,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   const handleRestart = useCallback(() => {
     const next = restartBoard(stateRef.current)
     stateRef.current = next
+    wake()
     previewKeysRef.current = new Set()
     pressedRef.current = null
     syncUiMeta(next)
@@ -428,6 +438,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   const handleNextBoard = useCallback(() => {
     const next = nextBoard(stateRef.current, calmRef.current)
     stateRef.current = next
+    wake()
     previewKeysRef.current = new Set()
     pressedRef.current = null
     syncUiMeta(next)
@@ -521,7 +532,6 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
       onExit={handleExit}
-      howTo={HOW_TO}
       controls={
         <GameControlBar>
           <GameActionButton

@@ -54,14 +54,17 @@ export function Button({
 }) {
   const { color } = useTokenColors()
   const isSm = size === 'sm'
+  // Primary is brass ink on obsidian with a brass hairline, never a solid brass
+  // slab: it leads without shouting at night.
   const bg =
     variant === 'primary'
-      ? color.accent
+      ? 'rgba(194, 161, 95, 0.10)'
       : variant === 'quiet'
         ? 'rgba(22, 24, 31, 0.72)'
         : 'transparent'
-  const fg = variant === 'primary' ? color.accentInk : variant === 'quiet' ? color.ink : color.ink2
-  const borderColor = variant === 'quiet' ? 'rgba(255, 255, 255, 0.14)' : 'transparent'
+  const fg = variant === 'primary' ? color.accent : variant === 'quiet' ? color.ink : color.ink2
+  const borderColor =
+    variant === 'primary' ? 'rgba(194, 161, 95, 0.55)' : variant === 'quiet' ? 'rgba(255, 255, 255, 0.14)' : 'transparent'
 
   return (
     <Pressable
@@ -77,7 +80,7 @@ export function Button({
           borderRadius: isSm ? 20 : 16,
           borderCurve: 'continuous',
           backgroundColor: bg,
-          borderWidth: variant === 'quiet' ? 1 : 0,
+          borderWidth: variant === 'ghost' ? 0 : 1,
           borderColor,
           width: block ? '100%' : undefined,
           opacity: disabled ? 0.35 : pressed ? 0.86 : 1,
@@ -219,6 +222,8 @@ export function LightSlider({
   const hapticsRef = useRef(hapticsOn)
   hapticsRef.current = hapticsOn
   const lastEmitMsRef = useRef(0)
+  /** When the finger last moved the slider; props arriving soon after are our own echoes. */
+  const lastTouchMsRef = useRef(0)
   const lastHapticTickRef = useRef(Math.round((1 - value) * 10))
 
   const brightnessSV = useSharedValue(Math.min(1, Math.max(0, 1 - value)))
@@ -226,23 +231,28 @@ export function LightSlider({
   const draggingSV = useSharedValue(0)
   const [liveBrightness, setLiveBrightness] = useState(() => Math.min(1, Math.max(0, 1 - value)))
 
+  // Follow outside changes only. While dragging, and for a moment after, the
+  // incoming value is a delayed echo of an earlier emit: applying it would pull
+  // the thumb back and then forward again.
   useEffect(() => {
+    if (draggingSV.get() !== 0 || Date.now() - lastTouchMsRef.current < 700) return
     const nextB = Math.min(1, Math.max(0, 1 - value))
-    if (draggingSV.get() === 0) {
-      brightnessSV.set(nextB)
-      setLiveBrightness(nextB)
-    }
+    brightnessSV.set(nextB)
+    setLiveBrightness(nextB)
   }, [value, brightnessSV, draggingSV])
 
   const emitChange = (nextB: number, force: boolean) => {
     const now = Date.now()
+    lastTouchMsRef.current = now
     const clampedB = Math.min(1, Math.max(0, nextB))
     const tick10 = Math.round(clampedB * 10)
     if (tick10 !== lastHapticTickRef.current) {
       lastHapticTickRef.current = tick10
       if (hapticsRef.current) haptics.play('light')
     }
-    if (!force && now - lastEmitMsRef.current < 28) return
+    // Each change re-tints the whole app, so ~11 Hz while dragging; the thumb
+    // itself follows the finger on the UI thread at full frame rate.
+    if (!force && now - lastEmitMsRef.current < 90) return
     lastEmitMsRef.current = now
     setLiveBrightness(clampedB)
     // Smooth 1% resolution (100 steps) — zero janky stepping.
@@ -369,7 +379,7 @@ export function LightSlider({
 
       <View style={styles.lightMetaRow}>
         <Text style={[styles.lightMetaStage, { color: color.ink2 }]}>{lightMoodLabel(liveLight)}</Text>
-        <Text style={[styles.lightMetaPct, { color: color.accent }]}>{pct}% in-app light</Text>
+        <Text style={[styles.lightMetaPct, { color: color.accent }]}>{pct}% brightness</Text>
       </View>
     </View>
   )
@@ -394,20 +404,22 @@ export function Slider({
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
   const lastEmitMsRef = useRef(0)
+  const lastTouchMsRef = useRef(0)
 
   const valSV = useSharedValue(Math.min(1, Math.max(0, value)))
   const widthSV = useSharedValue(240)
   const draggingSV = useSharedValue(0)
 
+  // Outside changes only: right after a drag the incoming value is our own late echo.
   useEffect(() => {
-    if (draggingSV.get() === 0) {
-      valSV.set(Math.min(1, Math.max(0, value)))
-    }
+    if (draggingSV.get() !== 0 || Date.now() - lastTouchMsRef.current < 700) return
+    valSV.set(Math.min(1, Math.max(0, value)))
   }, [value, valSV, draggingSV])
 
   const emitVal = (next: number, force: boolean) => {
     const now = Date.now()
-    if (!force && now - lastEmitMsRef.current < 24) return
+    lastTouchMsRef.current = now
+    if (!force && now - lastEmitMsRef.current < 60) return
     lastEmitMsRef.current = now
     onChangeRef.current(Math.round(Math.min(1, Math.max(0, next)) * 100) / 100)
   }

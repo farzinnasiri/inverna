@@ -106,12 +106,18 @@ export function GameGlyph({ id, size = 30 }: { id: GameId; size?: number }) {
           <Rect x="12.5" y="21" width="7" height="7" rx="1.6" fill={color.ink3} />
         </Svg>
       )
-    case 'patience':
+    case 'dim':
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-          <Rect x="6" y="5" width="13.5" height="19" rx="2.8" fill={color.surface3} stroke={color.ink4} strokeWidth={1.2} />
-          <Rect x="12.5" y="8" width="13.5" height="19" rx="2.8" fill={color.surface2} stroke={color.ink3} strokeWidth={1.2} />
-          <Path d="M19.25 14 L22 17.5 L19.25 21 L16.5 17.5 Z" fill={pieces.sage} />
+          <Rect x="4" y="4" width="7" height="7" rx="1.8" fill={color.surface3} />
+          <Rect x="12.5" y="4" width="7" height="7" rx="1.8" fill={color.accent} opacity={0.9} />
+          <Rect x="21" y="4" width="7" height="7" rx="1.8" fill={color.surface3} />
+          <Rect x="4" y="12.5" width="7" height="7" rx="1.8" fill={color.accent} opacity={0.9} />
+          <Rect x="12.5" y="12.5" width="7" height="7" rx="1.8" fill={color.accent} />
+          <Rect x="21" y="12.5" width="7" height="7" rx="1.8" fill={color.accent} opacity={0.9} />
+          <Rect x="4" y="21" width="7" height="7" rx="1.8" fill={color.surface3} />
+          <Rect x="12.5" y="21" width="7" height="7" rx="1.8" fill={color.accent} opacity={0.9} />
+          <Rect x="21" y="21" width="7" height="7" rx="1.8" fill={color.ink4} />
         </Svg>
       )
     case 'lanterns':

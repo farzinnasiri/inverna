@@ -1,7 +1,7 @@
 import '@/platform/boot'
 import { useEffect } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
-import { Stack } from 'expo-router'
+import { router, Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -10,10 +10,12 @@ import { applyTokens } from '@/design/tokens'
 import { sound } from '@/platform'
 import { NightCheckIn } from '@/ui/rn/NightCheckIn'
 import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
-import { NightSheet } from '@/ui/rn/NightSheet'
-import { Onboarding } from '@/ui/rn/Onboarding'
+import { LaunchVeil } from '@/ui/rn/LaunchVeil'
+import { useReminderPlanner } from '@/ui/rn/reminders'
 import { SessionCurtain } from '@/ui/rn/SessionCurtain'
 import { WindDownSheet } from '@/ui/rn/WindDownSheet'
+import { notifications } from '@/platform'
+import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
@@ -22,13 +24,29 @@ import { useSound } from '@/ui/state/sound'
 applyTokens({ warmth: 0, force: true })
 
 export default function RootLayout() {
+  useReminderPlanner()
+
+  // A tapped wind-down reminder opens Play with the check-in.
+  useEffect(
+    () =>
+      notifications.onReminderOpened(() => {
+        try {
+          router.navigate('/')
+        } catch {
+          /* navigation not ready; Play is the first screen anyway */
+        }
+        useNav.getState().setCheckIn('tonight')
+      }),
+    [],
+  )
+
   const session = useSession((s) => s.session)
   const sessionActive = useSession((s) => Boolean(s.session && !s.ended))
-  const soundPlaying = useSound((s) => s.playing)
   const soundPresetId = useSound((s) => s.presetId)
   const syncDescent = useSound((s) => s.syncDescent)
 
   const schedule = useSettings((s) => s.schedule)
+  const tonightBedtime = useSettings((s) => s.tonightBedtime)
   const modulationDepth = useSettings((s) => s.modulationDepth)
   const autoDescent = useSettings((s) => s.autoDescent)
   const savedPreset = useSettings((s) => s.sessionPreset)
@@ -46,17 +64,18 @@ export default function RootLayout() {
       syncDescent(new Date(), 4.0)
     }, 15_000)
     return () => clearInterval(id)
-  }, [schedule, modulationDepth, autoDescent, session, soundPresetId, savedPreset, syncDescent])
+  }, [schedule, tonightBedtime, modulationDepth, autoDescent, session, soundPresetId, savedPreset, syncDescent])
 
-  // Keep screen awake during active wind-down sessions or live sound playback on native.
+  // Keep the screen awake during a wind down only. A playing sound must not:
+  // "put my phone down" means the screen sleeps while the sound plays on.
   useEffect(() => {
     if (Platform.OS === 'web') return
-    if (sessionActive || soundPlaying) {
+    if (sessionActive) {
       void activateKeepAwakeAsync('lull-session').catch(() => {})
     } else {
       void deactivateKeepAwake('lull-session').catch(() => {})
     }
-  }, [sessionActive, soundPlaying])
+  }, [sessionActive])
 
   // Register PWA service worker on web production builds.
   useEffect(() => {
@@ -78,23 +97,24 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
             <Stack.Screen
               name="game/[id]"
               options={{
                 headerShown: false,
                 gestureEnabled: false,
-                animation: 'fade_from_bottom',
-                animationDuration: 240,
+                // The game itself steps in (GameShell scales it toward you); the route just fades.
+                animation: 'fade',
+                animationDuration: 260,
               }}
             />
           </Stack>
 
           <WindDownSheet />
-          <NightSheet />
           <NightCheckIn />
-          <Onboarding />
           <SessionCurtain />
           <NightFilterOverlay />
+          <LaunchVeil />
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>

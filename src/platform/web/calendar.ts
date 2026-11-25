@@ -32,7 +32,7 @@ export function downloadBedtimeIcs(schedule: Schedule): void {
     `DTEND:${dt(end)}`,
     `RRULE:FREQ=WEEKLY;BYDAY=${byday}`,
     'SUMMARY:Time to wind down',
-    'DESCRIPTION:Put away the feeds and open Lull for a quiet wind-down.',
+    'DESCRIPTION:Bedtime is an hour away. Open Lull when you’re ready to relax.',
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
     'TRIGGER:PT0M',

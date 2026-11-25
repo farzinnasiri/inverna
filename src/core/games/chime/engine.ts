@@ -105,6 +105,9 @@ export interface ChimeState {
   rings: ChimeRing[]
   score: number
   bricksBroken: number
+  /** Score and bricks carried into this wall, so restarting it keeps earlier walls' totals. */
+  wallStartScore?: number
+  wallStartBricks?: number
   boardsCleared: number
   solved: boolean
   rngState: number
@@ -471,6 +474,8 @@ export function createChime(opts: {
     rings: [],
     score: opts.score ?? 0,
     bricksBroken: opts.bricksBroken ?? 0,
+    wallStartScore: opts.score ?? 0,
+    wallStartBricks: opts.bricksBroken ?? 0,
     boardsCleared: opts.boardsCleared ?? 0,
     solved: false,
     rngState: rng.state(),
@@ -557,8 +562,8 @@ export function restartLevel(state: ChimeState, calm: number): ChimeState {
     seed: nextSeed,
     calm,
     levelIndex: state.levelIndex,
-    score: 0,
-    bricksBroken: 0,
+    score: state.wallStartScore ?? 0,
+    bricksBroken: state.wallStartBricks ?? 0,
     boardsCleared: state.boardsCleared,
   })
 }

@@ -10,7 +10,7 @@ import { NightFilterOverlay } from './NightFilterOverlay'
  * - On Android & Web: transparent Modal portal.
  *
  * Mounts `<NightFilterOverlay />` on top of the portal content so adjusting the
- * Night Light slider inside Onboarding or NightSheet visibly dims & warms the UI live!
+ * Night Light slider inside NightSheet visibly dims & warms the UI live.
  */
 export function Layer({
   visible,

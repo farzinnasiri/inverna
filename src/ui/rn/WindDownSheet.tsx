@@ -1,208 +1,111 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useRouter } from 'expo-router'
-import { Play, Volume2, VolumeX } from 'lucide-react-native'
-import { gameMeta, type GameId } from '@/core/games/catalog'
-import { PRESETS } from '@/core/sound/catalog'
+import { StyleSheet, Text, View } from 'react-native'
+import { formatBedtime12h, formatHHMM, nightKey } from '@/core/night'
 import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
-import { useSound } from '@/ui/state/sound'
+import { UNTIL_LIGHTS_OUT, useSound } from '@/ui/state/sound'
 import { Button, Segmented, Sheet } from './controls'
-import { GlassSurface } from './Glass'
 
 const DURATIONS = [
-  { value: 15, label: '15m' },
-  { value: 30, label: '30m' },
-  { value: 45, label: '45m' },
-  { value: 60, label: '60m' },
+  { value: 15, label: '15 min' },
+  { value: 30, label: '30 min' },
+  { value: 45, label: '45 min' },
+  { value: 60, label: '1 hour' },
 ] as const
 
 /**
- * Unified Wind Down ritual sheet.
- * Connects Soundscapes + Timer + Dimming + Calm Game off-ramp into one coherent ritual:
- * if a sound is already playing, it carries seamlessly; tapping "Start & play" begins
- * the fade timer, audio, and launches your recommended or resumed game in one tap.
+ * Wind down now: one question, how long. Starting moves tonight's bedtime to
+ * now + that long, so the light, the games, the sound and the timeline on Play
+ * all head for the same lights out. Sound is chosen on Play, not here.
  */
 export function WindDownSheet() {
-  const router = useRouter()
   const { color } = useTokenColors()
   const open = useNav((s) => s.windDownOpen)
   const setOpen = useNav((s) => s.setWindDownOpen)
 
   const minutes = useSettings((s) => s.sessionMinutes)
-  const savedPresetId = useSettings((s) => s.sessionPreset)
-  const lastGame = useSettings((s) => s.lastGame)
-  const tonightIntent = useSettings((s) => s.tonightIntent)
   const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
-
   const startSession = useSession((s) => s.start)
-  const soundPlaying = useSound((s) => s.playing)
-  const activeSoundPreset = useSound((s) => s.presetId)
-  const playPreset = useSound((s) => s.playPreset)
-  const stopSound = useSound((s) => s.stop)
-  const setSoundTimer = useSound((s) => s.setTimer)
 
-  const selectedPreset = soundPlaying && activeSoundPreset ? activeSoundPreset : savedPresetId
+  const lightsOut = new Date(Date.now() + minutes * 60_000)
+  const lightsOutHHMM = formatHHMM(lightsOut.getHours(), lightsOut.getMinutes())
 
-  const recommendedGameId: GameId =
-    lastGame ??
-    (tonightIntent === 'focus'
-      ? 'nine'
-      : tonightIntent === 'light'
-        ? 'settle'
-        : 'pond')
-  const targetGame = gameMeta(recommendedGameId)
-
-  const selectSound = (id: string | null) => {
-    if (hapticsOn) haptics.play('light')
-    set({ sessionPreset: id })
-    if (soundPlaying) {
-      if (id) playPreset(id, minutes)
-      else stopSound(0.6)
-    }
-  }
-
-  const startRitual = (openGame: boolean) => {
+  const start = () => {
     if (hapticsOn) haptics.play('medium')
-    startSession(minutes, selectedPreset)
-    if (selectedPreset) {
-      if (soundPlaying && activeSoundPreset === selectedPreset) {
-        setSoundTimer(minutes)
-      } else {
-        playPreset(selectedPreset, minutes)
-      }
-    } else if (soundPlaying) {
-      stopSound(0.8)
+    const now = new Date()
+    const end = new Date(now.getTime() + minutes * 60_000)
+    set({ tonightBedtime: { night: nightKey(now), bedtime: formatHHMM(end.getHours(), end.getMinutes()) } })
+    startSession(minutes, useSound.getState().presetId)
+    // A sound already playing now fades out at this lights out.
+    if (useSound.getState().playing && useSettings.getState().sleepTimer === UNTIL_LIGHTS_OUT) {
+      useSound.getState().setTimer(UNTIL_LIGHTS_OUT)
     }
     setOpen(false)
-    if (openGame) {
-      set({ lastGame: recommendedGameId })
-      router.push(`/game/${recommendedGameId}`)
-    }
   }
 
   return (
     <Sheet open={open} onClose={() => setOpen(false)} label="Wind down">
-      <View style={styles.body}>
-        <View style={styles.head}>
-          <Text style={[styles.title, { color: color.ink }]}>Wind down</Text>
-          <Text style={[styles.sub, { color: color.ink2 }]}>
-            Gently dims light, slows pace, and fades your soundscape to silence at the end.
-          </Text>
-        </View>
+      <Text style={[styles.kicker, { color: color.ink3 }]}>Wind down</Text>
+      <Text style={[styles.title, { color: color.ink }]}>How long do you want to wind down?</Text>
+      <Text style={[styles.sub, { color: color.ink2 }]}>
+        The screen warms and dims, games slow down, and your sound fades out gently.
+      </Text>
 
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: color.ink3 }]}>Duration</Text>
-          <Segmented
-            label="Wind down duration"
-            options={DURATIONS}
-            value={minutes}
-            onChange={(v) => set({ sessionMinutes: v })}
-          />
-        </View>
+      <View style={styles.section}>
+        <Segmented
+          label="Wind down length"
+          options={DURATIONS}
+          value={minutes}
+          onChange={(v) => {
+            if (hapticsOn) haptics.play('selection')
+            set({ sessionMinutes: v })
+          }}
+        />
+        <Text style={[styles.when, { color: color.ink3 }]}>
+          Bedtime at <Text style={{ color: color.accent }}>{formatBedtime12h(lightsOutHHMM)}</Text>
+        </Text>
+      </View>
 
-        <View style={styles.section}>
-          <Text style={[styles.label, { color: color.ink3 }]}>Soundscape</Text>
-          <View style={styles.soundGrid}>
-            {[
-              { id: null as string | null, name: 'Silence' },
-              ...PRESETS.filter((p) => p.page === 0).slice(0, 5).map((p) => ({ id: p.id as string | null, name: p.name })),
-            ].map((opt) => {
-              const active = selectedPreset === opt.id
-              return (
-                <Pressable
-                  key={opt.id ?? 'silence'}
-                  onPress={() => selectSound(opt.id)}
-                  style={styles.soundChipWrap}
-                >
-                  <GlassSurface variant="pill" radius={14} accent={active} interactive style={styles.soundChip}>
-                    {opt.id === null ? (
-                      <VolumeX size={13} strokeWidth={1.65} color={active ? color.accent : color.ink3} />
-                    ) : (
-                      <Volume2 size={13} strokeWidth={1.65} color={active ? color.accent : color.ink3} />
-                    )}
-                    <Text
-                      numberOfLines={1}
-                      style={[styles.soundChipText, { color: active ? color.accent : color.ink2 }]}
-                    >
-                      {opt.name}
-                    </Text>
-                  </GlassSurface>
-                </Pressable>
-              )
-            })}
-          </View>
-        </View>
-
-        <View style={styles.actions}>
-          <Button variant="primary" block onPress={() => startRitual(true)}>
-            <Play size={15} strokeWidth={2} color={color.accentInk} />
-            <Text style={[styles.primaryText, { color: color.accentInk }]}>
-              Start &amp; play {targetGame.name}
-            </Text>
-          </Button>
-          <Button variant="quiet" size="sm" block onPress={() => startRitual(false)}>
-            Start timer &amp; browse games
-          </Button>
-        </View>
+      <View style={styles.actions}>
+        <Button variant="primary" block onPress={start}>
+          Start winding down
+        </Button>
       </View>
     </Sheet>
   )
 }
 
 const styles = StyleSheet.create({
-  body: {
-    gap: 16,
-  },
-  head: {
-    gap: 4,
+  kicker: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   title: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '600',
-    letterSpacing: -0.35,
+    letterSpacing: -0.5,
+    marginTop: 2,
   },
   sub: {
-    fontSize: 13.5,
-    lineHeight: 19,
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 8,
   },
   section: {
-    gap: 8,
+    marginTop: 20,
+    gap: 10,
   },
-  label: {
-    fontSize: 12.5,
-    fontWeight: '500',
-  },
-  soundGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  soundChipWrap: {
-    width: '31%',
-    flexGrow: 1,
-  },
-  soundChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    height: 40,
-    paddingHorizontal: 8,
-  },
-  soundChipText: {
-    fontSize: 13,
-    fontWeight: '500',
+  when: {
+    fontSize: 13.5,
+    textAlign: 'center',
   },
   actions: {
+    marginTop: 20,
     gap: 8,
-    marginTop: 4,
-  },
-  primaryText: {
-    fontSize: 15.5,
-    fontWeight: '600',
   },
 })

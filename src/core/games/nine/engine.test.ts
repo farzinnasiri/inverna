@@ -245,3 +245,13 @@ describe('Nine difficulty', () => {
     }
   })
 })
+
+describe('nine difficulty with calm', () => {
+  it('calm adds givens to a chosen difficulty without reaching the next easier one', async () => {
+    const { createNine } = await import('./engine')
+    const count = (calm: number) =>
+      createNine({ seed: 21, calm, difficulty: 'medium' }).givens.filter(Boolean).length
+    expect(count(1)).toBeGreaterThan(count(0))
+    expect(count(1)).toBeLessThan(46)
+  })
+})

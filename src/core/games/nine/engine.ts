@@ -444,6 +444,13 @@ export function getRemainingCount(state: NineState): number {
   return empty
 }
 
+function givensFor(difficulty: NineDifficulty, calm: number): number {
+  const base = DIFFICULTY_GIVENS[difficulty]
+  const easier = Object.values(DIFFICULTY_GIVENS).filter((g) => g > base)
+  const ceiling = easier.length > 0 ? Math.min(...easier) - 1 : base + 6
+  return Math.min(ceiling, base + Math.round(clamp01(calm) * 6))
+}
+
 export function createNine(opts: CreateNineOptions = {}): NineState {
   const seed = (opts.seed ?? 1) >>> 0
   const calm = clamp01(opts.calm ?? 0)
@@ -451,7 +458,9 @@ export function createNine(opts: CreateNineOptions = {}): NineState {
   const rng = createRng(seed)
 
   const solution = generateSolution(rng)
-  const targetGivens = opts.difficulty ? DIFFICULTY_GIVENS[opts.difficulty] : targetGivensForCalm(calm, rng)
+  // A chosen difficulty sets the board; calm only adds a few extra givens
+  // (gentler), staying short of the next easier difficulty.
+  const targetGivens = opts.difficulty ? givensFor(opts.difficulty, calm) : targetGivensForCalm(calm, rng)
   const values = carveUniquePuzzle(solution, targetGivens, rng)
   const givens = values.map((v) => v !== 0)
 

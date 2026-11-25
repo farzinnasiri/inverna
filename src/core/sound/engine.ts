@@ -30,6 +30,7 @@ export interface SoundEngine {
   setCuesEnabled(enabled: boolean): void
   setNowPlayingMeta?(meta: NowPlayingMeta | null): void
   onExternalPause?(listener: () => void): () => void
-  onExternalPlay?(listener: () => void): () => void
+  /** OS Play (headphones, lock screen); `mix` is what resumed. */
+  onExternalPlay?(listener: (mix: Mix) => void): () => void
   readonly isRunning: boolean
 }

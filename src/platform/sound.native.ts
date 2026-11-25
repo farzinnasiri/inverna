@@ -124,9 +124,12 @@ export function createPlatformSoundEngine(): SoundEngine {
     createContext: () => {
       try {
         void prepareSession()
-        // Use 'balanced' (1024 frames = 21.3 ms IO buffer instead of 128 frames = 2.66 ms)
-        // for 8x more real-time CoreAudio headroom during 120Hz games & locked-screen sleep.
-        return new AudioContext({ latencyHint: 'balanced' }) as unknown as AudioContextLike
+        // 'playback' asks iOS for a 4096-frame IO buffer (~85 ms). Locked on the
+        // charger with the Always-On Display, 'balanced' (1024 frames) crackled
+        // and then broke into noise: the render thread was missing deadlines.
+        // A bigger buffer gives it slack; the cost is later game-cue taps.
+        // iOS treats this as a preference, so it's a mitigation, not a guarantee.
+        return new AudioContext({ latencyHint: 'playback' }) as unknown as AudioContextLike
       } catch {
         return null
       }
@@ -134,7 +137,9 @@ export function createPlatformSoundEngine(): SoundEngine {
     hooks: {
       onPrepareSession: prepareSession,
       onNowPlayingUpdate: updateNowPlaying,
-      bindRemoteControls: ({ onPause, onPlay }) => {
+      bindRemoteControls: ({ onPause, onPlay, isPlaying }) => {
+        // Resume after an interruption (a call, Siri) only if we were playing when it began.
+        let resumeAfterInterruption = false
         const subs: ({ remove?: () => void } | undefined)[] = []
         try {
           subs.push(
@@ -149,11 +154,14 @@ export function createPlatformSoundEngine(): SoundEngine {
           subs.push(
             AudioManager.addSystemEventListener('interruption', (ev) => {
               if (ev.type === 'began') {
+                resumeAfterInterruption = isPlaying()
                 sessionActive = false
                 onPause()
-              } else if (ev.type === 'ended' && ev.shouldResume) {
+              } else if (ev.type === 'ended') {
                 sessionActive = false
-                void prepareSession().then(() => onPlay())
+                const resume = ev.shouldResume && resumeAfterInterruption
+                resumeAfterInterruption = false
+                if (resume) void prepareSession().then(() => onPlay())
               }
             }),
           )

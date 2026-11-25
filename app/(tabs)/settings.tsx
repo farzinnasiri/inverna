@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { Bell, ChevronDown, ChevronUp, RotateCcw, Trash2 } from 'lucide-react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { router } from 'expo-router'
+import { ChevronDown, ChevronUp, RotateCcw, Trash2 } from 'lucide-react-native'
 import { formatBedtime12h } from '@/core/night'
 import { DEFAULT_PRESET_ID } from '@/core/sound/catalog'
 import { clearAll } from '@/core/storage'
-import { haptics, notifications } from '@/platform'
+import { haptics } from '@/platform'
+import { settingsCopy } from '@/ui/copy'
+import { planRemindersNow } from '@/ui/rn/reminders'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
 import { BedtimeWheel } from '@/ui/rn/BedtimeWheel'
@@ -12,7 +15,6 @@ import { Button, FRAME_MAX_WIDTH, HoldButton, LightSlider, Segmented, Toggle } f
 import { GlassSurface } from '@/ui/rn/Glass'
 import { useResponsiveLayout } from '@/ui/rn/hooks'
 import { useHighScores } from '@/ui/state/highscores'
-import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
@@ -27,7 +29,8 @@ const WIND_DURATIONS = [
 export default function SettingsScreen() {
   const { color } = useTokenColors()
   const { insets, isCompact, sideMargin } = useResponsiveLayout()
-  const setOnboardingReplay = useNav((s) => s.setOnboardingReplay)
+  const userName = useSettings((s) => s.userName)
+  const reminders = useSettings((s) => s.reminders)
 
   const light = useSettings((s) => s.light)
   const followBedtime = useSettings((s) => s.followBedtime)
@@ -42,11 +45,12 @@ export default function SettingsScreen() {
   const [reminderStatus, setReminderStatus] = useState<string | null>(null)
   const [confirmWipe, setConfirmWipe] = useState(false)
 
-  const handleReminder = async () => {
-    const res = await notifications.scheduleBedtimeReminder(schedule)
-    if (res === 'scheduled') setReminderStatus('Daily reminder set')
-    else if (res === 'downloaded') setReminderStatus('Calendar file saved')
-    else setReminderStatus('Notifications disabled')
+  const setReminders = async (on: boolean) => {
+    set({ reminders: on })
+    setReminderStatus(null)
+    if (!on) return
+    const res = await planRemindersNow({ ask: true })
+    if (res === 'denied' && Platform.OS !== 'web') setReminderStatus(settingsCopy.reminderDenied)
   }
 
   const wipeAndRestartOnboarding = () => {
@@ -62,15 +66,18 @@ export default function SettingsScreen() {
       sessionPreset: DEFAULT_PRESET_ID,
       modulationDepth: 'subtle',
       autoDescent: true,
-      sleepTimer: 30,
+      sleepTimer: -1, // until lights out
       sfx: true,
       haptics: true,
       hasCustomMix: false,
       lastGame: null,
       lastCheckInDate: null,
       tonightDay: null,
+      tonightNow: null,
       tonightIntent: null,
       lastLightsOut: null,
+      userName: '',
+      reminders: true,
       onboarded: false,
     })
     setConfirmWipe(false)
@@ -96,19 +103,39 @@ export default function SettingsScreen() {
           <View style={styles.head}>
             <Text style={[styles.title, { color: color.ink }]}>Settings</Text>
             <Text style={[styles.subtitle, { color: color.ink3 }]}>
-              Light, schedule, and quiet preferences
+              Bedtime, screen warmth, and sound
             </Text>
           </View>
 
           <View style={styles.block}>
-            <Text style={[styles.label, { color: color.ink3 }]}>In-app night light</Text>
+            <Text style={[styles.label, { color: color.ink3 }]}>{settingsCopy.nameLabel}</Text>
+            <GlassSurface variant="card" radius={18} style={styles.nameCard}>
+              <TextInput
+                value={userName}
+                onChangeText={(v) => set({ userName: v.slice(0, 24) })}
+                placeholder={settingsCopy.namePlaceholder}
+                placeholderTextColor={color.ink3}
+                autoCapitalize="words"
+                autoCorrect={false}
+                autoComplete="given-name"
+                textContentType="givenName"
+                returnKeyType="done"
+                style={[styles.nameInput, { color: color.ink }]}
+                accessibilityLabel={settingsCopy.nameLabel}
+              />
+            </GlassSurface>
+            <Text style={[styles.rowNote, { color: color.ink3 }]}>{settingsCopy.nameNote}</Text>
+          </View>
+
+          <View style={styles.block}>
+            <Text style={[styles.label, { color: color.ink3 }]}>Night light</Text>
             <LightSlider value={light} onChange={(v) => set({ light: v })} />
           </View>
 
           <View style={styles.block}>
-            <Text style={[styles.label, { color: color.ink3 }]}>Wind down length</Text>
+            <Text style={[styles.label, { color: color.ink3 }]}>Wind down time</Text>
             <Segmented
-              label="Wind down length"
+              label="Wind down time"
               options={WIND_DURATIONS}
               value={sessionMinutes}
               onChange={(v) => set({ sessionMinutes: v })}
@@ -146,7 +173,7 @@ export default function SettingsScreen() {
             )}
 
             <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Warm 60m before bed</Text>
+              <Text style={[styles.rowLabel, { color: color.ink }]}>Warm screen before bed</Text>
               <Toggle
                 label="Warm 60 minutes before bed"
                 checked={followBedtime}
@@ -154,9 +181,21 @@ export default function SettingsScreen() {
               />
             </View>
 
+            {Platform.OS !== 'web' ? (
+              <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.reminderLabel}</Text>
+                  <Text style={[styles.rowNote, { color: color.ink3 }]}>
+                    {reminderStatus ?? settingsCopy.reminderNote}
+                  </Text>
+                </View>
+                <Toggle label={settingsCopy.reminderLabel} checked={reminders} onChange={(v) => void setReminders(v)} />
+              </View>
+            ) : null}
+
             <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Game cues</Text>
-              <Toggle label="Game cues" checked={sfx} onChange={(v) => set({ sfx: v })} />
+              <Text style={[styles.rowLabel, { color: color.ink }]}>Game sounds</Text>
+              <Toggle label="Game sounds" checked={sfx} onChange={(v) => set({ sfx: v })} />
             </View>
 
             <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
@@ -166,26 +205,16 @@ export default function SettingsScreen() {
           </GlassSurface>
 
           <View style={styles.utilityRow}>
-            <Button size="sm" onPress={() => void handleReminder()} style={{ flex: 1 }}>
-              <Bell size={15} strokeWidth={1.65} color={color.ink2} />
-              <Text style={[styles.utilText, { color: color.ink }]} numberOfLines={1}>
-                {reminderStatus ?? 'Reminder'}
-              </Text>
-            </Button>
-            <Button
-              size="sm"
-              onPress={() => setOnboardingReplay(true)}
-              style={{ flex: 1 }}
-            >
+            <Button size="sm" onPress={() => router.push('/onboarding')} style={{ flex: 1 }}>
               <RotateCcw size={15} strokeWidth={1.65} color={color.ink2} />
-              <Text style={[styles.utilText, { color: color.ink }]}>Replay intro</Text>
+              <Text style={[styles.utilText, { color: color.ink }]}>{settingsCopy.replayIntro}</Text>
             </Button>
           </View>
 
           {confirmWipe ? (
             <View style={styles.wipeConfirm}>
               <HoldButton
-                label="Hold to clear data & restart onboarding"
+                label="Hold to reset Lull"
                 onConfirm={wipeAndRestartOnboarding}
               />
               <Button variant="ghost" size="sm" block onPress={() => setConfirmWipe(false)}>
@@ -220,6 +249,19 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  nameCard: {
+    height: 52,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  nameInput: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  rowNote: {
+    fontSize: 12.5,
+    marginTop: 2,
+  },
   root: {
     flex: 1,
     backgroundColor: '#000000',

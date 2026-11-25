@@ -310,15 +310,15 @@ export function MixSheet({
             ))}
           </View>
 
-          {/* Harmonic warmth slider */}
+          {/* Soft chords slider */}
           <View style={styles.section}>
             <View style={styles.sectionHead}>
-              <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Harmonic warmth</Text>
+              <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Soft chords</Text>
               <Text style={[styles.pctText, { color: padGain > 0.02 ? color.accent : color.ink4 }]}>
                 {Math.round(padGain * 100)}%
               </Text>
             </View>
-            <Slider value={padGain} onChange={setPad} label="Harmonic warmth" />
+            <Slider value={padGain} onChange={setPad} label="Soft chords" />
           </View>
 
           {/* Visual harmonic mood icons (replaces technical key jargon) + game cue preview */}
@@ -327,7 +327,7 @@ export function MixSheet({
               <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Tone &amp; game cues</Text>
               <Pressable onPress={previewTone} style={({ pressed }) => [styles.hearBtn, { opacity: pressed ? 0.7 : 1 }]}>
                 <Volume2 size={12} strokeWidth={1.7} color={color.accent} />
-                <Text style={[styles.hearText, { color: color.accent }]}>Hear</Text>
+                <Text style={[styles.hearText, { color: color.accent }]}>Preview</Text>
               </Pressable>
             </View>
             <View style={styles.moodGrid}>
@@ -357,18 +357,18 @@ export function MixSheet({
         </View>
       ) : (
         <View style={styles.tabBody}>
-          {/* Live 60m bedtime descent curve — clean, visual, zero technical fluff */}
+          {/* Live Bedtime slow-down curve — clean, visual, zero technical fluff */}
           <View style={[styles.curveCard, { borderColor: color.line, backgroundColor: 'rgba(255,255,255,0.03)' }]}>
             <View style={styles.curveTop}>
               <Text style={[styles.curveStatus, { color: descent.autoActive ? color.accent : color.ink3 }]}>
                 {descent.autoActive
                   ? descent.minutesToBed && descent.minutesToBed > 0
-                    ? `${descent.minutesToBed}m to bedtime`
-                    : 'Bedtime descent live'
-                  : '60m bedtime descent'}
+                    ? `${descent.minutesToBed} min until bed`
+                    : 'Slowing down for bed'
+                  : 'Bedtime slow-down'}
               </Text>
               <Text style={[styles.curveMeta, { color: color.ink2 }]}>
-                {modulationDepth === 'off' ? 'Modulation off' : `${descent.modHz.toFixed(1)} Hz · ${breathSec}s breath`}
+                {modulationDepth === 'off' ? 'Pulse off' : `${descent.modHz.toFixed(1)} Hz · ${breathSec}s breath`}
               </Text>
             </View>
             <DescentCurve
@@ -382,7 +382,7 @@ export function MixSheet({
 
           {/* Greek brainwave band picker with wave icons */}
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Wave band</Text>
+            <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Sleep rhythm</Text>
             <View style={styles.bandRow}>
               {[
                 { id: 'off' as const, greek: '—', name: 'Off' },
@@ -413,15 +413,15 @@ export function MixSheet({
 
           {/* Modulation depth */}
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Pulse depth</Text>
-            <Segmented label="Pulse depth" options={DEPTH_OPTIONS} value={modulationDepth} onChange={handleDepth} />
+            <Text style={[styles.sectionLabel, { color: color.ink3 }]}>Pulse strength</Text>
+            <Segmented label="Pulse strength" options={DEPTH_OPTIONS} value={modulationDepth} onChange={handleDepth} />
           </View>
 
           {/* Single clean auto-descent toggle */}
           <View style={[styles.toggleRow, { borderColor: color.line, backgroundColor: 'rgba(255,255,255,0.03)' }]}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.toggleTitle, { color: color.ink }]}>Auto 60m descent</Text>
-              <Text style={[styles.toggleHint, { color: color.ink3 }]}>Slows wave &amp; warmth before bed</Text>
+              <Text style={[styles.toggleTitle, { color: color.ink }]}>Slow down before bed</Text>
+              <Text style={[styles.toggleHint, { color: color.ink3 }]}>Softens the sound in the hour before bedtime</Text>
             </View>
             <Toggle label="Auto 60 minute descent" checked={autoDescent} onChange={handleAutoDescent} />
           </View>

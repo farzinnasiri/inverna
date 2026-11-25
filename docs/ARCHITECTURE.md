@@ -76,6 +76,25 @@ on water, Chladni sand, ...). `AmbientBackdrop` stacks two layers:
 - Worklets must be defined above their callers (the worklet compiler captures
   dependencies at definition time). `backdrop/worklets.test.ts` enforces it.
 
+## Evening, check-in and voice
+
+- **Bedtime is the pivot.** `core/evening.ts` says where tonight stands (day,
+  evening, winding, past, morning); Play's hero, its countdown and the check-in
+  prompt all follow it.
+- **Check-in** (`ui/rn/NightCheckIn.tsx`): two plain questions near bedtime.
+  `core/tonight.ts` turns the answers into tonight's game order and two sound
+  suggestions; the user never picks that themselves. Also opened from the
+  Sounds page ("Not sure what fits tonight?") and from reminders.
+- **Reminders** (`platform/notifications.ts`, `ui/rn/reminders.ts`): one
+  notification a night at wind-down start, rotating messages, re-planned for
+  the coming week whenever the app opens. Tapping one opens the check-in.
+- **Words** live in `ui/copy.ts`. Voice rules and the full copy deck:
+  `design/copy/VOICE.md`, `design/copy/copy.json`.
+- **Games** open on a door (difficulty, Continue / New game) in `GameShell`.
+  Shared Easy / Medium / Hard feeds `useCalm(gameId)`; Nine, Rally and Hue
+  keep their own difficulty. At bedtime a game asks once whether to stop,
+  keep playing, or put the phone down (sound plays on, then fades).
+
 ## Data
 
 All data is on-device under the `lull:` key prefix. Clearing site data resets

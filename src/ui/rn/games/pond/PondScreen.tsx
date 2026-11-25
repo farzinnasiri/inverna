@@ -47,11 +47,6 @@ const BODY_WIDTHS = [0.0155, 0.0235, 0.0245, 0.022, 0.018, 0.0138, 0.01, 0.0068,
 const RAD_TO_DEG = 180 / Math.PI
 const KOI_CLIP_ID = 'pond-koi-body-clip'
 
-const HOW_TO = [
-  'Touch or drag across the dark water to guide the koi through the glowing lotus bud. Follow the water-thread to the next bud.',
-  'Lift your finger and watch it glide on its own. There is no timer and no rush.',
-  'During a wind-down session, the pond slows gradually as bedtime approaches.',
-] as const
 
 const f = (n: number): string => n.toFixed(2)
 
@@ -263,7 +258,10 @@ export function PondScreen({ onExit }: GameScreenProps) {
     }
   }, [])
 
-  // 60fps simulation & SVG render loop
+  // Simulation steps every frame; the SVG re-renders at ~30 fps. The koi moves
+  // slowly, so the difference is invisible, and it halves (or, at 120 Hz,
+  // quarters) the render work.
+  const publishAccRef = useRef(0)
   useGameLoop(
     useCallback(
       (dtMs: number) => {
@@ -278,7 +276,11 @@ export function PondScreen({ onExit }: GameScreenProps) {
           persist(next)
         }
 
-        setPondState(next)
+        publishAccRef.current += dtMs
+        if (publishAccRef.current >= 30) {
+          publishAccRef.current = 0
+          setPondState(next)
+        }
       },
       [calm, cue, haptic, persist],
     ),
@@ -555,7 +557,6 @@ export function PondScreen({ onExit }: GameScreenProps) {
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
       onExit={handleExit}
-      howTo={HOW_TO}
       controls={
         <GameControlBar>
           <GameActionButton
@@ -811,7 +812,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
             </Svg>
           )}
           <Animated.View pointerEvents="none" style={[styles.hint, { opacity: hintOpacity }]}>
-            <Text style={[styles.caption, { color: color.ink2 }]}>Drag anywhere on the water to guide</Text>
+            <Text style={[styles.caption, { color: color.ink2 }]}>Touch or drag the water to guide the koi</Text>
           </Animated.View>
           <View
             {...panResponder.panHandlers}

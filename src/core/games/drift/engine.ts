@@ -180,7 +180,7 @@ export function createDrift(opts: CreateDriftOptions = {}): DriftState {
 /** True if the tile at `index` shares a row or column with the blank space and can slide. */
 export function canSlideTile(state: DriftState, index: number): boolean {
   if (state.solved) return false
-  if (index < 0 || index >= state.tiles.length) return false
+  if (!Number.isInteger(index) || index < 0 || index >= state.tiles.length) return false
   if (state.tiles[index] === 0) return false
   const blank = state.tiles.indexOf(0)
   if (blank < 0) return false

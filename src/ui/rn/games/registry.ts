@@ -10,7 +10,7 @@ import { PondScreen } from './pond/PondScreen'
 import { DriftScreen } from './drift/DriftScreen'
 import { NineScreen } from './nine/NineScreen'
 import { WeaveScreen } from './weave/WeaveScreen'
-import { PatienceScreen } from './patience/PatienceScreen'
+import { DimScreen } from './dim/DimScreen'
 import { LanternsScreen } from './lanterns/LanternsScreen'
 import { RallyScreen } from './rally/RallyScreen'
 import { ChimeScreen } from './chime/ChimeScreen'
@@ -25,7 +25,7 @@ export const GAME_SCREENS: Record<GameId, ComponentType<GameScreenProps>> = {
   drift: DriftScreen,
   nine: NineScreen,
   weave: WeaveScreen,
-  patience: PatienceScreen,
+  dim: DimScreen,
   lanterns: LanternsScreen,
   rally: RallyScreen,
   chime: ChimeScreen,

@@ -1,0 +1,1528 @@
+{
+  "playHero": {
+    "evening": {
+      "withoutName": "Good evening",
+      "withName": "Good evening, {name}",
+      "sub": "Bedtime is at {bedtime}",
+      "subTonightOnly": "Tonight's bedtime is {bedtime}",
+      "placeholders": ["name", "bedtime"]
+    },
+    "nearBedtime": {
+      "withoutName": "{minutes} minutes until bed",
+      "withoutNameSingular": "1 minute until bed",
+      "withName": "{minutes} minutes until bed, {name}",
+      "withNameSingular": "1 minute until bed, {name}",
+      "sub": "Bedtime is at {bedtime}",
+      "placeholders": ["minutes", "name", "bedtime"]
+    },
+    "windingDown": {
+      "withoutName": "{minutes} minutes until bed",
+      "withoutNameSingular": "1 minute until bed",
+      "withName": "{minutes} minutes until bed, {name}",
+      "withNameSingular": "1 minute until bed, {name}",
+      "sub": "Winding down until {bedtime}",
+      "placeholders": ["minutes", "name", "bedtime"]
+    },
+    "pastBedtime": {
+      "withoutName": "It's past your bedtime",
+      "withName": "Still up, {name}?",
+      "sub": "Your bedtime was {bedtime}",
+      "placeholders": ["name", "bedtime"]
+    },
+    "afterSleep": {
+      "withoutName": "Rest well",
+      "withName": "Rest well, {name}",
+      "sub": "I'm here if you need a sound",
+      "placeholders": ["name"]
+    },
+    "morning": {
+      "withoutName": "Good morning",
+      "withName": "Good morning, {name}",
+      "sub": "Hope you slept well",
+      "placeholders": ["name"]
+    },
+    "daytime": {
+      "withoutName": "See you tonight",
+      "withName": "Good to see you, {name}",
+      "sub": "Bedtime is at {bedtime}",
+      "placeholders": ["name", "bedtime"]
+    },
+    "noBedtime": {
+      "withoutName": "When do you go to bed?",
+      "withName": "When do you go to bed, {name}?",
+      "sub": "Tap to set a bedtime",
+      "placeholders": ["name"]
+    }
+  },
+  "playButtons": {
+    "windDown": {
+      "start": "Wind down",
+      "end": "End wind down",
+      "endCompact": "End"
+    },
+    "sound": {
+      "play": "Play {sound}",
+      "pause": "Pause {sound}",
+      "playCompact": "{sound}",
+      "pauseCompact": "Pause",
+      "placeholders": ["sound"]
+    },
+    "pastBedtime": {
+      "startWindDown": "Wind down now",
+      "changeBedtime": "Change bedtime"
+    }
+  },
+  "checkIn": {
+    "intro": {
+      "withoutName": "Before we start, how are you feeling tonight?",
+      "withName": "Hey {name}, how are you feeling tonight?",
+      "placeholders": ["name"]
+    },
+    "actions": {
+      "back": "Back",
+      "skip": "Skip for tonight"
+    },
+    "questions": [
+      {
+        "id": "day",
+        "prompt": "How was your day?",
+        "sub": "I'll pick tonight's games and sound for you.",
+        "options": [
+          {
+            "id": "good",
+            "label": "Good",
+            "followUp": "Glad to hear it."
+          },
+          {
+            "id": "calm",
+            "label": "Calm",
+            "followUp": "Nice to end a quiet day quietly."
+          },
+          {
+            "id": "busy",
+            "label": "Busy",
+            "followUp": "You can put the rest down now."
+          },
+          {
+            "id": "stressful",
+            "label": "Stressful",
+            "followUp": "Today is over. Let's slow things down."
+          },
+          {
+            "id": "exhausting",
+            "label": "Exhausting",
+            "followUp": "You made it through. Almost time to rest."
+          }
+        ]
+      },
+      {
+        "id": "now",
+        "prompt": "How do you feel right now?",
+        "sub": "One more question, then I'll set things up.",
+        "options": [
+          {
+            "id": "sleepy",
+            "label": "Sleepy",
+            "followUp": "I'll keep things slow and soft."
+          },
+          {
+            "id": "relaxed",
+            "label": "Relaxed",
+            "followUp": "I'll keep this easy pace going."
+          },
+          {
+            "id": "worn_out",
+            "label": "Worn out",
+            "followUp": "Nothing demanding tonight."
+          },
+          {
+            "id": "overthinking",
+            "label": "Overthinking",
+            "followUp": "I'll give your mind one quiet thing to hold."
+          },
+          {
+            "id": "wide_awake",
+            "label": "Wide awake",
+            "followUp": "No rush to sleep. Let's ease into it."
+          }
+        ]
+      }
+    ],
+    "mapping": {
+      "gameMoods": {
+        "unwind": {
+          "label": "Unwind",
+          "description": "Slow, wordless games with zero pressure",
+          "leadGames": ["pond", "hue", "lanterns", "drift", "dim"]
+        },
+        "focus": {
+          "label": "Focus",
+          "description": "Absorbing puzzles that gently hold a busy mind",
+          "leadGames": ["nine", "weave", "thread", "kindle", "drift"]
+        },
+        "playful": {
+          "label": "Playful",
+          "description": "Light, quick games with an easy rhythm",
+          "leadGames": ["settle", "cascade", "chime", "rally", "kindle"]
+        }
+      },
+      "rules": [
+        {
+          "now": "sleepy",
+          "day": ["stressful", "exhausting"],
+          "gameMood": "unwind",
+          "sounds": ["deep-drift", "theta-rain"]
+        },
+        {
+          "now": "sleepy",
+          "day": ["good", "calm", "busy"],
+          "gameMood": "unwind",
+          "sounds": ["theta-rain", "midnight-cove"]
+        },
+        {
+          "now": "worn_out",
+          "day": ["stressful", "exhausting"],
+          "gameMood": "unwind",
+          "sounds": ["deep-drift", "hearth"]
+        },
+        {
+          "now": "worn_out",
+          "day": ["good", "calm", "busy"],
+          "gameMood": "unwind",
+          "sounds": ["hearth", "low-tide"]
+        },
+        {
+          "now": "overthinking",
+          "day": ["busy", "stressful"],
+          "gameMood": "focus",
+          "sounds": ["still-horizon", "theta-rain"]
+        },
+        {
+          "now": "overthinking",
+          "day": ["exhausting"],
+          "gameMood": "focus",
+          "sounds": ["theta-rain", "starfield"]
+        },
+        {
+          "now": "overthinking",
+          "day": ["good", "calm"],
+          "gameMood": "focus",
+          "sounds": ["amber-study", "still-horizon"]
+        },
+        {
+          "now": "wide_awake",
+          "day": ["busy", "stressful"],
+          "gameMood": "focus",
+          "sounds": ["mist-pine", "ink-reverie"]
+        },
+        {
+          "now": "wide_awake",
+          "day": ["exhausting"],
+          "gameMood": "unwind",
+          "sounds": ["theta-rain", "adagio-dusk"]
+        },
+        {
+          "now": "wide_awake",
+          "day": ["good", "calm"],
+          "gameMood": "playful",
+          "sounds": ["nocturne", "low-tide"]
+        },
+        {
+          "now": "relaxed",
+          "day": ["good", "calm"],
+          "gameMood": "playful",
+          "sounds": ["nocturne", "hearth"]
+        },
+        {
+          "now": "relaxed",
+          "day": ["busy", "stressful", "exhausting"],
+          "gameMood": "unwind",
+          "sounds": ["low-tide", "adagio-dusk"]
+        }
+      ]
+    }
+  },
+  "notifications": {
+    "windDown": [
+      {
+        "id": "slow_down",
+        "title": "Time to slow down",
+        "body": "Bedtime is an hour away. Come check in and tell me how today went.",
+        "withName": {
+          "title": "Time to slow down, {name}",
+          "body": "Bedtime is an hour away. Come check in and tell me how today went."
+        },
+        "placeholders": ["name"]
+      },
+      {
+        "id": "how_was_today",
+        "title": "How was your day?",
+        "body": "Tell me how you feel and I'll pick tonight's games and sound.",
+        "withName": {
+          "title": "How was your day, {name}?",
+          "body": "Tell me how you feel and I'll pick tonight's games and sound."
+        },
+        "placeholders": ["name"]
+      },
+      {
+        "id": "almost_bedtime",
+        "title": "Almost time for bed",
+        "body": "One quiet game or a soft sound, whenever you're ready to wind down.",
+        "withName": {
+          "title": "Almost time for bed, {name}",
+          "body": "One quiet game or a soft sound, whenever you're ready to wind down."
+        },
+        "placeholders": ["name"]
+      },
+      {
+        "id": "ready_to_relax",
+        "title": "Ready to relax?",
+        "body": "Drop in for a quick check-in and let the evening slow down.",
+        "withName": {
+          "title": "Ready to relax, {name}?",
+          "body": "Drop in for a quick check-in and let the evening slow down."
+        },
+        "placeholders": ["name"]
+      },
+      {
+        "id": "quieter_place",
+        "title": "Something quieter is waiting",
+        "body": "Bedtime is coming up. Come tell me how tonight feels.",
+        "withName": {
+          "title": "Good evening, {name}",
+          "body": "Bedtime is coming up. Come tell me how tonight feels."
+        },
+        "placeholders": ["name"]
+      },
+      {
+        "id": "hour_before",
+        "title": "An hour until bed",
+        "body": "Check in when you're ready and I'll set up your night.",
+        "withName": {
+          "title": "An hour until bed, {name}",
+          "body": "Check in when you're ready and I'll set up your night."
+        },
+        "placeholders": ["name"]
+      },
+      {
+        "id": "gentle_nudge",
+        "title": "Winding down soon",
+        "body": "No rush. Your games and sleep sound are here when you want them.",
+        "withName": {
+          "title": "Winding down soon, {name}",
+          "body": "No rush. Your games and sleep sound are here when you want them."
+        },
+        "placeholders": ["name"]
+      }
+    ],
+    "pastBedtime": [
+      {
+        "id": "still_awake",
+        "title": "Still awake?",
+        "body": "Your bedtime has passed. Start a quick wind down, or move bedtime for tonight.",
+        "withName": {
+          "title": "Still awake, {name}?",
+          "body": "Your bedtime has passed. Start a quick wind down, or move bedtime for tonight."
+        },
+        "placeholders": ["name"]
+      },
+      {
+        "id": "past_bedtime_sound",
+        "title": "It's past your bedtime",
+        "body": "If sleep isn't coming yet, I can put on a soft sound while you rest.",
+        "withName": {
+          "title": "It's past your bedtime, {name}",
+          "body": "If sleep isn't coming yet, I can put on a soft sound while you rest."
+        },
+        "placeholders": ["name"]
+      }
+    ]
+  },
+  "gameBedtimeNudge": {
+    "title": "It's your bedtime",
+    "titleWithName": "It's your bedtime, {name}",
+    "body": "Your game is saved right where you are. Ready to get some sleep?",
+    "placeholders": ["name"],
+    "choices": {
+      "putPhoneDown": {
+        "label": "Put my phone down",
+        "description": "Keeps your sleep sound playing and turns off once you're asleep."
+      },
+      "keepPlaying": {
+        "label": "Keep playing"
+      },
+      "stop": {
+        "label": "Stop for tonight"
+      }
+    }
+  },
+  "onboarding": {
+    "pages": [
+      {
+        "id": "intro",
+        "title": "Hi, I'm Lull",
+        "body": "I help you slow down in the hour before bed.\nQuiet games, soft sounds, and a warmer screen.",
+        "button": "Let's begin",
+        "skip": "Skip"
+      },
+      {
+        "id": "bedtime",
+        "title": "When do you usually go to bed?",
+        "body": "I'll start warming the screen an hour before.\nYou can always move it for one night.",
+        "warmNote": "Screen starts warming at {warmTime}",
+        "button": "Continue",
+        "skip": "Skip",
+        "placeholders": ["warmTime"]
+      },
+      {
+        "id": "sound",
+        "title": "What helps you fall asleep?",
+        "body": "Tap any sound to listen.\nI'll gently fade it out once you're asleep.",
+        "playingNote": "Playing {soundName}",
+        "button": "Continue",
+        "skip": "Skip",
+        "placeholders": ["soundName"]
+      },
+      {
+        "id": "name",
+        "title": "May I know your name?",
+        "body": "Just so I can say hello now and then.\nYou can skip this if you prefer.",
+        "placeholder": "Your first name",
+        "optionalNote": "Optional. Stays only on this phone.",
+        "button": "All set",
+        "skip": "Skip"
+      }
+    ],
+    "reminderToggle": {
+      "label": "Remind me before bed",
+      "description": "A quiet note an hour before bedtime."
+    },
+    "notificationPermissionPrompt": "Allow notifications so I can gently remind you when it's time to wind down."
+  },
+  "soundsHelp": {
+    "link": "Not sure what fits tonight?",
+    "suggestionsHeading": "These two fit tonight",
+    "suggestionsSub": "Based on how you're feeling. Tap one to listen."
+  },
+  "settings": {
+    "yourName": {
+      "label": "Your name",
+      "placeholder": "Add your first name",
+      "description": "Used now and then in greetings and reminders."
+    },
+    "bedtimeReminder": {
+      "label": "Bedtime reminder",
+      "description": "Sends a quiet reminder an hour before bed.",
+      "statusScheduled": "On for {time}",
+      "statusDownloaded": "Calendar reminder saved",
+      "statusDenied": "Turn on notifications in iPhone Settings.",
+      "placeholders": ["time"]
+    }
+  },
+  "gameDoor": {
+    "difficulty": {
+      "label": "Difficulty",
+      "easy": "Easy",
+      "medium": "Medium",
+      "hard": "Hard",
+      "expert": "Expert"
+    },
+    "session": {
+      "continue": "Continue where you left off",
+      "continueShort": "Continue",
+      "newGame": "New game"
+    },
+    "modes": {
+      "endless": {
+        "label": "Endless",
+        "description": "No game over. If the stack reaches the top, the bottom rows clear away so you can keep playing."
+      },
+      "classic": {
+        "label": "Classic",
+        "description": "Play until the board fills up."
+      }
+    }
+  },
+  "gameRules": [
+    {
+      "id": "pond",
+      "name": "Pond",
+      "goal": "Guide the koi to each glowing bud until every lotus opens.",
+      "howToPlay": "Touch or drag anywhere on the water and the koi will swim toward your finger. Lift your finger to let it wander.",
+      "tip": "There is no timer or score. Tap Ripple anytime to stir the water."
+    },
+    {
+      "id": "hue",
+      "name": "Hue",
+      "goal": "Arrange the colour tiles so every row and column blends smoothly from corner to corner.",
+      "howToPlay": "Tap two tiles to swap them, or drag one onto another. Tiles with a small diamond dot are locked in place.",
+      "tip": "Start near the locked tiles and work inward. Tap Hint to light up one helpful swap."
+    },
+    {
+      "id": "thread",
+      "name": "Thread",
+      "goal": "Connect every matching pair of shapes with a line and cover every square on the board.",
+      "howToPlay": "Drag from a shape to its match. Lines cannot cross, so drawing over another line cuts it back.",
+      "tip": "Every square must be used. If empty squares remain, take a longer route with one of your lines."
+    },
+    {
+      "id": "drift",
+      "name": "Drift",
+      "goal": "Put the numbered tiles in order from 1, starting at the top left, with the empty space at the bottom right.",
+      "howToPlay": "Tap any tile in the same row or column as the empty space to slide it over, or swipe the board.",
+      "tip": "A small gold dot marks tiles in the right spot. Solve the top row first, then work down."
+    },
+    {
+      "id": "nine",
+      "name": "Nine",
+      "goal": "Fill the grid so every row, column, and 3x3 box holds the numbers 1 to 9 with no repeats.",
+      "howToPlay": "Tap an empty square, then tap a number below. Turn on Notes to jot down possible numbers inside a square.",
+      "tip": "Notes clear themselves as soon as you place a matching number in the same row, column, or box."
+    },
+    {
+      "id": "weave",
+      "name": "Weave",
+      "goal": "Fill the right squares to uncover a hidden picture.",
+      "howToPlay": "Side numbers show groups of filled squares in order (2 1 means two filled, a gap, then one). Drag to fill, or Mark empties.",
+      "tip": "Start with the biggest numbers first, since they leave the fewest choices. Tap Hint if a row feels stuck."
+    },
+    {
+      "id": "dim",
+      "name": "Dim",
+      "goal": "Turn off every lit square until the whole board is dark.",
+      "howToPlay": "Tap any square to flip its light, along with the squares directly above, below, left, and right of it.",
+      "tip": "Tapping a dark square can still help by flipping its lit neighbours. Tap Hint to highlight one helpful move."
+    },
+    {
+      "id": "lanterns",
+      "name": "Lanterns",
+      "goal": "Find every matching pair of hidden symbols on the board.",
+      "howToPlay": "Tap two tiles to flip them over. Matching pairs stay open; two different tiles flip back after a moment.",
+      "tip": "You do not have to wait for a mismatch to close. Just tap your next tile right away."
+    },
+    {
+      "id": "settle",
+      "name": "Settle",
+      "goal": "Stack the falling blocks to make full horizontal rows so they clear away.",
+      "howToPlay": "Tap the board to rotate, drag sideways to move, swipe down to drop, and swipe up to hold. Or use the buttons.",
+      "tip": "In Endless mode, if the stack reaches the top, the bottom four rows clear away so you can keep playing."
+    },
+    {
+      "id": "kindle",
+      "name": "Ember",
+      "goal": "Combine matching numbers to build higher tiles and reach 2048.",
+      "howToPlay": "Swipe up, down, left, or right to slide all tiles at once. Matching tiles that touch merge into double their number.",
+      "tip": "Keep your biggest number in one corner. If the board fills up, tap Undo or Make room to clear two small tiles."
+    },
+    {
+      "id": "cascade",
+      "name": "Cascade",
+      "goal": "Clear groups of matching stones from the board.",
+      "howToPlay": "Tap any group of two or more touching stones of the same colour to drop them away. Bigger groups score more points.",
+      "tip": "Leave one colour alone while you clear others around it, so it gathers into one big group."
+    },
+    {
+      "id": "chime",
+      "name": "Chime",
+      "goal": "Bounce the ball off your paddle to break every block in the wall.",
+      "howToPlay": "Tap to launch the ball, then drag the bar below to move your paddle. Hitting near an edge changes the angle.",
+      "tip": "Blocks with a gold border take two hits. If you miss the ball, it simply comes back to your paddle."
+    },
+    {
+      "id": "rally",
+      "name": "Rally",
+      "goal": "Keep the ball bouncing back and forth across the court as long as you can.",
+      "howToPlay": "Drag the bar below the court to move your paddle. Hit the ball near an edge to send it at a sharper angle.",
+      "tip": "As bedtime gets closer, the ball slows down and your paddle grows a little wider."
+    }
+  ],
+  "rewrites": [
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 118,
+      "old": " · tonight only",
+      "new": "Tonight only",
+      "why": "Avoid cramming facts together with a middot; render as its own clean note when needed."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 124,
+      "old": "Lights out at ${lastLightsOut}",
+      "new": "I'm here if you need a sound",
+      "why": "Removes banned 'lights out' jargon and responds warmly when someone opens the app late at night."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 125,
+      "old": "It was ${bedLabel}. Wind down now, or move it later.",
+      "new": "Your bedtime was ${bedLabel}",
+      "why": "One clear idea; the buttons directly underneath already offer the choices."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 130,
+      "old": "Lights out was ${lastLightsOut} · tonight ${bedLabel}",
+      "new": "Hope you slept well",
+      "why": "Removes 'lights out' jargon and stops cramming last night's time and tonight's time into one meaningless line."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 130,
+      "old": "Bedtime tonight · ${bedLabel}",
+      "new": "Bedtime is at ${bedLabel}",
+      "why": "Natural sentence without a middot."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 133,
+      "old": "No bedtime yet",
+      "new": "When do you go to bed?",
+      "why": "Speaks in Lull's voice instead of a cold empty-state label."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 133,
+      "old": "Tap to set one",
+      "new": "Tap to set a bedtime",
+      "why": "Clearer on its own."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 139,
+      "old": "to lights out · ${bedLabel}",
+      "new": "minutes until bed",
+      "why": "Removes 'lights out' jargon and middot cramming; explains what the countdown number means."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 139,
+      "old": "until bedtime · ${bedLabel}",
+      "new": "until bed",
+      "why": "Says one thing cleanly without cramming the clock time beside the countdown."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 264,
+      "old": "End",
+      "new": "End wind down",
+      "why": "Clarifies what tapping the button stops."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 312,
+      "old": "Bedtime",
+      "new": "Change bedtime",
+      "why": "Actionable label for the past-bedtime button."
+    },
+    {
+      "file": "app/(tabs)/index.tsx",
+      "line": 378,
+      "old": "Resume",
+      "new": "Continue",
+      "why": "Matches the game door copy and feels softer."
+    },
+    {
+      "file": "app/(tabs)/sounds.tsx",
+      "line": 37,
+      "old": "Until lights out",
+      "new": "Until bedtime",
+      "why": "Replaces banned 'lights out' jargon with plain English."
+    },
+    {
+      "file": "app/(tabs)/sounds.tsx",
+      "line": 38,
+      "old": "Until stopped",
+      "new": "Keep playing",
+      "why": "Reads more naturally."
+    },
+    {
+      "file": "app/(tabs)/sounds.tsx",
+      "line": 105,
+      "old": "Custom mix",
+      "new": "Your mix",
+      "why": "Warmer and more personal."
+    },
+    {
+      "file": "app/(tabs)/sounds.tsx",
+      "line": 158,
+      "old": "${descent.phaseLabel} · Tune",
+      "new": "Tune rhythm",
+      "why": "One clear action without middot compression."
+    },
+    {
+      "file": "app/(tabs)/sounds.tsx",
+      "line": 357,
+      "old": "Sleep fade-out timer",
+      "new": "Sleep timer",
+      "why": "Shorter and familiar to everyone."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 47,
+      "old": "Daily reminder set",
+      "new": "Reminder is on",
+      "why": "Simpler, warmer confirmation."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 48,
+      "old": "Calendar file saved",
+      "new": "Calendar reminder saved",
+      "why": "Plain English instead of technical 'file'."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 49,
+      "old": "Notifications disabled",
+      "new": "Turn on notifications in iPhone Settings",
+      "why": "Tells the user what to do instead of a dead-end status."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 100,
+      "old": "Light, schedule, and quiet preferences",
+      "new": "Bedtime, screen warmth, and sound",
+      "why": "Concrete and plain instead of vague 'quiet preferences'."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 105,
+      "old": "In-app night light",
+      "new": "Night light",
+      "why": "Shorter and cleaner."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 110,
+      "old": "Wind down length",
+      "new": "Wind down time",
+      "why": "More natural everyday phrasing."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 150,
+      "old": "Warm 60m before bed",
+      "new": "Warm screen before bed",
+      "why": "Removes compressed '60m' shorthand; explain 'Starts an hour before bedtime' in a subtitle if space allows."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 159,
+      "old": "Game cues",
+      "new": "Game sounds",
+      "why": "Replaces audio jargon with plain English."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 173,
+      "old": "Reminder",
+      "new": "Bedtime reminder",
+      "why": "Makes clear what the reminder is for."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 189,
+      "old": "Hold to clear data & restart onboarding",
+      "new": "Hold to reset Lull",
+      "why": "Removes developer jargon ('clear data', 'onboarding')."
+    },
+    {
+      "file": "app/(tabs)/settings.tsx",
+      "line": 214,
+      "old": "Clear data & restart onboarding",
+      "new": "Reset app",
+      "why": "Plain English instead of developer jargon."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 55,
+      "old": "Daily reminder set",
+      "new": "Reminder is on",
+      "why": "Consistent with Settings screen."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 56,
+      "old": "Calendar file saved",
+      "new": "Calendar reminder saved",
+      "why": "Plain English."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 57,
+      "old": "Notifications disabled",
+      "new": "Turn on notifications in iPhone Settings",
+      "why": "Actionable instead of a dead-end message."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 96,
+      "old": "In-app night light",
+      "new": "Night light",
+      "why": "Shorter and cleaner."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 102,
+      "old": "Wind down length",
+      "new": "Wind down time",
+      "why": "More natural phrasing."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 143,
+      "old": "Warm 60m before bed",
+      "new": "Warm screen before bed",
+      "why": "Removes compressed '60m' jargon."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 152,
+      "old": "Game cues",
+      "new": "Game sounds",
+      "why": "Plain English instead of audio jargon."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 166,
+      "old": "Reminder",
+      "new": "Bedtime reminder",
+      "why": "Clearer label."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 185,
+      "old": "Hold to clear data & restart onboarding",
+      "new": "Hold to reset Lull",
+      "why": "Removes developer jargon."
+    },
+    {
+      "file": "src/ui/rn/NightSheet.tsx",
+      "line": 210,
+      "old": "Clear data & restart onboarding",
+      "new": "Reset app",
+      "why": "Removes developer jargon."
+    },
+    {
+      "file": "src/ui/rn/WindDownSheet.tsx",
+      "line": 52,
+      "old": "How long before lights out?",
+      "new": "How long do you want to wind down?",
+      "why": "Removes banned 'lights out' jargon and speaks naturally."
+    },
+    {
+      "file": "src/ui/rn/WindDownSheet.tsx",
+      "line": 54,
+      "old": "The light warms and dims, games slow down, and any sound fades to silence.",
+      "new": "The screen warms and dims, games slow down, and your sound fades out gently.",
+      "why": "Clearer ('screen' instead of 'light') and softer."
+    },
+    {
+      "file": "src/ui/rn/WindDownSheet.tsx",
+      "line": 68,
+      "old": "Lights out at ${formatBedtime12h(lightsOutHHMM)}",
+      "new": "Bedtime at ${formatBedtime12h(lightsOutHHMM)}",
+      "why": "Removes banned 'lights out' jargon."
+    },
+    {
+      "file": "src/ui/rn/WindDownSheet.tsx",
+      "line": 74,
+      "old": "Start wind down",
+      "new": "Start winding down",
+      "why": "Reads like natural English."
+    },
+    {
+      "file": "src/ui/rn/TonightSheet.tsx",
+      "line": 111,
+      "old": " · ${bedtimeSide(bedtime)}",
+      "new": "",
+      "why": "AM/PM already shows which side of midnight it is; removing this prevents cramming two facts with a middot."
+    },
+    {
+      "file": "src/ui/rn/TonightSheet.tsx",
+      "line": 157,
+      "old": "Bedtime ${formatBedtime12h(bedtime)} tonight",
+      "new": "Use ${formatBedtime12h(bedtime)} tonight",
+      "why": "Reads like a clear action instead of compressed shorthand."
+    },
+    {
+      "file": "src/ui/rn/TonightSheet.tsx",
+      "line": 157,
+      "old": "Bedtime ${formatBedtime12h(bedtime)} every night",
+      "new": "Use ${formatBedtime12h(bedtime)} every night",
+      "why": "Reads like a clear action."
+    },
+    {
+      "file": "src/ui/rn/TonightSheet.tsx",
+      "line": 161,
+      "old": "Back to usual · ${formatBedtime12h(schedule.bedtime)}",
+      "new": "Reset to ${formatBedtime12h(schedule.bedtime)}",
+      "why": "Cleaner and drops the middot."
+    },
+    {
+      "file": "src/ui/rn/NightCheckIn.tsx",
+      "line": 34,
+      "old": "Heavy / Carry less tonight",
+      "new": "See checkIn.questions[0] (Good, Calm, Busy, Stressful, Exhausting)",
+      "why": "Replaces abstract poetic adjectives with words real people use to describe their day."
+    },
+    {
+      "file": "src/ui/rn/NightCheckIn.tsx",
+      "line": 49,
+      "old": "Melt away / Quiet focus / End on a light note",
+      "new": "See checkIn.questions[1] (Sleepy, Relaxed, Worn out, Overthinking, Wide awake)",
+      "why": "Asks how the person feels right now so Lull chooses tonight's games and sound instead of making the user pick."
+    },
+    {
+      "file": "src/ui/rn/NightCheckIn.tsx",
+      "line": 172,
+      "old": "How did today feel?",
+      "new": "How was your day?",
+      "why": "Simpler, warmer, and more natural."
+    },
+    {
+      "file": "src/ui/rn/NightCheckIn.tsx",
+      "line": 174,
+      "old": "Lull will arrange tonight's games and sound to match your pace.",
+      "new": "I'll pick tonight's games and sound for you.",
+      "why": "First-person voice feels alive instead of robotic third-person."
+    },
+    {
+      "file": "src/ui/rn/NightCheckIn.tsx",
+      "line": 210,
+      "old": "How do you want to end tonight?",
+      "new": "How do you feel right now?",
+      "why": "Lets the app decide what fits tonight based on how the person feels."
+    },
+    {
+      "file": "src/ui/rn/NightCheckIn.tsx",
+      "line": 212,
+      "old": "We'll bring the right games forward and keep everything else one tap below.",
+      "new": "One more question, then I'll set things up.",
+      "why": "Shorter, first-person, and avoids explaining UI mechanics."
+    },
+    {
+      "file": "src/ui/rn/NightCheckIn.tsx",
+      "line": 261,
+      "old": "Just browse",
+      "new": "Skip for tonight",
+      "why": "Sounds natural and reassuring."
+    },
+    {
+      "file": "src/ui/rn/Onboarding.tsx",
+      "line": 192,
+      "old": "When do you usually turn in?",
+      "new": "When do you usually go to bed?",
+      "why": "Removes banned 'turn in' jargon."
+    },
+    {
+      "file": "src/ui/rn/Onboarding.tsx",
+      "line": 197,
+      "old": "The light starts warming at ${time}",
+      "new": "Screen starts warming at ${time}",
+      "why": "Clearer what is warming."
+    },
+    {
+      "file": "src/ui/rn/Onboarding.tsx",
+      "line": 205,
+      "old": "What helps you settle?",
+      "new": "Replace step with new 4-page flow in onboarding.pages",
+      "why": "Removes banned 'settle' jargon and matches the new intro + bedtime + sound + name onboarding."
+    },
+    {
+      "file": "src/ui/rn/Onboarding.tsx",
+      "line": 235,
+      "old": "What do you fall asleep to?",
+      "new": "What helps you fall asleep?",
+      "why": "More inviting for people who do not already use sleep sounds."
+    },
+    {
+      "file": "src/ui/rn/Onboarding.tsx",
+      "line": 264,
+      "old": "Tap to listen. Sound fades out at lights out.",
+      "new": "Tap any sound to listen. I'll fade it out once you're asleep.",
+      "why": "Removes banned 'lights out' jargon and uses Lull's voice."
+    },
+    {
+      "file": "src/ui/rn/SessionCurtain.tsx",
+      "line": 90,
+      "old": "Tap anywhere to wake",
+      "new": "Tap anywhere to return",
+      "why": "Clearer that tapping returns to the app, without using 'wake' ambiguously."
+    },
+    {
+      "file": "src/ui/rn/GameShell.tsx",
+      "line": 179,
+      "old": "winding down",
+      "new": "Winding down",
+      "why": "Consistent sentence case."
+    },
+    {
+      "file": "src/ui/rn/GameShell.tsx",
+      "line": 268,
+      "old": "New ${formattedBest}",
+      "new": "New best: ${formattedBest}",
+      "why": "Clearer what the number means."
+    },
+    {
+      "file": "src/ui/rn/GameShell.tsx",
+      "line": 297,
+      "old": "Begin",
+      "new": "Play",
+      "why": "Simpler and friendlier than 'Begin'."
+    },
+    {
+      "file": "src/ui/rn/GameShell.tsx",
+      "line": 352,
+      "old": "${spec.label} · ${formattedBest}",
+      "new": "${spec.label}: ${formattedBest}",
+      "why": "Cleaner punctuation without middot."
+    },
+    {
+      "file": "src/ui/rn/GameShell.tsx",
+      "line": 362,
+      "old": "Reset personal best",
+      "new": "Reset best",
+      "why": "Shorter and cleaner."
+    },
+    {
+      "file": "src/ui/rn/GameShell.tsx",
+      "line": 374,
+      "old": "${spec.label} · ${formattedBest}",
+      "new": "${spec.label}: ${formattedBest}",
+      "why": "Cleaner punctuation without middot."
+    },
+    {
+      "file": "src/ui/rn/GameShell.tsx",
+      "line": 408,
+      "old": "Leave ${meta.name}",
+      "new": "Back to games",
+      "why": "Tells the user where the button goes."
+    },
+    {
+      "file": "src/ui/rn/GameAudioSheet.tsx",
+      "line": 36,
+      "old": "Ambient",
+      "new": "Sleep sound",
+      "why": "Plain English instead of audio jargon."
+    },
+    {
+      "file": "src/ui/rn/GameAudioSheet.tsx",
+      "line": 71,
+      "old": "Game cues",
+      "new": "Game sounds",
+      "why": "Plain English."
+    },
+    {
+      "file": "src/ui/rn/GameAudioSheet.tsx",
+      "line": 72,
+      "old": "Tuned to ${keyLabel}",
+      "new": "Matches ${keyLabel}",
+      "why": "Simpler and avoids music-production jargon."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 316,
+      "old": "Harmonic warmth",
+      "new": "Soft chords",
+      "why": "Plain English instead of synth jargon."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 327,
+      "old": "Tone & game cues",
+      "new": "Musical tone",
+      "why": "Plain English and removes 'game cues' jargon."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 330,
+      "old": "Hear",
+      "new": "Preview",
+      "why": "Clearer action label."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 366,
+      "old": "${descent.minutesToBed}m to bedtime",
+      "new": "${descent.minutesToBed} min until bed",
+      "why": "Less compressed and more natural."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 367,
+      "old": "Bedtime descent live",
+      "new": "Slowing down for bed",
+      "why": "Removes 'descent' jargon."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 368,
+      "old": "60m bedtime descent",
+      "new": "Bedtime slow-down",
+      "why": "Removes '60m' shorthand and 'descent' jargon."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 371,
+      "old": "Modulation off",
+      "new": "Pulse off",
+      "why": "Plain English and consistent with the Pulse control below."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 385,
+      "old": "Wave band",
+      "new": "Sleep rhythm",
+      "why": "Plain English instead of technical jargon."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 416,
+      "old": "Pulse depth",
+      "new": "Pulse strength",
+      "why": "Clearer for non-musicians."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 423,
+      "old": "Auto 60m descent",
+      "new": "Slow down before bed",
+      "why": "Removes compressed '60m' and 'descent' jargon."
+    },
+    {
+      "file": "src/ui/rn/MixSheet.tsx",
+      "line": 424,
+      "old": "Slows wave & warmth before bed",
+      "new": "Softens the sound in the hour before bedtime",
+      "why": "Plain sentence anyone can understand."
+    },
+    {
+      "file": "src/ui/rn/controls.tsx",
+      "line": 382,
+      "old": "${pct}% in-app light",
+      "new": "${pct}% brightness",
+      "why": "Plain English."
+    },
+    {
+      "file": "src/ui/rn/TabIsland.tsx",
+      "line": 229,
+      "old": "Custom",
+      "new": "Your mix",
+      "why": "Matches the Sounds screen label."
+    },
+    {
+      "file": "src/ui/rn/TabIsland.tsx",
+      "line": 318,
+      "old": "Night controls",
+      "new": "Settings",
+      "why": "Matches the settings gear icon and sheet title."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 81,
+      "old": "${hint} · until lights out",
+      "new": "${hint} (stops at bedtime)",
+      "why": "Removes banned 'lights out' jargon and middot cramming."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 82,
+      "old": "${hint} · ${choice}m timer",
+      "new": "${hint} (${choice} min timer)",
+      "why": "Clearer formatting without middot."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 158,
+      "old": "Custom mix",
+      "new": "Your mix",
+      "why": "Consistent and warmer."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 159,
+      "old": "Your layered blend",
+      "new": "Custom sleep sound",
+      "why": "Plain English instead of 'layered blend'."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 182,
+      "old": "Custom mix",
+      "new": "Your mix",
+      "why": "Consistent and warmer."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 183,
+      "old": "Your layered blend",
+      "new": "Custom sleep sound",
+      "why": "Plain English."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 209,
+      "old": "Custom mix",
+      "new": "Your mix",
+      "why": "Consistent and warmer."
+    },
+    {
+      "file": "src/ui/state/sound.ts",
+      "line": 210,
+      "old": "Your layered blend",
+      "new": "Custom sleep sound",
+      "why": "Plain English."
+    },
+    {
+      "file": "src/platform/notifications.ts",
+      "line": 39,
+      "old": "Put away the feeds and open Lull.",
+      "new": "See notifications.windDown rotating list",
+      "why": "Sounds scolding; replace with warm, rotating reminders that invite a check-in."
+    },
+    {
+      "file": "src/platform/web/calendar.ts",
+      "line": 35,
+      "old": "Put away the feeds and open Lull for a quiet wind-down.",
+      "new": "Bedtime is an hour away. Open Lull when you're ready to relax.",
+      "why": "Gentler and never scolding."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 53,
+      "old": "Ripple blooms",
+      "new": "Koi pond",
+      "why": "Immediately tells the player what the game is."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 54,
+      "old": "Guide your koi through quiet harmonic water to bloom each lotus constellation.",
+      "new": "Guide a koi across quiet water to open glowing lotus buds.",
+      "why": "Drops pretentious phrasing ('harmonic water', 'lotus constellation')."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 68,
+      "old": "Swap tiles until the colours flow seamlessly again.",
+      "new": "Swap tiles until every row and column blends smoothly.",
+      "why": "Removes marketing-style word 'seamlessly' and explains the goal clearly."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 82,
+      "old": "Join each pair of lights without crossing lines.",
+      "new": "Connect matching shapes without crossing lines.",
+      "why": "Matches the actual shapes on the board."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 83,
+      "old": "Bounded calm",
+      "new": "Quiet focus",
+      "why": "'Bounded calm' is awkward jargon."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 96,
+      "old": "Slide the numbered stones home, one quiet move at a time.",
+      "new": "Slide the numbered tiles back into order.",
+      "why": "Clearer and less forced."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 124,
+      "old": "Read the clues, weave the cells, reveal the hidden pattern.",
+      "new": "Use the number clues to uncover a hidden picture.",
+      "why": "Plain English that makes Nonograms approachable."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 130,
+      "old": "The numbers are the runs of filled cells in each row and column, in order. Drag to fill; switch to Mark to cross out.",
+      "new": "Side numbers show groups of filled squares in order (2 1 means two filled, a gap, then one). Drag to fill, or Mark empties.",
+      "why": "Teaches a first-timer how a nonogram actually works with a concrete example."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 137,
+      "old": "Lights out",
+      "new": "Switch off",
+      "why": "Avoids repeating the banned 'lights out' phrase while staying clear."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 138,
+      "old": "Tap a stone to flip it and its neighbours. Put every light out.",
+      "new": "Flip tiles and their neighbours until the whole board is dark.",
+      "why": "Plain, concrete description."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 152,
+      "old": "Turn two lanterns and recall where the matching light rests.",
+      "new": "Flip two tiles at a time to find every matching pair.",
+      "why": "Clearer than 'recall where the matching light rests'."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 166,
+      "old": "Fit the stones and clear rows in calm Endless or Classic mode.",
+      "new": "Stack falling blocks to clear rows at your own pace.",
+      "why": "Simpler and avoids explaining mode names in the tagline."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 167,
+      "old": "Visuospatial focus",
+      "new": "Spatial focus",
+      "why": "Removes clinical jargon."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 180,
+      "old": "Slide warm embers together until they glow brighter.",
+      "new": "Slide matching numbers together until you reach 2048.",
+      "why": "Says what the game actually does instead of hiding it behind a metaphor."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 186,
+      "old": "Swipe to move every ember at once. Two that match merge into one twice as bright.",
+      "new": "Swipe up, down, left, or right to slide all tiles at once. Matching tiles that touch merge into double their number.",
+      "why": "Plain, accurate rules instead of confusing 'twice as bright' metaphor."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 193,
+      "old": "Cluster clear",
+      "new": "Tile match",
+      "why": "More intuitive than 'Cluster clear'."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 194,
+      "old": "Tap matching clusters and watch the stones tumble quietly away.",
+      "new": "Tap groups of matching stones and watch them fall away.",
+      "why": "Plain, everyday words."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 207,
+      "old": "Brick chimes",
+      "new": "Brick breaker",
+      "why": "Names the classic plainly."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 208,
+      "old": "Guide the brass ball gently to clear resonant stone walls.",
+      "new": "Bounce the ball off your paddle to clear each wall of blocks.",
+      "why": "Plain English instead of 'resonant stone walls'."
+    },
+    {
+      "file": "src/core/games/catalog.ts",
+      "line": 222,
+      "old": "Return the brass ball up the court at a steady nocturnal rhythm.",
+      "new": "Bounce the ball back and forth at an easy pace.",
+      "why": "Drops forced word 'nocturnal'."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 51,
+      "old": "Twilight air currents",
+      "new": "Soft night wind",
+      "why": "Plain English instead of 'air currents'."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 52,
+      "old": "Deep, velvet sub-rumble",
+      "new": "Deep, soft rumble",
+      "why": "Removes technical prefix 'sub-'."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 53,
+      "old": "Warm masking floor",
+      "new": "Soft, warm hush",
+      "why": "Removes audio-engineer jargon ('masking floor')."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 54,
+      "old": "Softened broadband mask",
+      "new": "Soft, even static",
+      "why": "Removes audio-engineer jargon ('broadband mask')."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 58,
+      "old": "Deep slow-wave pulse",
+      "new": "Slowest pulse, for deep sleep",
+      "why": "Explains what Delta is for in plain words."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 59,
+      "old": "Drowsy twilight drift",
+      "new": "Slow pulse, for drifting off",
+      "why": "Clearer description of Theta."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 60,
+      "old": "Calm evening unwind",
+      "new": "Gentle pulse, for relaxing",
+      "why": "Clearer description of Alpha."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 132,
+      "old": "Soft rain & felt fifths",
+      "new": "Soft rain & quiet chords",
+      "why": "'Felt fifths' is music-theory jargon; keeps the warm spirit of the Sounds page."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 138,
+      "old": "Flagship",
+      "new": "Popular",
+      "why": "Removes marketing jargon."
+    },
+    {
+      "file": "src/core/sound/catalog.ts",
+      "line": 261,
+      "old": "Warm hush & alpha drift",
+      "new": "Soft rain & gentle keys",
+      "why": "Removes 'alpha drift' jargon while keeping the sensory tone."
+    },
+    {
+      "file": "src/ui/rn/games/pond/PondScreen.tsx",
+      "line": 815,
+      "old": "Drag anywhere on the water to guide",
+      "new": "Touch or drag the water to guide the koi",
+      "why": "Completes the thought and mentions tapping as well as dragging."
+    },
+    {
+      "file": "src/ui/rn/games/hue/HueScreen.tsx",
+      "line": 64,
+      "old": "Cozy 4×4",
+      "new": "Easy",
+      "why": "Consistent difficulty naming across games."
+    },
+    {
+      "file": "src/ui/rn/games/hue/HueScreen.tsx",
+      "line": 65,
+      "old": "Medium 4×5",
+      "new": "Medium",
+      "why": "Consistent difficulty naming."
+    },
+    {
+      "file": "src/ui/rn/games/hue/HueScreen.tsx",
+      "line": 66,
+      "old": "Classic",
+      "new": "Hard",
+      "why": "Matches Easy / Medium / Hard clearly."
+    },
+    {
+      "file": "src/ui/rn/games/hue/HueScreen.tsx",
+      "line": 722,
+      "old": "In harmony · ${state.paletteTitle}",
+      "new": "${state.paletteTitle} complete",
+      "why": "Drops middot cramming and overly precious phrasing."
+    },
+    {
+      "file": "src/ui/rn/games/thread/ThreadScreen.tsx",
+      "line": 723,
+      "old": "Fill the remaining ${remainingCells} ${remainingCells === 1 ? 'cell' : 'cells'}",
+      "new": "${remainingCells} empty ${remainingCells === 1 ? 'square' : 'squares'} left to cover",
+      "why": "Uses plain word 'square' instead of 'cell'."
+    },
+    {
+      "file": "src/ui/rn/games/nine/NineScreen.tsx",
+      "line": 430,
+      "old": "New Puzzle",
+      "new": "New puzzle",
+      "why": "Consistent sentence case."
+    },
+    {
+      "file": "src/ui/rn/games/weave/WeaveScreen.tsx",
+      "line": 487,
+      "old": "Woven",
+      "new": "Filled",
+      "why": "Plain English that matches the tool name."
+    },
+    {
+      "file": "src/ui/rn/games/weave/WeaveScreen.tsx",
+      "line": 706,
+      "old": "${state.rows}×${state.cols} woven",
+      "new": "Picture complete",
+      "why": "Celebrates the picture instead of technical grid dimensions."
+    },
+    {
+      "file": "src/ui/rn/games/dim/DimScreen.tsx",
+      "line": 310,
+      "old": "Par",
+      "new": "Target",
+      "why": "Plain English instead of golf jargon."
+    },
+    {
+      "file": "src/ui/rn/games/dim/DimScreen.tsx",
+      "line": 369,
+      "old": "Lights out",
+      "new": "All dark",
+      "why": "Removes banned 'lights out' jargon."
+    },
+    {
+      "file": "src/ui/rn/games/dim/DimScreen.tsx",
+      "line": 370,
+      "old": "${state.moves} taps · a perfect board",
+      "new": "Done in ${state.moves} taps. Shortest possible.",
+      "why": "Plain sentence without middot cramming."
+    },
+    {
+      "file": "src/ui/rn/games/dim/DimScreen.tsx",
+      "line": 370,
+      "old": "${state.moves} taps · par ${state.par}",
+      "new": "Done in ${state.moves} taps",
+      "why": "One clear fact without golf jargon or middot."
+    },
+    {
+      "file": "src/ui/rn/games/settle/SettleScreen.tsx",
+      "line": 595,
+      "old": "Move and lower stones with your left thumb, then rotate and drop with your right.",
+      "new": "Tap to rotate, drag to move, or use the buttons below.",
+      "why": "Shorter and covers both touch gestures and buttons."
+    },
+    {
+      "file": "src/ui/rn/games/kindle/KindleScreen.tsx",
+      "line": 715,
+      "old": "2048 · keep going",
+      "new": "You reached 2048. Keep going if you like.",
+      "why": "Reads like a warm sentence instead of compressed middot text."
+    },
+    {
+      "file": "src/ui/rn/games/chime/ChimeScreen.tsx",
+      "line": 534,
+      "old": "Tap to launch and drag the rail to steer. Reinforced brass stones take two hits.",
+      "new": "Tap to launch, then drag the bar below to move. Gold-bordered blocks take two hits.",
+      "why": "Plain words instead of 'rail' and 'Reinforced brass stones'."
+    },
+    {
+      "file": "src/ui/rn/games/chime/ChimeScreen.tsx",
+      "line": 615,
+      "old": "Cleared · ${uiMeta.patternName}",
+      "new": "Wall cleared",
+      "why": "One clear thought without middot cramming."
+    },
+    {
+      "file": "src/ui/rn/games/rally/RallyScreen.tsx",
+      "line": 402,
+      "old": "Drag on the rail below the court to steer your paddle.",
+      "new": "Drag the bar below to move your paddle.",
+      "why": "Shorter and uses plain word 'bar' instead of 'rail'."
+    }
+  ]
+}

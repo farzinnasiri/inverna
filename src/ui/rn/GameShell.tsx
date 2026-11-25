@@ -1,17 +1,23 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
-import { Award, ChevronLeft, CircleHelp, Pause, Play, Volume2, VolumeX } from 'lucide-react-native'
+import { Award, Bell, BellOff, ChevronLeft, CircleHelp, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react-native'
+import { eveningState } from '@/core/evening'
 import { gameMeta, type GameId } from '@/core/games/catalog'
+import { nightKey } from '@/core/night'
+import { readJSON } from '@/core/storage'
 import { formatScoreValue, HIGH_SCORE_SPECS } from '@/core/highscores'
 import { presetById } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useHighScores } from '@/ui/state/highscores'
 import { useSession } from '@/ui/state/session'
-import { useSettings } from '@/ui/state/settings'
-import { useSound } from '@/ui/state/sound'
+import { currentSchedule, useSettings, type Difficulty } from '@/ui/state/settings'
+import { bedtimeNudge as nudgeCopy, gameDoor as doorCopy } from '@/ui/copy'
+import { sound as soundEngine } from '@/platform'
+import { useAmbientToggle, useSound } from '@/ui/state/sound'
 import { GameAudioSheet } from './GameAudioSheet'
-import { Button, FRAME_MAX_WIDTH, IconButton, Sheet } from './controls'
+import { AmbientBackdrop } from './AmbientBackdrop'
+import { Button, FRAME_MAX_WIDTH, IconButton, Segmented, Sheet } from './controls'
 import { GlassSurface } from './Glass'
 import { useBackgroundPause, useHighScore, useReducedMotion, useResponsiveLayout } from './hooks'
 
@@ -25,6 +31,16 @@ export interface Stat {
 }
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
+
+/** Games whose difficulty is the shared Easy / Medium / Hard (through `useCalm(gameId)`). */
+const SHARED_DIFFICULTY = new Set<GameId>(['thread', 'drift', 'weave', 'dim', 'lanterns', 'settle', 'kindle', 'cascade', 'chime'])
+const DIFFICULTIES: readonly { value: Difficulty; label: string }[] = [
+  { value: 'easy', label: doorCopy.easy },
+  { value: 'medium', label: doorCopy.medium },
+  { value: 'hard', label: doorCopy.hard },
+]
+/** How long after bedtime the in-game prompt may still appear. */
+const NUDGE_WINDOW_MIN = 45
 
 /**
  * Shared slimmed Liquid Glass Watchmaker frame for all 13 games.
@@ -47,7 +63,6 @@ export function GameShell({
   onPauseChange,
   onRestart,
   onExit,
-  howTo,
   controls,
   children,
 }: {
@@ -67,7 +82,6 @@ export function GameShell({
   onPauseChange: (paused: boolean) => void
   onRestart?: () => void
   onExit: () => void
-  howTo: readonly string[]
   controls?: ReactNode
   children: ReactNode
 }) {
@@ -76,14 +90,105 @@ export function GameShell({
   const reducedMotion = useReducedMotion()
   const meta = gameMeta(gameId)
   const spec = HIGH_SCORE_SPECS[gameId]
-  const [helpOpen, setHelpOpen] = useState(false)
-  const [audioOpen, setAudioOpen] = useState(false)
+  // One sheet at a time on top of the game. Opening Help or Sound pauses play;
+  // closing it returns to wherever it was opened from: back to play from the
+  // top bar, back to the Pause sheet from Pause. Play never resumes unseen.
+  // The door opens first: difficulty, Continue or New game. It counts as a
+  // sheet so the Pause sheet stays out of the way while it's up.
+  const [hadSave] = useState(() => readJSON<unknown>(`game:${gameId}`, null) !== null)
+  const [sheet, setSheet] = useState<{ kind: 'door' | 'help' | 'audio' | 'nudge'; fromPause: boolean } | null>(() => ({
+    kind: 'door',
+    fromPause: false,
+  }))
+  const doorOpen = sheet?.kind === 'door'
+  const nudgeOpen = sheet?.kind === 'nudge'
+  const helpOpen = sheet?.kind === 'help'
+  const audioOpen = sheet?.kind === 'audio'
+  const openSheet = (kind: 'help' | 'audio') => {
+    const fromPause = paused
+    if (!paused && ready) onPauseChange(true)
+    setSheet({ kind, fromPause: fromPause || !ready })
+  }
+  const closeSheet = () => {
+    const from = sheet
+    setSheet(null)
+    if (from && !from.fromPause && ready) onPauseChange(false)
+  }
+
+  // Hold play while the door is up (games with their own start gate aren't running yet).
+  useEffect(() => {
+    if (ready) onPauseChange(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const enter = (fresh: boolean) => {
+    if (fresh) onRestart?.()
+    setSheet(null)
+    if (ready) onPauseChange(false)
+    onReady?.()
+  }
+
+  const difficulty = useSettings((s) => s.difficulty[gameId] ?? 'medium')
+  const setDifficulty = (d: Difficulty) => {
+    const st = useSettings.getState()
+    st.set({ difficulty: { ...st.difficulty, [gameId]: d } })
+  }
+
+  // Bedtime arrives mid-game: ask once a night, gently, and let them choose.
+  const userName = useSettings((s) => s.userName)
+  const nudgedNight = useSettings((s) => s.bedtimeNudgeNight)
+  const sheetRef = useRef(sheet)
+  sheetRef.current = sheet
+  useEffect(() => {
+    const check = () => {
+      const now = new Date()
+      if (useSettings.getState().bedtimeNudgeNight === nightKey(now) || sheetRef.current) return
+      const ev = eveningState(currentSchedule(now), now)
+      const justPast = ev.kind === 'past' && (ev.minutesSinceBedtime ?? 99) <= NUDGE_WINDOW_MIN
+      const atBedtime = ev.kind === 'winding' && (ev.minutesToBedtime ?? 99) <= 0
+      if (!justPast && !atBedtime) return
+      const fromPause = pausedRef.current
+      if (!fromPause && readyRef.current) onPauseChange(true)
+      setSheet({ kind: 'nudge', fromPause })
+    }
+    check()
+    const id = setInterval(check, 30_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nudgedNight])
+  const pausedRef = useRef(paused)
+  pausedRef.current = paused
+  const readyRef = useRef(ready)
+  readyRef.current = ready
+
+  const answerNudge = (choice: 'phone-down' | 'keep' | 'stop') => {
+    const now = new Date()
+    useSettings.getState().set({ bedtimeNudgeNight: nightKey(now) })
+    if (choice === 'keep') {
+      closeSheet()
+      return
+    }
+    setSheet(null)
+    if (choice === 'phone-down') {
+      // Tonight's sound plays on and fades out by itself; the screen can sleep.
+      useSession.getState().dismiss()
+      const st = useSettings.getState()
+      st.set({ lastLightsOutNight: nightKey(now) })
+      useSound.getState().playPreset(st.sessionPreset ?? 'theta-rain', 45)
+    }
+    stepOut()
+  }
 
   const ambientPlaying = useSound((s) => s.playing)
   const activePresetId = useSound((s) => s.presetId)
   const session = useSession((s) => s.session)
   const sfx = useSettings((s) => s.sfx)
-  const allMuted = !ambientPlaying && !sfx
+  const setSettings = useSettings((s) => s.set)
+  const ambient = useAmbientToggle()
+  const toggleCues = () => {
+    setSettings({ sfx: !sfx })
+    soundEngine.setCuesEnabled(!sfx)
+  }
 
   const activeSoundName = ambientPlaying
     ? (activePresetId ? presetById(activePresetId)?.name : 'Custom mix') ?? 'Playing'
@@ -97,9 +202,10 @@ export function GameShell({
   const clearGameBest = useHighScores((s) => s.clearGame)
   const [pulseBest, setPulseBest] = useState(false)
 
-  // UI-thread Reanimated arrival (scale 0.97 -> 1, opacity 0 -> 1, 220ms EASE_OUT).
+  // Stepping in: the game comes toward you out of the night (scale 1.06 -> 1)
+  // as the backdrop's colour carries over; stepping out reverses it.
   const entryOpacity = useSharedValue(reducedMotion ? 1 : 0)
-  const entryScale = useSharedValue(reducedMotion ? 1 : 0.97)
+  const entryScale = useSharedValue(reducedMotion ? 1 : 1.06)
 
   useEffect(() => {
     if (reducedMotion) {
@@ -107,9 +213,22 @@ export function GameShell({
       entryScale.set(1)
       return
     }
-    entryOpacity.set(withTiming(1, { duration: 200, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
-    entryScale.set(withTiming(1, { duration: 240, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
+    entryOpacity.set(withTiming(1, { duration: 320, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
+    entryScale.set(withTiming(1, { duration: 420, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
   }, [entryOpacity, entryScale, reducedMotion])
+
+  const leaving = useRef(false)
+  const stepOut = () => {
+    if (leaving.current) return
+    leaving.current = true
+    if (reducedMotion) {
+      onExit()
+      return
+    }
+    entryOpacity.set(withTiming(0, { duration: 200, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
+    entryScale.set(withTiming(1.05, { duration: 220, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
+    setTimeout(onExit, 190)
+  }
 
   const frameAnimStyle = useAnimatedStyle(() => ({
     opacity: entryOpacity.get(),
@@ -139,15 +258,17 @@ export function GameShell({
         },
       ]}
     >
+      {/* The night you came from, carried in: colour only, dimmed, no motion. */}
+      <AmbientBackdrop still dim={0.8} />
       <Animated.View style={[styles.frame, frameAnimStyle]}>
         {/* Slim Liquid Glass Top Bar */}
         <View style={[styles.top, { paddingHorizontal: sideMargin }]}>
           <GlassSurface variant="chrome" radius={21} style={styles.capsule}>
-            <IconButton label="Back" onPress={onExit} style={styles.capBtn}>
+            <IconButton label="Back" onPress={stepOut} style={styles.capBtn}>
               <ChevronLeft size={20} strokeWidth={1.65} color={color.ink} />
             </IconButton>
             <View style={styles.capDiv} />
-            <IconButton label="How to play" onPress={() => setHelpOpen(true)} style={styles.capBtn}>
+            <IconButton label="How to play" onPress={() => openSheet('help')} style={styles.capBtn}>
               <CircleHelp size={17} strokeWidth={1.65} color={color.ink2} />
             </IconButton>
           </GlassSurface>
@@ -158,23 +279,31 @@ export function GameShell({
             </Text>
             {session ? (
               <Text style={[styles.sessionMini, { color: color.accent }]} numberOfLines={1}>
-                winding down
+                Winding down
               </Text>
             ) : null}
           </View>
 
           <GlassSurface variant="chrome" radius={21} style={styles.capsule}>
-            <IconButton label="Sound" onPress={() => setAudioOpen(true)} lit={ambientPlaying} style={styles.capBtn}>
-              <View style={styles.soundIconWrap}>
-                {allMuted ? (
-                  <VolumeX size={17} strokeWidth={1.65} color={color.ink3} />
-                ) : (
-                  <Volume2 size={17} strokeWidth={1.65} color={ambientPlaying ? color.accent : color.ink2} />
-                )}
-                {ambientPlaying ? (
-                  <View style={[styles.liveDot, { backgroundColor: color.accent }]} />
-                ) : null}
-              </View>
+            <IconButton
+              label={ambientPlaying ? `Stop ${ambient.name}` : `Play ${ambient.name}`}
+              onPress={ambient.toggle}
+              lit={ambientPlaying}
+              style={styles.capBtn}
+            >
+              {ambientPlaying ? (
+                <Volume2 size={17} strokeWidth={1.65} color={color.accent} />
+              ) : (
+                <VolumeX size={17} strokeWidth={1.65} color={color.ink3} />
+              )}
+            </IconButton>
+            <View style={styles.capDiv} />
+            <IconButton label={sfx ? 'Mute game sounds' : 'Unmute game sounds'} onPress={toggleCues} style={styles.capBtn}>
+              {sfx ? (
+                <Bell size={16} strokeWidth={1.65} color={color.ink2} />
+              ) : (
+                <BellOff size={16} strokeWidth={1.65} color={color.ink3} />
+              )}
             </IconButton>
             <View style={styles.capDiv} />
             <IconButton label="Pause" onPress={() => onPauseChange(true)} style={styles.capBtn}>
@@ -209,7 +338,7 @@ export function GameShell({
             <View style={styles.telemetryRight}>
               {activeSoundName ? (
                 <Pressable
-                  onPress={() => setAudioOpen(true)}
+                  onPress={() => openSheet('audio')}
                   accessibilityRole="button"
                   accessibilityLabel={`Now playing ${activeSoundName}`}
                   style={[styles.nowPlayingPill, { borderColor: 'rgba(194, 161, 95, 0.28)' }]}
@@ -239,7 +368,7 @@ export function GameShell({
                     ]}
                     numberOfLines={1}
                   >
-                    {pulseBest ? `New ${formattedBest}` : `Best ${formattedBest}`}
+                    {pulseBest ? `New best: ${formattedBest}` : `Best ${formattedBest}`}
                   </Text>
                 </View>
               ) : null}
@@ -250,33 +379,6 @@ export function GameShell({
         <View style={[styles.stage, { paddingHorizontal: sideMargin }]}>
           {children}
 
-          {/* Forgiving Ready Gate for games with start/mode/difficulty choice */}
-          {!ready && onReady && (
-            <View style={styles.readyOverlay}>
-              <Pressable
-                onPress={onReady}
-                accessibilityRole="button"
-                accessibilityLabel={`Begin ${meta.name}`}
-                style={StyleSheet.absoluteFill}
-              />
-              <GlassSurface variant="elevated" radius={26} style={styles.readyCard}>
-                <Text style={[styles.readyTitle, { color: color.ink }]}>{meta.name}</Text>
-                <Text style={[styles.readySub, { color: color.ink2 }]}>
-                  {readyHint ?? howTo[0] ?? meta.classic}
-                </Text>
-                {readyExtra ? <View style={styles.readyExtraWrap}>{readyExtra}</View> : null}
-                <View style={styles.readyActions}>
-                  <Button variant="primary" block onPress={onReady}>
-                    <Play size={15} strokeWidth={2} color={color.accentInk} />
-                    <Text style={[styles.readyBtnText, { color: color.accentInk }]}>Begin</Text>
-                  </Button>
-                  <Button variant="ghost" size="sm" onPress={() => setHelpOpen(true)}>
-                    How to play
-                  </Button>
-                </View>
-              </GlassSurface>
-            </View>
-          )}
         </View>
 
         {controls ? (
@@ -296,98 +398,170 @@ export function GameShell({
       </Animated.View>
 
       {/* Identical Audio Sheet across all 13 games */}
-      <GameAudioSheet open={audioOpen} onClose={() => setAudioOpen(false)} />
+      <GameAudioSheet open={audioOpen} onClose={closeSheet} />
 
-      {/* Identical How-to-Play Guide Sheet across all 13 games */}
-      <Sheet open={helpOpen} onClose={() => setHelpOpen(false)} label={`How to play ${meta.name}`}>
-        <View style={styles.guideHeader}>
-          <View>
-            <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
-            <Text style={[styles.sheetSub, { color: color.ink3 }]}>{meta.classic}</Text>
-          </View>
-          {showBestPill ? (
-            <GlassSurface variant="card" radius={14} accent style={styles.guideBestBox}>
-              <Text style={[styles.guideBestLabel, { color: color.ink3 }]}>{spec.label}</Text>
-              <Text style={[styles.guideBestVal, { color: color.accent }]}>{formattedBest}</Text>
-            </GlassSurface>
-          ) : null}
-        </View>
+      {/* Rules: the same three lines for every game. */}
+      <Sheet open={helpOpen} onClose={closeSheet} label={`How to play ${meta.name}`}>
+        <Text style={[styles.kicker, { color: color.ink3 }]}>{meta.classic}</Text>
+        <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
 
-        <GlassSurface variant="card" radius={18} style={styles.howtoBox}>
-          {howTo.map((line, i) => (
-            <View key={i} style={styles.howtoRow}>
-              <Text style={[styles.howtoNum, { color: color.accent }]}>{i + 1}</Text>
-              <Text style={[styles.howtoText, { color: color.ink2 }]}>{line}</Text>
+        <View style={styles.rules}>
+          {(
+            [
+              ['Goal', meta.rules.goal],
+              ['Play', meta.rules.play],
+              ['Tip', meta.rules.tip],
+            ] as const
+          ).map(([label, text], i) => (
+            <View
+              key={label}
+              style={[styles.ruleRow, i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line }]}
+            >
+              <Text style={[styles.ruleLabel, { color: label === 'Goal' ? color.accent : color.ink3 }]}>{label}</Text>
+              <Text style={[styles.ruleText, { color: label === 'Goal' ? color.ink : color.ink2 }]}>{text}</Text>
             </View>
           ))}
-        </GlassSurface>
+        </View>
+
+        {showBestPill ? (
+          <Text style={[styles.bestLine, { color: color.ink3 }]}>
+            {spec.label} · <Text style={{ color: color.accent }}>{formattedBest}</Text>
+          </Text>
+        ) : null}
 
         <View style={styles.sheetActions}>
-          <Button variant="primary" block onPress={() => setHelpOpen(false)}>
+          <Button variant="primary" block onPress={closeSheet}>
             Got it
           </Button>
           {showBestPill && (
             <Button variant="ghost" size="sm" block onPress={() => clearGameBest(gameId)}>
-              Reset personal best
+              Reset best
             </Button>
           )}
         </View>
       </Sheet>
 
-      {/* Identical Pause Sheet across all 13 games */}
-      <Sheet open={paused} onClose={() => onPauseChange(false)} label="Paused">
-        <View style={styles.guideHeader}>
-          <View>
-            <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
-            <Text style={[styles.sheetSub, { color: color.ink3 }]}>{meta.classic}</Text>
+      {/* The door: how hard, then carry on or start fresh. */}
+      <Sheet open={doorOpen} onClose={() => enter(false)} label={meta.name}>
+        <Text style={[styles.kicker, { color: color.ink3 }]}>{meta.classic}</Text>
+        <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
+        <Text style={[styles.doorGoal, { color: color.ink2 }]}>{readyHint ?? meta.rules.goal}</Text>
+        {SHARED_DIFFICULTY.has(gameId) ? (
+          <View style={styles.doorPicker}>
+            <Segmented label={doorCopy.difficulty} options={DIFFICULTIES} value={difficulty} onChange={setDifficulty} />
           </View>
-          {showBestPill ? (
-            <GlassSurface variant="card" radius={14} style={styles.guideBestBox}>
-              <Text style={[styles.guideBestLabel, { color: color.ink3 }]}>{spec.label}</Text>
-              <Text style={[styles.guideBestVal, { color: color.accent }]}>{formattedBest}</Text>
-            </GlassSurface>
-          ) : null}
+        ) : null}
+        {readyExtra ? <View style={styles.doorPicker}>{readyExtra}</View> : null}
+        <View style={styles.sheetActions}>
+          {hadSave ? (
+            <>
+              <Button variant="primary" block onPress={() => enter(false)}>
+                <Play size={15} strokeWidth={2} color={color.accent} />
+                <Text style={[styles.readyBtnText, { color: color.accent }]}>{doorCopy.continue}</Text>
+              </Button>
+              <Button variant="quiet" block onPress={() => enter(true)}>
+                {doorCopy.newGame}
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" block onPress={() => enter(false)}>
+              <Play size={15} strokeWidth={2} color={color.accent} />
+              <Text style={[styles.readyBtnText, { color: color.accent }]}>{doorCopy.newGame}</Text>
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" block onPress={() => setSheet({ kind: 'help', fromPause: false })}>
+            How to play
+          </Button>
         </View>
+      </Sheet>
+
+      {/* Bedtime arrived mid-game. */}
+      <Sheet open={nudgeOpen} onClose={() => answerNudge('keep')} label={nudgeCopy.title(userName)}>
+        <Text style={[styles.sheetTitle, { color: color.ink }]}>{nudgeCopy.title(userName)}</Text>
+        <Text style={[styles.doorGoal, { color: color.ink2 }]}>{nudgeCopy.body}</Text>
+        <View style={styles.sheetActions}>
+          <Button variant="primary" block onPress={() => answerNudge('phone-down')}>
+            {nudgeCopy.putPhoneDown}
+          </Button>
+          <Text style={[styles.nudgeNote, { color: color.ink3 }]}>{nudgeCopy.putPhoneDownNote}</Text>
+          <View style={styles.nudgeRow}>
+            <View style={{ flex: 1 }}>
+              <Button variant="quiet" block onPress={() => answerNudge('keep')}>
+                {nudgeCopy.keepPlaying}
+              </Button>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button variant="quiet" block onPress={() => answerNudge('stop')}>
+                {nudgeCopy.stop}
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Sheet>
+
+      {/* Pause: resume first, three equal side doors, a quiet way out. */}
+      <Sheet open={paused && !sheet} onClose={() => onPauseChange(false)} label="Paused">
+        <Text style={[styles.kicker, { color: color.ink3 }]}>Paused</Text>
+        <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
+        {showBestPill ? (
+          <Text style={[styles.bestLine, { color: color.ink3, marginTop: 4 }]}>
+            {spec.label} · <Text style={{ color: color.accent }}>{formattedBest}</Text>
+          </Text>
+        ) : null}
 
         <View style={styles.sheetActions}>
           <Button variant="primary" block onPress={() => onPauseChange(false)}>
-            Resume
+            <Play size={15} strokeWidth={2} color={color.accent} />
+            <Text style={[styles.readyBtnText, { color: color.accent }]}>Resume</Text>
           </Button>
-          <Button
-            block
-            onPress={() => {
-              onPauseChange(false)
-              setAudioOpen(true)
-            }}
-          >
-            {activeSoundName ? `Sound (${activeSoundName})` : 'Sound'}
-          </Button>
-          <Button
-            block
-            onPress={() => {
-              onPauseChange(false)
-              setHelpOpen(true)
-            }}
-          >
-            How to play
-          </Button>
-          {onRestart && (
-            <Button
-              block
-              onPress={() => {
-                onRestart()
-                onPauseChange(false)
-              }}
-            >
-              Start over
-            </Button>
-          )}
-          <Button variant="ghost" block onPress={onExit}>
-            Leave
+
+          <View style={styles.doorRow}>
+            <PauseDoor
+              label="Sound"
+              icon={<Volume2 size={18} strokeWidth={1.6} color={ambientPlaying ? color.accent : color.ink2} />}
+              onPress={() => setSheet({ kind: 'audio', fromPause: true })}
+            />
+            <PauseDoor
+              label="Rules"
+              icon={<CircleHelp size={18} strokeWidth={1.6} color={color.ink2} />}
+              onPress={() => setSheet({ kind: 'help', fromPause: true })}
+            />
+            {onRestart ? (
+              <PauseDoor
+                label="Start over"
+                icon={<RotateCcw size={18} strokeWidth={1.6} color={color.ink2} />}
+                onPress={() => {
+                  onRestart()
+                  onPauseChange(false)
+                }}
+              />
+            ) : null}
+          </View>
+
+          <Button variant="ghost" size="sm" block onPress={stepOut}>
+            Back to games
           </Button>
         </View>
       </Sheet>
     </View>
+  )
+}
+
+function PauseDoor({ label, icon, onPress }: { label: string; icon: ReactNode; onPress: () => void }) {
+  const { color } = useTokenColors()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.door,
+        { backgroundColor: color.surface2, borderColor: color.line, opacity: pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] },
+      ]}
+    >
+      {icon}
+      <Text style={[styles.doorText, { color: color.ink2 }]}>{label}</Text>
+    </Pressable>
   )
 }
 
@@ -536,18 +710,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     marginTop: 1,
   },
-  soundIconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  liveDot: {
-    position: 'absolute',
-    top: -3,
-    right: -4,
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
   telemetry: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -655,10 +817,22 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
   },
-  readyExtraWrap: {
-    width: '100%',
-    marginTop: 2,
-    marginBottom: 4,
+  doorGoal: {
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 6,
+  },
+  doorPicker: {
+    marginTop: 18,
+  },
+  nudgeNote: {
+    fontSize: 12.5,
+    textAlign: 'center',
+    marginTop: -2,
+  },
+  nudgeRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
   readyActions: {
     width: '100%',
@@ -691,58 +865,62 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  guideHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  guideBestBox: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    alignItems: 'flex-end',
-  },
-  guideBestLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  guideBestVal: {
-    fontSize: 14.5,
+  kicker: {
+    fontSize: 11.5,
     fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-    marginTop: 1,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   sheetTitle: {
-    fontSize: 22,
+    fontSize: 28,
     fontWeight: '600',
-    letterSpacing: -0.35,
-  },
-  sheetSub: {
-    fontSize: 13.5,
-    fontWeight: '400',
+    letterSpacing: -0.6,
     marginTop: 2,
   },
-  howtoBox: {
-    marginTop: 16,
-    padding: 16,
-    gap: 10,
+  rules: {
+    marginTop: 18,
   },
-  howtoRow: {
+  ruleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 14,
+    paddingVertical: 13,
   },
-  howtoNum: {
-    fontSize: 13,
+  ruleLabel: {
+    width: 38,
+    fontSize: 12,
     fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-    marginTop: 2,
-    width: 14,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginTop: 3,
   },
-  howtoText: {
+  ruleText: {
     flex: 1,
-    fontSize: 14.5,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 23,
+  },
+  bestLine: {
+    fontSize: 13,
+    marginTop: 6,
+    fontVariant: ['tabular-nums'],
+  },
+  doorRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  door: {
+    flex: 1,
+    height: 66,
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  doorText: {
+    fontSize: 13,
+    fontWeight: '500',
   },
   sheetActions: {
     gap: 8,

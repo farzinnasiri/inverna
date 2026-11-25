@@ -35,7 +35,7 @@ export const HIGH_SCORE_SPECS: Record<GameId, HighScoreSpec> = {
   drift: { mode: 'lower', label: 'Fewest moves', unit: 'moves', unitSingular: 'move' },
   nine: { mode: 'higher', label: 'Puzzles solved', unit: 'solved' },
   weave: { mode: 'higher', label: 'Puzzles solved', unit: 'solved' },
-  patience: { mode: 'lower', label: 'Fewest moves', unit: 'moves', unitSingular: 'move' },
+  dim: { mode: 'higher', label: 'Boards cleared', unit: 'cleared' },
   lanterns: { mode: 'lower', label: 'Fewest moves', unit: 'moves', unitSingular: 'move' },
   rally: { mode: 'higher', label: 'Best rally', unit: 'hits', unitSingular: 'hit' },
   chime: { mode: 'higher', label: 'Best score', unit: 'pts', unitSingular: 'pt' },

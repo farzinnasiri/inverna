@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { GameId } from '@/core/games/catalog'
-import { DEFAULT_SCHEDULE, type Schedule } from '@/core/night'
+import type { GameId, NightIntent } from '@/core/games/catalog'
+import type { DayAnswer, NowAnswer } from '@/core/tonight'
+import { DEFAULT_SCHEDULE, effectiveSchedule, type BedtimeOverride, type Schedule } from '@/core/night'
 import type { ModulationDepth } from '@/core/sound/arc'
 import { DEFAULT_PRESET_ID, normalizeBand, SILENT_MIX, type Mix } from '@/core/sound/catalog'
 import { kv, NAMESPACE } from '@/core/storage'
@@ -17,8 +18,9 @@ export const kvStorage = createJSONStorage(() => ({
   removeItem: (k: string) => kv().removeItem(NAMESPACE + k),
 }))
 
-export type DayFeeling = 'heavy' | 'restless' | 'steady' | 'bright'
-export type NightIntent = 'melt' | 'focus' | 'light'
+export type { NightIntent }
+
+export type Difficulty = 'easy' | 'medium' | 'hard'
 
 export interface SettingsState {
   /** Single unified night light level, 0 = normal, 1 = lowest. */
@@ -46,10 +48,25 @@ export interface SettingsState {
   lastGame: GameId | null
   /** Nightly check-in date stamp (YYYY-MM-DD) so it asks gently once per night. */
   lastCheckInDate: string | null
-  tonightDay: DayFeeling | null
+  /** Tonight's check-in answers (reset by lastCheckInDate each night). */
+  tonightDay: DayAnswer | null
+  tonightNow: NowAnswer | null
+  /** What Lull decided from the check-in: which kind of games lead tonight. */
   tonightIntent: NightIntent | null
+  /** First name, if they shared it. Used sparingly: greetings and reminders. */
+  userName: string
+  /** Daily reminder when it's time to wind down. */
+  reminders: boolean
+  /** Chosen difficulty per game (games without their own difficulty use it through `useCalm`). */
+  difficulty: Partial<Record<GameId, Difficulty>>
+  /** nightKey() of the night the in-game bedtime prompt was answered, so it asks once. */
+  bedtimeNudgeNight: string | null
   /** Quiet non-streak reflection: formatted time of last completed wind-down. */
   lastLightsOut: string | null
+  /** nightKey() of the night that lastLightsOut belongs to. */
+  lastLightsOutNight: string | null
+  /** Bedtime changed for one night only (tapping the time on Play). Expires at 06:00. */
+  tonightBedtime: BedtimeOverride | null
   set: (patch: Partial<Omit<SettingsState, 'set' | 'setSchedule'>>) => void
   setSchedule: (patch: Partial<Schedule>) => void
 }
@@ -68,20 +85,27 @@ export const useSettings = create<SettingsState>()(
       haptics: true,
       mix: SILENT_MIX,
       hasCustomMix: false,
-      sleepTimer: 30,
+      sleepTimer: -1, // until lights out
       onboarded: false,
       lastGame: null,
       lastCheckInDate: null,
       tonightDay: null,
+      tonightNow: null,
       tonightIntent: null,
+      userName: '',
+      reminders: true,
+      difficulty: {},
+      bedtimeNudgeNight: null,
       lastLightsOut: null,
+      lastLightsOutNight: null,
+      tonightBedtime: null,
       set: (patch) => set(patch),
       setSchedule: (patch) => set((s) => ({ schedule: { ...s.schedule, ...patch } })),
     }),
     {
       name: 'settings',
       storage: kvStorage,
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
         const p = persisted as Record<string, unknown>
@@ -111,8 +135,26 @@ export const useSettings = create<SettingsState>()(
             autoDescent: true,
           }
         }
+        if (version < 4) {
+          // The check-in asks different questions now.
+          next = { ...next, tonightDay: null, tonightNow: null, tonightIntent: null, lastCheckInDate: null }
+          delete next.usualIntent
+        }
         return next
       },
     },
   ),
 )
+
+/** The schedule in force now: the usual one, or tonight's bedtime if it was changed for tonight. */
+export function currentSchedule(now = new Date()): Schedule {
+  const st = useSettings.getState()
+  return effectiveSchedule(st.schedule, st.tonightBedtime, now)
+}
+
+/** React view of `currentSchedule`; re-renders when the schedule or tonight's change does. */
+export function useCurrentSchedule(now: Date): Schedule {
+  const schedule = useSettings((s) => s.schedule)
+  const tonight = useSettings((s) => s.tonightBedtime)
+  return effectiveSchedule(schedule, tonight, now)
+}
