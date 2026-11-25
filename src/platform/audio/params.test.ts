@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rampParam, setParam } from './params'
+import { noteRamp, paramNow, rampParam, setParam, trackedValue } from './params'
 import type { AudioParamLike } from './types'
 
 /**
@@ -44,5 +44,25 @@ describe('ramps on brand-new params', () => {
     setParam(param, 0.1)
     rampParam(param, 0.12, 1, 3)
     expect(calls[0]).toEqual(['set', 0.1, 3])
+  })
+})
+
+describe('params the engine never gave a value', () => {
+  it('fail loudly instead of guessing from the library default', () => {
+    const { param } = laggingParam(1)
+    expect(() => rampParam(param, 0.3, 1, 0)).toThrow(/setParam/)
+    expect(() => paramNow(param, 0)).toThrow(/setParam/)
+  })
+})
+
+describe('chained schedules (sleep fade after a short recovery)', () => {
+  it('follow the recovery, the hold at full volume, then the fade', () => {
+    const track = { from: 0.4, to: 1, t0: 10, t1: 10.25, then: { from: 1, to: 0, t0: 20, t1: 30 } }
+    expect(trackedValue(track, 10.125)).toBeCloseTo(0.7, 5)
+    expect(trackedValue(track, 15)).toBe(1)
+    expect(trackedValue(track, 25)).toBeCloseTo(0.5, 5)
+    const { param } = laggingParam(1)
+    noteRamp(param, track)
+    expect(paramNow(param, 10.125)).toBeCloseTo(0.7, 5)
   })
 })

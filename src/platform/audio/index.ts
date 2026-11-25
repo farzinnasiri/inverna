@@ -8,7 +8,7 @@ import { createClassicalMotifController, type ClassicalMotifController } from '.
 import { createCueBloomBus, playHarmonicCue, type CueBloomBus } from './cues'
 import { createAmbientLayer, type AmbientLayer } from './layers'
 import { createAsymmetricBreathWave, createHarmonicPadController, type HarmonicPadController } from './pad'
-import { clamp, noteRamp, paramNow, rampParam, rampTracked, safeDisconnect, safeStop, setParam, type RampTrack } from './params'
+import { clamp, noteRamp, paramNow, rampParam, safeDisconnect, safeStop, setParam } from './params'
 import type {
   AudioContextLike,
   AudioNodeLike,
@@ -102,8 +102,6 @@ export function createNeuroSoundEngine({
   let masterVolume = 0.85
   // Ramps on these two params are tracked here: the native `param.value` does
   // not follow automation, so ramping "from param.value" would jump.
-  const masterTrack: RampTrack = { from: masterVolume, to: masterVolume, t0: 0, t1: 0 }
-  const gateTrack: RampTrack = { from: 1, to: 1, t0: 0, t1: 0 }
   let idleSuspendTimer: ReturnType<typeof setTimeout> | null = null
   let activeKey: HarmonicKeyId = DEFAULT_HARMONIC_KEY
   let lastMix: Mix | null = null
@@ -285,8 +283,6 @@ export function createNeuroSoundEngine({
         ambientGateGain.gain.setValueAtTime(1, t0)
         sleepFadeGain.gain.setValueAtTime(1, t0)
         masterGain.gain.setValueAtTime(masterVolume, t0)
-        Object.assign(masterTrack, { from: masterVolume, to: masterVolume, t0, t1: t0 })
-        Object.assign(gateTrack, { from: 1, to: 1, t0, t1: t0 })
       } catch {
         /* mock fallback */
       }
@@ -474,8 +470,14 @@ export function createNeuroSoundEngine({
       }
       param.setValueAtTime(1, fadeStart)
       param.linearRampToValueAtTime(0, fadeEnd)
-      // Full volume until fadeStart, then down to silence at fadeEnd.
-      noteRamp(param, { from: 1, to: 0, t0: fadeStart, t1: fadeEnd })
+      // Back up to full (if it was down) until fadeStart, then down to silence
+      // at fadeEnd. Both segments are recorded, so a stop during the recovery
+      // starts from where the gain really is.
+      const fade = { from: 1, to: 0, t0: fadeStart, t1: fadeEnd }
+      noteRamp(
+        param,
+        cur < 0.999 ? { from: cur, to: 1, t0: now, t1: Math.min(fadeStart, now + 0.25), then: fade } : { ...fade, from: 1 },
+      )
     } catch {
       /* fallback handled by JS SessionCurtain */
     }
@@ -509,13 +511,13 @@ export function createNeuroSoundEngine({
     }
 
     if (safeFade <= 0.002) {
-      rampTracked(g.ambientGateGain.gain, gateTrack, 0, 0, g.ctx.currentTime)
+      rampParam(g.ambientGateGain.gain, 0, 0, g.ctx.currentTime)
       disposeAllAmbientNow()
       suspendWhenIdle(g, 0)
       return
     }
 
-    rampTracked(g.ambientGateGain.gain, gateTrack, 0, safeFade, g.ctx.currentTime)
+    rampParam(g.ambientGateGain.gain, 0, safeFade, g.ctx.currentTime)
     g.pad.stop(safeFade)
     g.binaural.stop(safeFade)
 
@@ -574,7 +576,7 @@ export function createNeuroSoundEngine({
       }
     })
 
-    rampTracked(g.ambientGateGain.gain, gateTrack, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
+    rampParam(g.ambientGateGain.gain, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
     // If a previous sleep timer already faded sleepFadeGain down, bring it back cleanly on play
     if (paramNow(g.sleepFadeGain.gain, g.ctx.currentTime) < 0.99) {
       clearSleepFadeOnGraph(g, Math.min(safeFade, 0.35))
@@ -666,7 +668,7 @@ export function createNeuroSoundEngine({
       masterVolume = clamp(volume, 0, 1)
       if (!graph) return
       const safeRamp = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0.2)
-      rampTracked(graph.masterGain.gain, masterTrack, masterVolume, safeRamp, graph.ctx.currentTime)
+      rampParam(graph.masterGain.gain, masterVolume, safeRamp, graph.ctx.currentTime)
     },
 
     scheduleSleepFade(delaySeconds: number, fadeSeconds = 12) {

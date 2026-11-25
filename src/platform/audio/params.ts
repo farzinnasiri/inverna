@@ -24,53 +24,53 @@ export function clamp(value: number, min: number, max: number): number {
  * `linearRampToValueAtTime` makes ramps click-free on BOTH Web Audio and native C++.
  */
 /**
- * Where a linear ramp we scheduled is at `now`. The native audio library's
- * `param.value` does not follow automation (it keeps reporting the last value
- * *set*), so callers that ramp a param repeatedly track it with this instead.
+ * Where a param is heading, as linear segments we scheduled ourselves. The
+ * native audio library's `param.value` can't be trusted for this (see
+ * `setParam`), so the engine keeps the truth on the JavaScript side.
+ * `then` chains a later segment (a sleep fade after its short recovery).
  */
 export interface RampTrack {
   from: number
   to: number
   t0: number
   t1: number
+  then?: RampTrack
 }
 
 export function trackedValue(track: RampTrack, now: number): number {
+  if (track.then && now >= track.then.t0) return trackedValue(track.then, now)
   if (now >= track.t1) return track.to
   if (now <= track.t0) return track.from
   return track.from + ((track.to - track.from) * (now - track.t0)) / (track.t1 - track.t0)
 }
 
-/** Ramp a tracked param from where it really is now, and update the track. */
-export function rampTracked(param: AudioParamLike, track: RampTrack, target: number, rampSeconds: number, now: number): void {
-  const from = trackedValue(track, now)
-  const duration = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0)
-  rampParam(param, target, duration, now, from)
-  track.from = from
-  track.to = Number.isFinite(target) ? target : 0
-  track.t0 = now
-  track.t1 = now + duration
-}
-
 /**
- * Where every param's last ramp was heading, so the next ramp starts from where
- * the sound really is. Without this, a second change read `param.value` (the
- * last value *set*, on native) and jumped back before ramping: audible as a
- * short sweep on every sound switch. Params are stable per node, so a WeakMap
- * keyed by the param object follows them and forgets them with the node.
+ * Every param's schedule, keyed by the param object so it is forgotten with
+ * its node. Ramps start from here, never from a read of `param.value`.
  */
 const lastRamp = new WeakMap<object, RampTrack>()
 
-/** Where a param really is now (its last ramp, if we scheduled one), for code that schedules by hand. */
+/**
+ * A param nobody gave a value through `setParam`. That is a bug: the only
+ * fallback would be reading `param.value`, which on native is the library
+ * default for a fresh node and caused the start-of-sound burst. Tests and
+ * development builds fail loudly; a release build uses `fallback` and warns.
+ */
+function untracked(fallback: number): number {
+  const message = 'Audio param ramped without setParam(): give it a starting value first (see params.ts).'
+  if (process.env.NODE_ENV !== 'production') throw new Error(message)
+  console.warn(message)
+  return fallback
+}
+
+/** Where a param really is now, for code that schedules by hand. */
 export function paramNow(param: AudioParamLike, now: number): number {
   const known = lastRamp.get(param)
-  if (known) return trackedValue(known, now)
-  return Number.isFinite(param.value) ? param.value : 0
+  return known ? trackedValue(known, now) : untracked(0)
 }
 
 /**
- * Give a param its starting value. Use this instead of `param.value = x` for
- * anything a ramp may later start from.
+ * Give a param its starting value. Use this instead of `param.value = x`.
  *
  * On native (react-native-audio-api), `param.value = x` is applied on the
  * audio thread a moment later, and reading `param.value` straight back still
@@ -85,9 +85,9 @@ export function setParam(param: AudioParamLike, value: number): void {
   lastRamp.set(param, { from: v, to: v, t0: 0, t1: 0 })
 }
 
-/** Record a ramp scheduled by hand (not through rampParam), so the next ramp starts from it. */
+/** Record automation scheduled by hand (not through rampParam), so the next ramp starts from it. */
 export function noteRamp(param: AudioParamLike, track: RampTrack): void {
-  lastRamp.set(param, { ...track })
+  lastRamp.set(param, track)
 }
 
 export function rampParam(param: AudioParamLike, target: number, rampSeconds: number, now: number, from?: number): void {
@@ -100,9 +100,7 @@ export function rampParam(param: AudioParamLike, target: number, rampSeconds: nu
       ? from
       : known
         ? trackedValue(known, safeNow)
-        : Number.isFinite(param.value)
-          ? param.value
-          : safeTarget
+        : untracked(safeTarget)
   lastRamp.set(param, { from: currentVal, to: safeTarget, t0: safeNow, t1: safeNow + (duration <= 0.002 ? 0 : duration) })
 
   try {
