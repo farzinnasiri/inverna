@@ -7,8 +7,13 @@
 
 export type AudioContextStateLike = 'suspended' | 'running' | 'closed' | 'interrupted' | string
 
+/**
+ * No `value`: on native, reading it back right after a write returns the
+ * library default, and that caused the start-of-sound burst. Set values with
+ * `setParam` and read where a param is with `paramNow` (both in params.ts),
+ * which keep each param's schedule on the JavaScript side.
+ */
 export interface AudioParamLike {
-  value: number
   setValueAtTime(value: number, startTime: number): unknown
   linearRampToValueAtTime(value: number, endTime: number): unknown
   exponentialRampToValueAtTime(value: number, endTime: number): unknown

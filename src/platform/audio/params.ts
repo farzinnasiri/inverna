@@ -44,6 +44,11 @@ export function trackedValue(track: RampTrack, now: number): number {
   return track.from + ((track.to - track.from) * (now - track.t0)) / (track.t1 - track.t0)
 }
 
+/** The one place that writes `.value`; nothing reads it (see `AudioParamLike`). */
+function writeValue(param: AudioParamLike, value: number): void {
+  ;(param as AudioParamLike & { value: number }).value = value
+}
+
 /**
  * Every param's schedule, keyed by the param object so it is forgotten with
  * its node. Ramps start from here, never from a read of `param.value`.
@@ -81,7 +86,7 @@ export function paramNow(param: AudioParamLike, now: number): number {
  */
 export function setParam(param: AudioParamLike, value: number): void {
   const v = Number.isFinite(value) ? value : 0
-  param.value = v
+  writeValue(param, v)
   lastRamp.set(param, { from: v, to: v, t0: 0, t1: 0 })
 }
 
@@ -113,7 +118,7 @@ export function rampParam(param: AudioParamLike, target: number, rampSeconds: nu
     try {
       param.cancelScheduledValues(safeNow)
     } catch {
-      param.value = safeTarget
+      writeValue(param, safeTarget)
       return
     }
   }
@@ -122,7 +127,7 @@ export function rampParam(param: AudioParamLike, target: number, rampSeconds: nu
     try {
       param.setValueAtTime(safeTarget, safeNow)
     } catch {
-      param.value = safeTarget
+      writeValue(param, safeTarget)
     }
     return
   }
@@ -131,7 +136,7 @@ export function rampParam(param: AudioParamLike, target: number, rampSeconds: nu
     param.setValueAtTime(currentVal, safeNow)
     param.linearRampToValueAtTime(safeTarget, safeNow + duration)
   } catch {
-    param.value = safeTarget
+    writeValue(param, safeTarget)
   }
 }
 
