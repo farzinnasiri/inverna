@@ -1,6 +1,6 @@
 import type { CueName } from '@/core/sound/engine'
 import { DEFAULT_HARMONIC_KEY, resolveGameNotes, type HarmonicKeyId, type QuantizedNote } from '@/core/sound/harmonics'
-import { clamp, rampParam, safeDisconnect, safeStop } from './params'
+import { clamp, rampParam, safeDisconnect, safeStop, setParam } from './params'
 import type { AudioContextLike, AudioNodeLike, BiquadFilterNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
 
 /**
@@ -27,7 +27,7 @@ export interface CueBloomBus {
 
 export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeLike): CueBloomBus {
   const input = ctx.createGain()
-  input.gain.value = 1
+  setParam(input.gain, 1)
   input.connect(destination)
 
   const extraNodes: AudioNodeLike[] = []
@@ -36,12 +36,12 @@ export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeL
   if (typeof ctx.createDelay === 'function') {
     try {
       const wetSend = ctx.createGain()
-      wetSend.gain.value = 0.24
+      setParam(wetSend.gain, 0.24)
 
       wetFilter = ctx.createBiquadFilter()
       wetFilter.type = 'lowpass'
-      wetFilter.frequency.value = 1280
-      wetFilter.Q.value = BUTTERWORTH_Q_DB
+      setParam(wetFilter.frequency, 1280)
+      setParam(wetFilter.Q, BUTTERWORTH_Q_DB)
       try {
         wetFilter.frequency.setValueAtTime(1280, ctx.currentTime)
       } catch {
@@ -50,13 +50,13 @@ export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeL
 
       // Strictly feedforward stereo bloom: tap 1 (L, 185ms) feeds damped tap 2 (R, +265ms)
       const delayL = ctx.createDelay(1)
-      delayL.delayTime.value = 0.185
+      setParam(delayL.delayTime, 0.185)
 
       const tap2Damp = ctx.createGain()
-      tap2Damp.gain.value = 0.44
+      setParam(tap2Damp.gain, 0.44)
 
       const delayR = ctx.createDelay(1)
-      delayR.delayTime.value = 0.265
+      setParam(delayR.delayTime, 0.265)
 
       input.connect(wetSend)
       wetSend.connect(wetFilter)
@@ -66,9 +66,9 @@ export function createCueBloomBus(ctx: AudioContextLike, destination: AudioNodeL
 
       if (typeof ctx.createStereoPanner === 'function') {
         const panL = ctx.createStereoPanner()
-        panL.pan.value = -0.45
+        setParam(panL.pan, -0.45)
         const panR = ctx.createStereoPanner()
-        panR.pan.value = 0.45
+        setParam(panR.pan, 0.45)
         delayL.connect(panL)
         delayR.connect(panR)
         panL.connect(destination)
@@ -113,12 +113,12 @@ function playQuantizedNote(
 
   const filter = ctx.createBiquadFilter()
   filter.type = 'lowpass'
-  filter.frequency.value = clamp(note.cutoff, 320, 4200)
-  filter.Q.value = BUTTERWORTH_Q_DB
+  setParam(filter.frequency, clamp(note.cutoff, 320, 4200))
+  setParam(filter.Q, BUTTERWORTH_Q_DB)
 
   const env = ctx.createGain()
   const peak = Math.max(0.0002, note.gain * vol)
-  env.gain.value = 0.0001
+  setParam(env.gain, 0.0001)
   env.gain.setValueAtTime(0.0001, start)
   env.gain.linearRampToValueAtTime(peak, start + note.attack)
   env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
@@ -138,7 +138,7 @@ function playQuantizedNote(
     overtone.type = 'triangle'
     overtone.frequency.setValueAtTime(note.freq * 2, start)
     overtoneGainNode = ctx.createGain()
-    overtoneGainNode.gain.value = note.overtoneGain
+    setParam(overtoneGainNode.gain, note.overtoneGain)
     overtone.connect(overtoneGainNode)
     overtoneGainNode.connect(filter)
   }
@@ -148,7 +148,7 @@ function playQuantizedNote(
   if (typeof ctx.createStereoPanner === 'function' && Math.abs(note.pan) > 0.02) {
     try {
       const p = ctx.createStereoPanner()
-      p.pan.value = clamp(note.pan, -0.7, 0.7)
+      setParam(p.pan, clamp(note.pan, -0.7, 0.7))
       env.connect(p)
       p.connect(destination)
       panner = p

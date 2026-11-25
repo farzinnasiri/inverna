@@ -1,5 +1,5 @@
 import { DEFAULT_HARMONIC_KEY, harmonicKeyMeta, type CueTimbre, type HarmonicKeyId } from '@/core/sound/harmonics'
-import { clamp, rampParam, safeDisconnect, safeStop } from './params'
+import { clamp, rampParam, safeDisconnect, safeStop, setParam } from './params'
 import type {
   AudioContextLike,
   AudioNodeLike,
@@ -192,8 +192,8 @@ export function createHarmonicPadController(
 
     const warmFilter = ctx.createBiquadFilter()
     warmFilter.type = 'lowpass'
-    warmFilter.frequency.value = descent.padCutoffHz
-    warmFilter.Q.value = -3.01
+    setParam(warmFilter.frequency, descent.padCutoffHz)
+    setParam(warmFilter.Q, -3.01)
     try {
       warmFilter.frequency.setValueAtTime(descent.padCutoffHz, now)
     } catch {
@@ -216,19 +216,19 @@ export function createHarmonicPadController(
         oscA.type = 'sine'
         oscB.type = 'sine'
       }
-      oscA.frequency.value = freq * (1 - DETUNE_RATIO)
-      oscB.frequency.value = freq * (1 + DETUNE_RATIO)
+      setParam(oscA.frequency, freq * (1 - DETUNE_RATIO))
+      setParam(oscB.frequency, freq * (1 + DETUNE_RATIO))
 
       const weight = VOICE_WEIGHTS[idx] ?? 0.2
       const vca = ctx.createGain()
-      vca.gain.value = weight * 0.72
+      setParam(vca.gain, weight * 0.72)
 
       const lfo = ctx.createOscillator()
       lfo.type = 'sine'
-      lfo.frequency.value = VOICE_LFO_HZ[idx] ?? 0.05
+      setParam(lfo.frequency, VOICE_LFO_HZ[idx] ?? 0.05)
 
       const lfoDepth = ctx.createGain()
-      lfoDepth.gain.value = weight * 0.28
+      setParam(lfoDepth.gain, weight * 0.28)
 
       oscA.connect(vca)
       oscB.connect(vca)
@@ -255,18 +255,18 @@ export function createHarmonicPadController(
     } else {
       breathLfo.type = 'sine'
     }
-    breathLfo.frequency.value = descent.breathHz
+    setParam(breathLfo.frequency, descent.breathHz)
 
     const breathFilterDepth = ctx.createGain()
     const initBreathFilter = breathEnabled ? descent.padCutoffHz * 0.22 * (descent.breathDepth / 0.24) : 0
-    breathFilterDepth.gain.value = initBreathFilter
+    setParam(breathFilterDepth.gain, initBreathFilter)
 
     const breathGainNode = ctx.createGain()
     const initBreathAmp = breathEnabled ? descent.breathDepth * 0.45 : 0
-    breathGainNode.gain.value = 1 - initBreathAmp
+    setParam(breathGainNode.gain, 1 - initBreathAmp)
 
     const breathGainDepth = ctx.createGain()
-    breathGainDepth.gain.value = initBreathAmp
+    setParam(breathGainDepth.gain, initBreathAmp)
 
     try {
       breathFilterDepth.gain.setValueAtTime(initBreathFilter, now)
@@ -285,14 +285,14 @@ export function createHarmonicPadController(
     // Cortical Phase-Locked AM Modulator (1.5 - 9 Hz, speaker + headphone effective!)
     const amVca = ctx.createGain()
     const initAmAmp = descent.amDepth * 0.5
-    amVca.gain.value = 1 - initAmAmp
+    setParam(amVca.gain, 1 - initAmAmp)
 
     const amLfo = ctx.createOscillator()
     amLfo.type = 'sine'
-    amLfo.frequency.value = clamp(descent.modHz, 0.5, 16)
+    setParam(amLfo.frequency, clamp(descent.modHz, 0.5, 16))
 
     const amDepthGain = ctx.createGain()
-    amDepthGain.gain.value = initAmAmp
+    setParam(amDepthGain.gain, initAmAmp)
 
     try {
       amVca.gain.setValueAtTime(1 - initAmAmp, now)
@@ -312,12 +312,12 @@ export function createHarmonicPadController(
     if (typeof ctx.createStereoPanner === 'function') {
       try {
         panner = ctx.createStereoPanner()
-        panner.pan.value = 0
+        setParam(panner.pan, 0)
         panLfo = ctx.createOscillator()
         panLfo.type = 'sine'
-        panLfo.frequency.value = descent.spatialHz
+        setParam(panLfo.frequency, descent.spatialHz)
         panDepthGain = ctx.createGain()
-        panDepthGain.gain.value = clamp(spatialAmount, 0, 1) * 0.34
+        setParam(panDepthGain.gain, clamp(spatialAmount, 0, 1) * 0.34)
         panLfo.connect(panDepthGain)
         panDepthGain.connect(panner.pan)
         panLfo.start(now)
@@ -333,7 +333,7 @@ export function createHarmonicPadController(
     }
 
     const outputGain = ctx.createGain()
-    outputGain.gain.value = 0
+    setParam(outputGain.gain, 0)
     try {
       outputGain.gain.setValueAtTime(0, now)
     } catch {

@@ -68,6 +68,23 @@ export function paramNow(param: AudioParamLike, now: number): number {
   return Number.isFinite(param.value) ? param.value : 0
 }
 
+/**
+ * Give a param its starting value. Use this instead of `param.value = x` for
+ * anything a ramp may later start from.
+ *
+ * On native (react-native-audio-api), `param.value = x` is applied on the
+ * audio thread a moment later, and reading `param.value` straight back still
+ * returns the library default: 1.0 for a gain, 440 Hz for an oscillator. A
+ * ramp started from that read began every new sound at full volume with a
+ * 440 Hz tone sliding down (the burst heard on every play and switch). This
+ * records the value we meant, so `rampParam` starts from it, never from a read.
+ */
+export function setParam(param: AudioParamLike, value: number): void {
+  const v = Number.isFinite(value) ? value : 0
+  param.value = v
+  lastRamp.set(param, { from: v, to: v, t0: 0, t1: 0 })
+}
+
 /** Record a ramp scheduled by hand (not through rampParam), so the next ramp starts from it. */
 export function noteRamp(param: AudioParamLike, track: RampTrack): void {
   lastRamp.set(param, { ...track })

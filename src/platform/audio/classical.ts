@@ -1,7 +1,7 @@
 import type { ClassicalMotifStyle } from '@/core/sound/catalog'
 import { harmonicKeyMeta, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { emitMotifPhrase } from './motifEvents'
-import { clamp, safeDisconnect } from './params'
+import { clamp, safeDisconnect, setParam } from './params'
 import type { AudioContextLike, AudioNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
 
 /**
@@ -57,12 +57,12 @@ function triggerFeltPianoNote(
 
   const lp = ctx.createBiquadFilter()
   lp.type = 'lowpass'
-  lp.frequency.value = clamp(opts.cutoff, 320, 2600)
-  lp.Q.value = -3.01
+  setParam(lp.frequency, clamp(opts.cutoff, 320, 2600))
+  setParam(lp.Q, -3.01)
 
   const env = ctx.createGain()
   const peak = Math.max(0.0002, opts.gain)
-  env.gain.value = 0.0001
+  setParam(env.gain, 0.0001)
   env.gain.setValueAtTime(0.0001, start)
   env.gain.linearRampToValueAtTime(peak, start + opts.attack)
   env.gain.exponentialRampToValueAtTime(0.0001, start + opts.attack + opts.decay)
@@ -79,7 +79,7 @@ function triggerFeltPianoNote(
     osc2.type = 'triangle'
     osc2.frequency.setValueAtTime(opts.freq * 2, start)
     ovGain = ctx.createGain()
-    ovGain.gain.value = opts.overtone
+    setParam(ovGain.gain, opts.overtone)
     osc2.connect(ovGain)
     ovGain.connect(lp)
   }
@@ -89,7 +89,7 @@ function triggerFeltPianoNote(
   if (typeof ctx.createStereoPanner === 'function') {
     try {
       const p = ctx.createStereoPanner()
-      p.pan.value = clamp(opts.pan, -0.65, 0.65)
+      setParam(p.pan, clamp(opts.pan, -0.65, 0.65))
       env.connect(p)
       p.connect(destination)
       panner = p

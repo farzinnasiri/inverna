@@ -1,5 +1,5 @@
 import { BANDS, type BandId } from '@/core/sound/catalog'
-import { clamp, rampParam, safeDisconnect, safeStop } from './params'
+import { clamp, rampParam, safeDisconnect, safeStop, setParam } from './params'
 import type { AudioContextLike, AudioNodeLike, GainNodeLike, OscillatorNodeLike } from './types'
 
 /**
@@ -87,11 +87,11 @@ export function createBinauralController(
     const rightOsc = ctx.createOscillator()
     leftOsc.type = 'sine'
     rightOsc.type = 'sine'
-    leftOsc.frequency.value = leftFreq
-    rightOsc.frequency.value = rightFreq
+    setParam(leftOsc.frequency, leftFreq)
+    setParam(rightOsc.frequency, rightFreq)
 
     const outputGain = ctx.createGain()
-    outputGain.gain.value = 0
+    setParam(outputGain.gain, 0)
     try {
       outputGain.channelCount = 2
       outputGain.channelCountMode = 'explicit'
@@ -111,8 +111,8 @@ export function createBinauralController(
     } else if (typeof ctx.createStereoPanner === 'function') {
       const leftPan = ctx.createStereoPanner()
       const rightPan = ctx.createStereoPanner()
-      leftPan.pan.value = -1
-      rightPan.pan.value = 1
+      setParam(leftPan.pan, -1)
+      setParam(rightPan.pan, 1)
       leftOsc.connect(leftPan)
       rightOsc.connect(rightPan)
       leftPan.connect(outputGain)

@@ -8,7 +8,7 @@ import { createClassicalMotifController, type ClassicalMotifController } from '.
 import { createCueBloomBus, playHarmonicCue, type CueBloomBus } from './cues'
 import { createAmbientLayer, type AmbientLayer } from './layers'
 import { createAsymmetricBreathWave, createHarmonicPadController, type HarmonicPadController } from './pad'
-import { clamp, noteRamp, paramNow, rampParam, rampTracked, safeDisconnect, safeStop, type RampTrack } from './params'
+import { clamp, noteRamp, paramNow, rampParam, rampTracked, safeDisconnect, safeStop, setParam, type RampTrack } from './params'
 import type {
   AudioContextLike,
   AudioNodeLike,
@@ -209,7 +209,7 @@ export function createNeuroSoundEngine({
       const bank = createNoiseBufferBank(ctx)
 
       const textureBus = ctx.createGain()
-      textureBus.gain.value = 1
+      setParam(textureBus.gain, 1)
 
       // Master Iso-descent warmth high-shelf across natural texture layers:
       // smoothly tilts highs down (-0.5 -> -5.5 dB) as bedtime deepens without
@@ -217,12 +217,12 @@ export function createNeuroSoundEngine({
       const initWarmthGain = -(0.5 + descent.progress * 5.0)
       const masterWarmthFilter = ctx.createBiquadFilter()
       masterWarmthFilter.type = 'highshelf'
-      masterWarmthFilter.frequency.value = descent.masterCutoffHz
-      masterWarmthFilter.gain.value = initWarmthGain
+      setParam(masterWarmthFilter.frequency, descent.masterCutoffHz)
+      setParam(masterWarmthFilter.gain, initWarmthGain)
 
       // Gentle asymmetric 0.1 Hz (~4s rise / ~6s release) breath swell across the texture bed
       const textureBreathVca = ctx.createGain()
-      textureBreathVca.gain.value = 0.94
+      setParam(textureBreathVca.gain, 0.94)
 
       const textureBreathLfo = ctx.createOscillator()
       const breathWave = createAsymmetricBreathWave(ctx)
@@ -235,10 +235,10 @@ export function createNeuroSoundEngine({
       } else {
         textureBreathLfo.type = 'sine'
       }
-      textureBreathLfo.frequency.value = descent.breathHz
+      setParam(textureBreathLfo.frequency, descent.breathHz)
 
       const textureBreathDepth = ctx.createGain()
-      textureBreathDepth.gain.value = 0.06
+      setParam(textureBreathDepth.gain, 0.06)
 
       textureBreathLfo.connect(textureBreathDepth)
       textureBreathDepth.connect(textureBreathVca.gain)
@@ -248,29 +248,29 @@ export function createNeuroSoundEngine({
       // rain & fire stay smooth and free of choppy flutter; Harmonic Pad carries full AM)
       const initTexAm = clamp(descent.amDepth * 0.09, 0, 0.032)
       const textureAmVca = ctx.createGain()
-      textureAmVca.gain.value = 1 - initTexAm
+      setParam(textureAmVca.gain, 1 - initTexAm)
 
       const textureAmLfo = ctx.createOscillator()
       textureAmLfo.type = 'sine'
-      textureAmLfo.frequency.value = clamp(descent.modHz, 0.5, 16)
+      setParam(textureAmLfo.frequency, clamp(descent.modHz, 0.5, 16))
 
       const textureAmDepth = ctx.createGain()
-      textureAmDepth.gain.value = initTexAm
+      setParam(textureAmDepth.gain, initTexAm)
 
       textureAmLfo.connect(textureAmDepth)
       textureAmDepth.connect(textureAmVca.gain)
       textureAmLfo.start(ctx.currentTime)
 
       const ambientGateGain = ctx.createGain()
-      ambientGateGain.gain.value = 1
+      setParam(ambientGateGain.gain, 1)
 
       // Dedicated CoreAudio-scheduled sleep-timer fade node (runs on native audio thread
       // even when iOS suspends JS while the phone is locked!).
       const sleepFadeGain = ctx.createGain()
-      sleepFadeGain.gain.value = 1
+      setParam(sleepFadeGain.gain, 1)
 
       const masterGain = ctx.createGain()
-      masterGain.gain.value = masterVolume
+      setParam(masterGain.gain, masterVolume)
 
       // Anchor initial automation values on ParamRenderQueue so react-native-audio-api@1.0.1
       // never falls back to C++ defaultValue_ (1.0) on the first rampParam() call.
@@ -299,11 +299,11 @@ export function createNeuroSoundEngine({
       if (typeof ctx.createDynamicsCompressor === 'function') {
         try {
           limiter = ctx.createDynamicsCompressor()
-          limiter.threshold.value = -8
-          limiter.knee.value = 14
-          limiter.ratio.value = 8
-          limiter.attack.value = 0.006
-          limiter.release.value = 0.18
+          setParam(limiter.threshold, -8)
+          setParam(limiter.knee, 14)
+          setParam(limiter.ratio, 8)
+          setParam(limiter.attack, 0.006)
+          setParam(limiter.release, 0.18)
           limiter.connect(ctx.destination)
           busOutput = limiter
         } catch {
@@ -576,7 +576,7 @@ export function createNeuroSoundEngine({
 
     rampTracked(g.ambientGateGain.gain, gateTrack, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
     // If a previous sleep timer already faded sleepFadeGain down, bring it back cleanly on play
-    if ((g.sleepFadeGain.gain.value ?? 1) < 0.99) {
+    if (paramNow(g.sleepFadeGain.gain, g.ctx.currentTime) < 0.99) {
       clearSleepFadeOnGraph(g, Math.min(safeFade, 0.35))
     }
 

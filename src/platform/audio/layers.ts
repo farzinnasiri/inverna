@@ -1,6 +1,6 @@
 import type { LayerId } from '@/core/sound/catalog'
 import type { NoiseBufferBank } from './buffers'
-import { clamp, rampParam, safeDisconnect, safeStop } from './params'
+import { clamp, rampParam, safeDisconnect, safeStop, setParam } from './params'
 import type {
   AudioBufferLike,
   AudioBufferSourceNodeLike,
@@ -68,7 +68,7 @@ function createLoopingSource(
       : 1
   const effectiveRate = playbackRate * srRatio
   if (effectiveRate !== 1.0 && src.playbackRate) {
-    src.playbackRate.value = effectiveRate
+    setParam(src.playbackRate, effectiveRate)
   }
   const safeOffset = buffer.duration > 0 ? offsetSeconds % buffer.duration : 0
   src.start(ctx.currentTime, safeOffset)
@@ -84,15 +84,15 @@ function createFilter(
 ): BiquadFilterNodeLike {
   const filter = ctx.createBiquadFilter()
   filter.type = type
-  filter.frequency.value = frequency
-  filter.Q.value = q
-  if (gain !== 0) filter.gain.value = gain
+  setParam(filter.frequency, frequency)
+  setParam(filter.Q, q)
+  if (gain !== 0) setParam(filter.gain, gain)
   return filter
 }
 
 function createLfo(ctx: AudioContextLike, frequencyHz: number, phaseRadians = 0): OscillatorNodeLike {
   const osc = ctx.createOscillator()
-  osc.frequency.value = frequencyHz
+  setParam(osc.frequency, frequencyHz)
   if (phaseRadians !== 0 && typeof ctx.createPeriodicWave === 'function' && typeof osc.setPeriodicWave === 'function') {
     // Web Audio PeriodicWave uses a*cos(wt) + b*sin(wt); sin(wt + phi) = sin(phi)*cos(wt) + cos(phi)*sin(wt)
     const real = new Float32Array([0, Math.sin(phaseRadians)])
@@ -122,10 +122,10 @@ function attachSlowDriftMod(
   rateHz: number,
   phaseRadians = 0,
 ): { lfo: OscillatorNodeLike; modGain: GainNodeLike } {
-  gainNode.gain.value = baseGain
+  setParam(gainNode.gain, baseGain)
   const lfo = createLfo(ctx, rateHz, phaseRadians)
   const modGain = ctx.createGain()
-  modGain.gain.value = depth
+  setParam(modGain.gain, depth)
   lfo.connect(modGain)
   modGain.connect(gainNode.gain)
   return { lfo, modGain }
@@ -144,13 +144,13 @@ function attachComplementaryDrift(
   depth: number,
   rateHz: number,
 ): { lfo: OscillatorNodeLike; modA: GainNodeLike; modB: GainNodeLike } {
-  gainA.gain.value = base
-  gainB.gain.value = base
+  setParam(gainA.gain, base)
+  setParam(gainB.gain, base)
   const lfo = createLfo(ctx, rateHz)
   const modA = ctx.createGain()
   const modB = ctx.createGain()
-  modA.gain.value = depth
-  modB.gain.value = -depth
+  setParam(modA.gain, depth)
+  setParam(modB.gain, -depth)
   lfo.connect(modA)
   lfo.connect(modB)
   modA.connect(gainA.gain)
@@ -188,7 +188,7 @@ function createWhiteLayer(
   compensateBufferRate: boolean,
 ): AmbientLayer {
   const output = ctx.createGain()
-  output.gain.value = 0
+  setParam(output.gain, 0)
   const lowpass = createFilter(ctx, 'lowpass', 3800, BUTTERWORTH_Q_DB)
   const src = createLoopingSource(ctx, bank.get('white'), 0, 1.0, compensateBufferRate)
 
@@ -210,7 +210,7 @@ function createPinkLayer(
   compensateBufferRate: boolean,
 ): AmbientLayer {
   const output = ctx.createGain()
-  output.gain.value = 0
+  setParam(output.gain, 0)
   const warmth = createFilter(ctx, 'lowshelf', 240, 0.7, 2.5)
   const lowpass = createFilter(ctx, 'lowpass', 2600, BUTTERWORTH_Q_DB)
   const src = createLoopingSource(ctx, bank.get('pink'), 0, 1.0, compensateBufferRate)
@@ -235,7 +235,7 @@ function createBrownLayer(
   compensateBufferRate: boolean,
 ): AmbientLayer {
   const output = ctx.createGain()
-  output.gain.value = 0
+  setParam(output.gain, 0)
   const subClean = createFilter(ctx, 'highpass', 32, BUTTERWORTH_Q_DB)
   const lowpass = createFilter(ctx, 'lowpass', 260, BUTTERWORTH_Q_DB)
   const src = createLoopingSource(ctx, bank.get('brown'), 0, 1.0, compensateBufferRate)
@@ -265,7 +265,7 @@ function createRainLayer(
   compensateBufferRate: boolean,
 ): AmbientLayer {
   const output = ctx.createGain()
-  output.gain.value = 0
+  setParam(output.gain, 0)
   output.connect(destination)
 
   const rainBuffer = bank.get('rain-patter')
@@ -281,7 +281,7 @@ function createRainLayer(
   // Near drops: separate 17 s events-only loop, single copy
   const nearSrc = createLoopingSource(ctx, bank.get('rain-near'), 0, 1.0, compensateBufferRate)
   const nearGain = ctx.createGain()
-  nearGain.gain.value = 0.95
+  setParam(nearGain.gain, 0.95)
 
   const hp = createFilter(ctx, 'highpass', 260, BUTTERWORTH_Q_DB)
   const body = createFilter(ctx, 'peaking', 1350, 0.8, 1.5)
@@ -330,7 +330,7 @@ function createWavesLayer(
   compensateBufferRate: boolean,
 ): AmbientLayer {
   const output = ctx.createGain()
-  output.gain.value = 0
+  setParam(output.gain, 0)
   output.connect(destination)
 
   const surfBuffer = bank.get('waves-surf')
@@ -387,7 +387,7 @@ function createFireLayer(
   compensateBufferRate: boolean,
 ): AmbientLayer {
   const output = ctx.createGain()
-  output.gain.value = 0
+  setParam(output.gain, 0)
   output.connect(destination)
 
   const crackleBuffer = bank.get('fire-crackle')
@@ -402,7 +402,7 @@ function createFireLayer(
   // Flame bed: own 10 s @ 8 kHz loop; this one gain IS the flame/crackle balance
   const bedSrc = createLoopingSource(ctx, bank.get('fire-bed'), 0, 1.0, compensateBufferRate)
   const bedGain = ctx.createGain()
-  bedGain.gain.value = 0.08
+  setParam(bedGain.gain, 0.08)
 
   const hp = createFilter(ctx, 'highpass', 100, BUTTERWORTH_Q_DB)
   const midDip = createFilter(ctx, 'peaking', 760, 0.9, -3.5)
@@ -448,7 +448,7 @@ function createWindLayer(
   compensateBufferRate: boolean,
 ): AmbientLayer {
   const output = ctx.createGain()
-  output.gain.value = 0
+  setParam(output.gain, 0)
   output.connect(destination)
 
   const windBuffer = bank.get('wind-gust')
