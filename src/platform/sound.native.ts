@@ -136,12 +136,11 @@ export function createPlatformSoundEngine(): SoundEngine {
         // Measured on device: development builds can't keep up there (the
         // audio library compiles unoptimised and runs a debug check on every
         // 128-frame slice), so judge this in a release build.
-        // 24 kHz, not the device's 48: every sound passes the master warmth
-        // filter (3.2 kHz at most) and the noise beds are made at 24 kHz or
-        // less, so nothing audible lives above 12 kHz. Half the rate is about
-        // half the audio work, which is slack when the phone is hot, charging,
-        // or busy for a moment (taking a screenshot crackled).
-        return new AudioContext({ latencyHint: 'playback', sampleRate: 24000 }) as unknown as AudioContextLike
+        // The device's own sample rate. The crackle seen while hot and charging
+        // (and when taking a screenshot) was a development-build problem: a
+        // release build on TestFlight plays cleanly at the device rate, so
+        // this stays the tested setup.
+        return new AudioContext({ latencyHint: 'playback' }) as unknown as AudioContextLike
       } catch {
         return null
       }
