@@ -382,7 +382,8 @@ export function layoutForPuzzle(puzzleNumber: number, calm: number): BoardLayout
 /*  Solved detection & shuffling                                              */
 /* -------------------------------------------------------------------------- */
 
-function tileMatchesSlot(tile: HueTile, slotIndex: number, targetColors: readonly string[]): boolean {
+/** A tile is in place on its own slot, or on any slot of the same colour (the win check's rule). */
+export function tileMatchesSlot(tile: HueTile, slotIndex: number, targetColors: readonly string[]): boolean {
   if (tile.id === slotIndex) return true
   const target = targetColors[slotIndex]
   if (!target) return false

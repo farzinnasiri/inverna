@@ -552,6 +552,8 @@ export const gameDoor = {
 
 /** Pond's end of round and its few words on the water. */
 export const pondCopy = {
+  /** On the door: the gesture, since nothing else on screen shows it. */
+  doorHint: 'Draw a loop around a whole family of matching buds, and the koi paints that stroke of the picture.',
   another: 'Next',
   rest: 'Done',
   restNote: 'You can put the phone down',

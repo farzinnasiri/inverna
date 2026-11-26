@@ -853,7 +853,9 @@ export function tickSettle(state: SettleState, dtMs: number, calm: number): Sett
     // Keep the same object while the piece hasn't moved so screens can skip re-rendering.
     active: curY === y ? next.active : { type, x, y: curY, rotation },
     gravityTimerMs: nowGrounded ? 0 : gravityTimerMs,
-    lockTimerMs: 0,
+    // Lifted off a ledge with every reset used and no lower row reached: the
+    // lock delay keeps what it had, or stepping between ledges never locks.
+    lockTimerMs: lockResets >= MAX_LOCK_RESETS && lowestY === next.lowestY ? next.lockTimerMs : 0,
     lockResets,
     lowestY,
   }

@@ -17,6 +17,7 @@ import {
   Lightbulb as _Lightbulb,
 } from 'lucide-react-native'
 import {
+  tileMatchesSlot,
   createHue,
   findHintPair,
   nextPuzzle,
@@ -350,6 +351,11 @@ export function HueScreen({ onExit }: GameScreenProps) {
     selectTile(null)
     setFocusedIndex(null)
     setShowCompletion(false)
+    const pending = pendingDifficultyRef.current
+    if (pending) {
+      difficultyRef.current = pending
+      setPendingDifficulty(null)
+    }
     const next = nextPuzzle(stateRef.current, tierCalm(difficultyRef.current, sessionCalmRef.current))
     stateRef.current = next
     setSave((prev) => ({
@@ -361,6 +367,22 @@ export function HueScreen({ onExit }: GameScreenProps) {
     cue('tap', 0.6)
     haptic('tick')
   }, [cancelDrag, clearHint, selectTile, setSave, cue, haptic])
+
+  // A difficulty tapped mid-puzzle waits for the next one; on an untouched
+  // board there's nothing to lose, so it deals straight away (ISS-09).
+  const [pendingDifficulty, setPendingDifficulty] = useState<HueDifficulty | null>(null)
+  const pendingDifficultyRef = useRef(pendingDifficulty)
+  pendingDifficultyRef.current = pendingDifficulty
+  const pickDifficulty = (nextDiff: HueDifficulty) => {
+    const cur = stateRef.current
+    if (cur.moves > 0 && !cur.solved) {
+      setPendingDifficulty(nextDiff === difficultyRef.current ? null : nextDiff)
+      haptic('tick')
+      return
+    }
+    setPendingDifficulty(null)
+    changeDifficulty(nextDiff)
+  }
 
   const changeDifficulty = useCallback(
     (nextDiff: HueDifficulty) => {
@@ -403,8 +425,18 @@ export function HueScreen({ onExit }: GameScreenProps) {
     return row * stateRef.current.cols + col
   }
 
+  /** The slot whose centre is nearest: a drop in the thin gap between tiles still lands (ISS-17). */
+  const nearestSlot = (x: number, y: number): number | null => {
+    const { gridW, gridH, pitch, cellSize } = metricsRef.current
+    const { cols, rows } = stateRef.current
+    if (x < -pitch / 2 || x >= gridW + pitch / 2 || y < -pitch / 2 || y >= gridH + pitch / 2) return null
+    const col = Math.min(cols - 1, Math.max(0, Math.round((x - cellSize / 2) / pitch)))
+    const row = Math.min(rows - 1, Math.max(0, Math.round((y - cellSize / 2) / pitch)))
+    return row * cols + col
+  }
+
   const dropTarget = (session: DragSession, dx: number, dy: number): number | null => {
-    const over = slotFromLocal(session.startX + dx, session.startY + dy)
+    const over = nearestSlot(session.startX + dx, session.startY + dy)
     return over !== null && over !== session.fromIdx && !stateRef.current.tiles[over]?.pinned
       ? over
       : null
@@ -523,11 +555,12 @@ export function HueScreen({ onExit }: GameScreenProps) {
       const t = state.tiles[i]!
       if (!t.pinned) {
         movable++
-        if (t.id === i) settled++
+        // The same rule as the win check, so the count reaches full exactly when it's solved.
+        if (tileMatchesSlot(t, i, state.targetColors)) settled++
       }
     }
     return { settled, movable }
-  }, [state.tiles])
+  }, [state.tiles, state.targetColors])
 
   const handleStageLayout = useCallback(
     (e: LayoutChangeEvent) => {
@@ -562,11 +595,14 @@ export function HueScreen({ onExit }: GameScreenProps) {
         <View style={styles.bar}>
           <View style={styles.diffRow}>
             {DIFFICULTY_OPTIONS.map((opt) => {
-              const active = opt.value === difficulty
+              const active = opt.value === (pendingDifficulty ?? difficulty)
               return (
                 <Pressable
                   key={opt.value}
-                  onPress={() => changeDifficulty(opt.value)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                  accessibilityHint={pendingDifficulty === opt.value ? 'For your next puzzle' : undefined}
+                  onPress={() => pickDifficulty(opt.value)}
                   style={[
                     styles.diffChip,
                     {

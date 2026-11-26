@@ -50,6 +50,23 @@ function stateWithActive(
   }
 }
 
+describe('settle lock delay', () => {
+  // ISS-17: with every reset used, stepping off a ledge zeroed the lock delay,
+  // so moving between ledges at one height never locked.
+  it('keeps the lock delay while airborne once every reset is used', () => {
+    const lifted = stateWithActive('T', { lockResets: MAX_LOCK_RESETS, lockTimerMs: 400 }, { x: 3, y: 5 })
+    const next = tickSettle({ ...lifted, lowestY: 5 }, 1, 0)
+    expect(next.lockTimerMs).toBe(400)
+  })
+
+  it('a new lowest row still starts the delay over', () => {
+    const lifted = stateWithActive('T', { lockResets: MAX_LOCK_RESETS, lockTimerMs: 400, gravityTimerMs: BASE_GRAVITY_MS * 4 }, { x: 3, y: 5 })
+    const next = tickSettle({ ...lifted, lowestY: 5 }, 1, 0)
+    expect(next.active!.y).toBeGreaterThan(5)
+    expect(next.lockTimerMs).toBe(0)
+  })
+})
+
 describe('settle engine', () => {
   it('uses a fair 7-bag randomizer with all 7 distinct pieces per bag', () => {
     let state = createSettle({ seed: 1337 })

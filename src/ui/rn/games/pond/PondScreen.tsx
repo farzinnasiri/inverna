@@ -181,13 +181,13 @@ export function PondScreen({ onExit }: GameScreenProps) {
     timers.current.add(id)
   }, [])
 
-  useEffect(() => {
-    const set = timers.current
-    return () => {
-      for (const id of set) clearTimeout(id)
-      set.clear()
-    }
+  /** Drop pending bloom and completion moments (Pause, a new pond, leaving). */
+  const clearLater = useCallback(() => {
+    for (const id of timers.current) clearTimeout(id)
+    timers.current.clear()
   }, [])
+
+  useEffect(() => clearLater, [clearLater])
 
   const persist = useCallback(
     (extra?: Partial<PondSave>) => {
@@ -290,6 +290,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
   const startPond = useCallback(() => {
     const fresh = makePond()
     if (!fresh) return
+    clearLater()
     stateRef.current = fresh
     resetView()
     publish()
@@ -299,7 +300,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
       plays: prev.plays + 1,
       recent: [fresh.picture, ...(prev.recent ?? []).filter((id) => id !== fresh.picture)].slice(0, RECENT_KEEP),
     }))
-  }, [makePond, publish, resetView, setSaved])
+  }, [clearLater, makePond, publish, resetView, setSaved])
 
   // First layout: carry on the pond you left, or deal a new one.
   const handleLayout = useCallback(
@@ -312,7 +313,10 @@ export function PondScreen({ onExit }: GameScreenProps) {
       setSize(sizeRef.current)
       const aspect = height / width
       const current = stateRef.current ?? (isPondState(savedRef.current.state) ? savedRef.current.state : null)
-      const fits = current !== null && current.completedAt === null && Math.abs(current.aspect - aspect) < 0.08
+      // Keep the pond (finished or not) while its whole play area is still on
+      // screen; a small change of layout used to deal a new one (ISS-09).
+      const visibleBottom = aspect - (chromeRef.current.bottom + 24) / width
+      const fits = current !== null && current.aspect - current.bottom <= visibleBottom + 0.005
       if (fits) {
         stateRef.current = current
         publish()
@@ -441,11 +445,12 @@ export function PondScreen({ onExit }: GameScreenProps) {
   const handlePauseChange = useCallback((next: boolean) => {
     setPaused(next)
     if (next) {
+      clearLater()
       const s = stateRef.current
       if (s) stateRef.current = cancelStroke(s)
       persistRef.current()
     }
-  }, [])
+  }, [clearLater])
 
   /* --------------------------------------------------------------- touch */
 
@@ -602,6 +607,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
     <GameShell
       gameId="pond"
       hideBest
+      readyHint={pondCopy.doorHint}
       readyExtra={
         <Segmented
           label={pondCopy.mode}

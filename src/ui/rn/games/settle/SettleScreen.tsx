@@ -239,8 +239,9 @@ export function SettleScreen({ onExit }: GameScreenProps) {
   const [arenaSize, setArenaSize] = useState({ w: 0, h: 0 })
   const playing = started && !paused && !state.gameOver
 
+  // Every setState also sets this ref; copying `state` into it on each render
+  // would rewind the gravity and lock timers the loop keeps here (ISS-17).
   const stateRef = useRef(state)
-  stateRef.current = state
   const playingRef = useRef(playing)
   playingRef.current = playing
   const changePaused = (nextPaused: boolean) => {
@@ -254,6 +255,8 @@ export function SettleScreen({ onExit }: GameScreenProps) {
     setPaused(nextPaused)
   }
 
+  /** The next lock is the player's own (a hard drop), not gravity's. */
+  const playerDropRef = useRef(false)
   const prevPiecesRef = useRef(state.pieces)
   const prevLinesRef = useRef(state.lines)
   const prevClearIdRef = useRef(state.clearEventId)
@@ -276,17 +279,15 @@ export function SettleScreen({ onExit }: GameScreenProps) {
     const linesChanged = state.lines > prevLinesRef.current
     const dissolveChanged = state.dissolveCount > prevDissolveRef.current
 
+    // Felt only when the player caused it: a drop of theirs, or lines it cleared.
+    const theirs = playerDropRef.current
+    if (piecesChanged || clearChanged) playerDropRef.current = false
     if (clearChanged) {
-      if (state.lastClearCount >= 4) {
-        cue('chime', 0.95)
-        haptic('complete')
-      } else {
-        cue('clear', 0.85)
-        haptic('reward')
-      }
+      cue(state.lastClearCount >= 4 ? 'chime' : 'clear', state.lastClearCount >= 4 ? 0.95 : 0.85)
+      if (theirs) haptic('reward')
     } else if (piecesChanged) {
       cue('place', 0.85)
-      haptic('settle')
+      if (theirs) haptic('settle')
     }
 
     if (dissolveChanged) {
@@ -352,7 +353,12 @@ export function SettleScreen({ onExit }: GameScreenProps) {
   const doLeft = useCallback(() => applyInteractive(moveLeft, 'tap'), [applyInteractive])
   const doRight = useCallback(() => applyInteractive(moveRight, 'tap'), [applyInteractive])
   const doSoftDrop = useCallback(() => applyInteractive(softDrop, 'tap'), [applyInteractive])
-  const doHardDrop = useCallback(() => applyInteractive(hardDrop, 'none'), [applyInteractive])
+  const doHardDrop = useCallback(() => {
+    const before = stateRef.current
+    playerDropRef.current = true
+    applyInteractive(hardDrop, 'none')
+    if (stateRef.current === before) playerDropRef.current = false
+  }, [applyInteractive])
   const doRotateCW = useCallback(() => applyInteractive(rotateCW, 'tap'), [applyInteractive])
   const doRotateCCW = useCallback(() => applyInteractive(rotateCCW, 'tap'), [applyInteractive])
   const doHold = useCallback(() => applyInteractive(hold, 'undo'), [applyInteractive])
@@ -374,13 +380,20 @@ export function SettleScreen({ onExit }: GameScreenProps) {
   }, [persistState])
 
   const handleRestart = useCallback(() => {
-    resetBoard(restart(stateRef.current, Date.now() >>> 0), true)
+    const mode = pendingModeRef.current
+    setPendingMode(null)
+    const fresh =
+      mode && mode !== stateRef.current.mode
+        ? createSettle({ seed: Date.now() >>> 0, mode })
+        : restart(stateRef.current, Date.now() >>> 0)
+    resetBoard(fresh, true)
   }, [resetBoard])
 
-  const changeMode = useCallback((mode: SettleMode) => {
-    if (stateRef.current.mode === mode) return
-    resetBoard(createSettle({ seed: Date.now() >>> 0, mode }), false)
-  }, [resetBoard])
+  // A mode picked on the door or New game sheet waits for a new game; Continue
+  // keeps the board as it was (ISS-09). An untouched board just takes it.
+  const [pendingMode, setPendingMode] = useState<SettleMode | null>(null)
+  const pendingModeRef = useRef(pendingMode)
+  pendingModeRef.current = pendingMode
 
   const handleExit = useCallback(() => {
     persistState(stateRef.current)
@@ -489,13 +502,15 @@ export function SettleScreen({ onExit }: GameScreenProps) {
           actionsRef.current.doRotateCW()
           return
         }
-        if (axis === 'v') {
+        // A quick flick can end before any move set the axis: take it from the whole gesture.
+        const finalAxis = axis === 'none' ? (Math.abs(g.dx) >= Math.abs(g.dy) ? 'h' : 'v') : axis
+        if (finalAxis === 'v') {
           if (g.dy > 32) {
             actionsRef.current.doHardDrop()
           } else if (g.dy < -32) {
             actionsRef.current.doHold()
           }
-        } else if (axis === 'h' && steps === 0) {
+        } else if (finalAxis === 'h' && steps === 0) {
           if (g.dx > 24) actionsRef.current.doRight()
           else if (g.dx < -24) actionsRef.current.doLeft()
         }
@@ -597,9 +612,15 @@ export function SettleScreen({ onExit }: GameScreenProps) {
       commitScore={started}
       ready={started}
       readyHint="Tap to rotate, drag to move, or use the buttons below."
-      readyExtra={<Segmented label="Mode" options={MODE_OPTIONS} value={state.mode} onChange={changeMode} />}
+      readyExtra={<Segmented label="Mode" options={MODE_OPTIONS} value={pendingMode ?? state.mode} onChange={setPendingMode} />}
       onReady={() => {
-        if (stateRef.current.gameOver) handleRestart()
+        const cur = stateRef.current
+        const mode = pendingModeRef.current
+        setPendingMode(null)
+        if (cur.gameOver) handleRestart()
+        else if (mode && mode !== cur.mode && cur.pieces === 0 && cur.lines === 0) {
+          resetBoard(createSettle({ seed: Date.now() >>> 0, mode }), false)
+        }
         setStarted(true)
       }}
       paused={paused}

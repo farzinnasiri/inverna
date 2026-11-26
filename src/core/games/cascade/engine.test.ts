@@ -408,3 +408,29 @@ describe('Cascade engine', () => {
     })
   })
 })
+
+describe('cascade taps after a clear', () => {
+  // ISS-10: taps were blocked for ~1.6 s until every cleared tile had tumbled away.
+  it('the board takes taps again once its tiles have landed, while debris still falls', async () => {
+    const { boardSettling, createCascade, findCluster, tapCell, tickCascade } = await import('./engine')
+    let s = createCascade({ seed: 7, calm: 0.7 })
+    let tapped = false
+    for (let r = s.rows - 1; r >= 0 && !tapped; r--) {
+      for (let c = 0; c < s.cols && !tapped; c++) {
+        if (findCluster(s, r, c).length >= 2) {
+          s = tapCell(s, r, c)
+          tapped = true
+        }
+      }
+    }
+    expect(tapped).toBe(true)
+    let t = 0
+    while (boardSettling(s) && t < 2000) {
+      s = tickCascade(s, 16, 0.7)
+      t += 16
+    }
+    expect(boardSettling(s)).toBe(false)
+    expect(t).toBeLessThan(800)
+    expect(s.falling.length).toBeGreaterThan(0)
+  })
+})

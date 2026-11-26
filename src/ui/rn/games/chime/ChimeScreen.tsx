@@ -236,7 +236,8 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
   const playing = started && !paused
   // After a wall clears and its debris has fallen, stop the frame loop and the
   // save timer until the next wall starts.
-  const [settled, setSettled] = useState(false)
+  // A save of a cleared wall loads settled, or the loop would wait for debris that's gone (ISS-09).
+  const [settled, setSettled] = useState(() => initialStateRef.current!.solved)
   const mode: ChimeMode = saved.mode ?? 'endless'
   const running = playing && !settled
   const [courtSize, setCourtSize] = useState({ w: 0, h: 0 })
@@ -281,6 +282,7 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
       saveDirty.current = false
       const stripped = stripEphemeralForSave(nextState)
       setSaved((prev) => ({
+        ...prev,
         version: 1,
         state: stripped,
         bestScore: Math.max(prev.bestScore, stripped.score),
@@ -373,10 +375,10 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
 
   // Endless: a cleared wall gives way to the next one after a breath.
   useEffect(() => {
-    if (mode !== 'endless' || !started || !settled || !uiMeta.solved) return
+    if (mode !== 'endless' || !started || paused || !settled || !uiMeta.solved) return
     const t = setTimeout(handleNextLevel, 900)
     return () => clearTimeout(t)
-  }, [mode, started, settled, uiMeta.solved, handleNextLevel])
+  }, [mode, started, paused, settled, uiMeta.solved, handleNextLevel])
 
   const handleRestart = useCallback(() => {
     playingRef.current = false

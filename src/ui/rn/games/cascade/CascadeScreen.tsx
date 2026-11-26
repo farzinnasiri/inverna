@@ -4,6 +4,7 @@ import Svg, { Circle, ClipPath, Defs, G, LinearGradient, Path, Rect, Stop } from
 import { RefreshCw as _RefreshCw, Undo2 as _Undo2 } from 'lucide-react-native'
 import {
   WOBBLE_DURATION_MS,
+  boardSettling,
   createCascade,
   findCluster,
   nextBoard,
@@ -298,8 +299,9 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     (row: number, col: number) => {
       if (pausedRef.current) return
       const prev = stateRef.current
-      // While tiles are still tumbling, what you see isn't where they are yet: wait for them to land.
-      if (prev.falling.length > 0) return
+      // Wait only while the board's tiles slide into place (a fraction of a
+      // second); cleared tiles tumbling away don't block the next tap (ISS-10).
+      if (boardSettling(prev)) return
       const next = tapCell(prev, row, col)
       if (next === prev) return
 

@@ -443,6 +443,19 @@ export function releaseRemaining(state: CascadeState, baseDelayMs = 0): CascadeS
  * - Cluster === 1: triggers non-punitive micro-shudder wobble (or releases stragglers
  *   if somehow no playable moves remain).
  */
+/**
+ * True while standing tiles are still sliding into their places: the board
+ * on screen isn't where the rules say yet. Tumbling debris doesn't count.
+ */
+export function boardSettling(state: CascadeState): boolean {
+  for (const row of state.board) {
+    for (const t of row) {
+      if (t && (Math.abs(t.row - t.y) > 0.05 || Math.abs(t.col - t.x) > 0.05)) return true
+    }
+  }
+  return false
+}
+
 export function tapCell(state: CascadeState, row: number, col: number): CascadeState {
   if (state.boardComplete) return state
   if (row < 0 || row >= state.rows || col < 0 || col >= state.cols) return state
