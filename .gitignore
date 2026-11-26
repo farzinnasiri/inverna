@@ -8,3 +8,6 @@ dev-dist
 /scratch
 # Copied from @shopify/react-native-skia on install (pnpm postinstall)
 public/canvaskit.wasm
+
+# QA screenshots from cloud test runs (large; kept locally for fixing)
+.qa/

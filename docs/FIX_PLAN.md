@@ -113,8 +113,10 @@ disappear. Ordered so later steps build on earlier ones.
    counts as a cover and sends an app-wide pause, so games and the backdrop stop
    underneath it. Reduce Motion releases the 30 Hz clock. Onboarding,
    MindTangle and the science sheet animate from `useAmbientTime`.
-7. **One way to close a sheet** (ISS-15.2). Dragging a sheet closed runs exactly
-   what tapping the backdrop runs.
+7. **One way to close a sheet** (ISS-15.2, NAT-06). Dragging a sheet closed runs
+   exactly what tapping the backdrop runs. QA found dragging the grabber did
+   nothing on device (only the backdrop closed the check-in); fix and check it
+   here.
 
 ## Phase 2 — Fix the bugs on the new shape
 
@@ -129,7 +131,10 @@ Every fix comes with a test that fails without it.
      with the research as "studies suggest". Same voice, same rhythm, full
      sentences: no compressed, clipped rewrites. Inverna helps; it never
      promises to fix sleep.
-   - **Reminders:** Skip never asks for notification permission. Reminders
+   - **Reminders:** Skip never asks for notification permission (QA saw the
+     iOS prompt after Skip twice, landing on top of the check-in: NAT-05). The
+     first evening check-in also waits until onboarding's end has settled.
+     Reminders
      start off, and the app offers them later with a short sheet that says
      what they're for (at most once every few days, never twice in a night,
      and never again after "Not now" twice).
@@ -144,10 +149,31 @@ Every fix comes with a test that fails without it.
    player caused.
 4. **Sound leftovers** (ISS-15): resume a custom mix by name, pause when
    headphones disconnect, `playing` only after the context really started,
-   retry failed session setup.
-5. **Accessibility** (ISS-19.1–2): slider accessibility actions and keyboard
-   support, the slider sync fix, placeholder contrast, onboarding at large text
-   and in iPad Split View.
+   retry failed session setup. Plus, from device QA:
+   - **NAT-03:** the Sounds pulse chip and the Composer disagree (Lunar tide:
+     chip "θ 5.2 Hz", Composer "α Relax · 8.5 Hz"). Outside the hour before
+     bed the chip shows the slow-down's resting rate while the sound plays the
+     chosen pulse. Both read from one source: the rate actually playing.
+   - **NAT-04:** the sound pages open on page 1 while the sound shown is on
+     page 2, and the page dot stays wrong after picking. Open on the shown
+     sound's page and keep the dot in step.
+5. **Accessibility** (ISS-19.1–2, NAT-02): slider accessibility actions and
+   keyboard support, the slider sync fix, placeholder contrast, onboarding at
+   large text and in iPad Split View. From device QA: the game Pause sheet is
+   invisible to VoiceOver (no elements at all); the custom sliders (onboarding,
+   Sounds volume) aren't in the accessibility tree; some controls report the
+   wrong role (Dim Undo and Lanterns "How to play" as switches, Play tiles and
+   Settings toggles as "other").
+6. **Look and polish from device QA:**
+   - **NAT-01:** onboarding's first page: each card's coloured glow is a hard
+     rectangle that runs past the card's rounded edge to the screen edge.
+   - **NAT-07:** Dim's hint is too faint on a tile that's already lit; the
+     scene's bright moon sits behind text and the pulse chip (onboarding page
+     2, Sounds on iPad landscape); Settings scrolls under the status bar and
+     its last line crowds the tab bar; Nocturne's subtitle is cut off at
+     390pt.
+
+QA screenshots for NAT-xx are in `.qa/` (local only, not in git).
 
 ## Phase 3 — Cheaper to run
 
