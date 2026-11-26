@@ -1,0 +1,12 @@
+{
+  // Inverna's privacy, support and home pages: static files on a Worker at
+  // inverna.farzin.space. Deploy from this folder: `npx wrangler deploy`.
+  "name": "inverna-site",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "routes": [{ "pattern": "inverna.farzin.space", "custom_domain": true }]
+}
