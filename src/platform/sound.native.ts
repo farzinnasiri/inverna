@@ -3,7 +3,6 @@ import { AudioContext, AudioManager, PlaybackNotificationManager } from 'react-n
 import { artworkIcon, type ArtworkIconId, type SoundIconId } from '@/core/sound/catalog'
 import type { NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
 import { createNeuroSoundEngine, type NowPlayingState } from './audio'
-import { precomputeNoise } from './audio/buffers'
 import type { AudioContextLike } from './audio/types'
 
 const DEFAULT_ARTWORK_MODULE = require('../../assets/images/icon.png')
@@ -55,10 +54,6 @@ function resolveArtworkUri(icon?: SoundIconId): string | undefined {
  *   Lock Screen / Dynamic Island Play & Pause controls when paused.
  */
 export function createPlatformSoundEngine(): SoundEngine {
-  // Work out the sound textures quietly after launch, so the first play starts
-  // at once. This touches no audio session: music from other apps keeps playing.
-  setTimeout(() => precomputeNoise(), 2000)
-
   let sessionConfigured = false
   let sessionActive = false
   let controlsConfigured = false

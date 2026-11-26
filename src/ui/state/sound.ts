@@ -121,6 +121,8 @@ export const useSound = create<SoundState>()((set, get) => {
   const initialDescent = buildDescentSnapshot(initialPreset?.id ?? DEFAULT_PRESET_ID)
   sound.setHarmonicKey?.(initialKey)
   sound.setDescent?.(initialDescent, 0.1)
+  // Only tonight's sound is worked out ahead; the rest wait until something plays.
+  if (initialPreset) sound.prepare?.(initialPreset.mix)
 
   return {
     playing: false,

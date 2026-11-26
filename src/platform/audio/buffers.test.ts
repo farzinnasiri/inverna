@@ -1,5 +1,14 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createNoiseBuffer, isPrecomputed, precomputeNoise, type NoiseKind } from './buffers'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SILENT_MIX } from '@/core/sound/catalog'
+import {
+  createNoiseBuffer,
+  createNoiseBufferBank,
+  isPrecomputed,
+  resetTextureCache,
+  texturesFor,
+  warmTextures,
+  type NoiseKind,
+} from './buffers'
 import type { AudioContextLike } from './types'
 
 function fakeContext(sampleRate = 48000): AudioContextLike {
@@ -12,20 +21,22 @@ function fakeContext(sampleRate = 48000): AudioContextLike {
   } as unknown as AudioContextLike
 }
 
-function precompute(kind: NoiseKind) {
-  vi.useFakeTimers()
-  precomputeNoise([kind], 10)
-  vi.advanceTimersByTime(50)
-  vi.useRealTimers()
+function warm(...kinds: NoiseKind[]) {
+  warmTextures(kinds, 0)
+  vi.advanceTimersByTime(5000)
 }
 
+beforeEach(() => {
+  vi.useFakeTimers()
+  resetTextureCache()
+})
 afterEach(() => vi.useRealTimers())
 
 describe('noise buffers', () => {
-  it('uses the samples worked out after launch, once, and they match the on-demand ones', () => {
+  it('uses the samples worked out ahead, once, and they match the on-demand ones', () => {
     const direct = createNoiseBuffer(fakeContext(), 'rain-near')
     expect(isPrecomputed('rain-near')).toBe(false)
-    precompute('rain-near')
+    warm('rain-near')
     expect(isPrecomputed('rain-near')).toBe(true)
     const early = createNoiseBuffer(fakeContext(), 'rain-near')
     // Handed over, not kept: the memory is freed once the buffer has it.
@@ -36,10 +47,27 @@ describe('noise buffers', () => {
   })
 
   it("doesn't use precomputed samples made at a higher rate than the context runs", () => {
-    precompute('pink')
+    warm('pink')
     const slow = createNoiseBuffer(fakeContext(16000), 'pink')
     expect(slow.sampleRate).toBeLessThanOrEqual(16000)
     // Still waiting for a context that can use it.
     expect(isPrecomputed('pink')).toBe(true)
+  })
+
+  // ISS-11: two warmers used to work the same texture out twice.
+  it('never works out a texture that already has a buffer', () => {
+    const bank = createNoiseBufferBank(fakeContext())
+    bank.get('brown')
+    warm('brown')
+    expect(isPrecomputed('brown')).toBe(false)
+  })
+
+  it('warms only what a mix needs, loudest layer first', () => {
+    expect(texturesFor({ ...SILENT_MIX, layers: { rain: 0.2, fire: 0.6, wind: 0 } })).toEqual([
+      'fire-crackle',
+      'fire-bed',
+      'rain-patter',
+      'rain-near',
+    ])
   })
 })

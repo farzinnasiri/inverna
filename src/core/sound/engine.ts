@@ -14,6 +14,11 @@ export interface NowPlayingMeta {
 
 export interface SoundEngine {
   unlock(): Promise<void>
+  /**
+   * The sound likely to play next: work out what it needs in the background
+   * so it starts at once. Touches no audio session.
+   */
+  prepare?(mix: Mix): void
   setMix(mix: Mix, fadeSeconds?: number): void
   setDescent?(snapshot: DescentSnapshot, rampSeconds?: number): void
   setHarmonicKey?(keyId: HarmonicKeyId): void

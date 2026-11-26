@@ -3,7 +3,7 @@ import { isSilent, LAYERS, type LayerId, type Mix } from '@/core/sound/catalog'
 import type { CueName, NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { createBinauralController, type BinauralController } from './binaural'
-import { createNoiseBufferBank, type NoiseBufferBank } from './buffers'
+import { createNoiseBufferBank, texturesFor, warmTextures, type NoiseBufferBank } from './buffers'
 import { createClassicalMotifController, type ClassicalMotifController } from './classical'
 import { createCueBloomBus, playHarmonicCue, type CueBloomBus } from './cues'
 import { createAmbientLayer, type AmbientLayer } from './layers'
@@ -647,6 +647,11 @@ export function createNeuroSoundEngine({
       const g = ensureGraph()
       if (!g) return
       await resumeContext(g.ctx)
+    },
+
+    prepare(mix: Mix) {
+      // Well after launch, so the first screens stay smooth.
+      warmTextures(texturesFor(mix), 2000)
     },
 
     setMix(mix: Mix, fadeSeconds = 1.5) {

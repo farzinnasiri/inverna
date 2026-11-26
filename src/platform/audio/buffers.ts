@@ -1,3 +1,4 @@
+import type { LayerId, Mix } from '@/core/sound/catalog'
 import type { AudioBufferLike, AudioContextLike } from './types'
 
 /**
@@ -32,7 +33,7 @@ const LOOP_XFADE_SECONDS = 0.4
 
 export interface NoiseBufferBank {
   get(kind: NoiseKind): AudioBufferLike
-  /** Stagger-prewarm remaining acoustic textures lazily so preset switches never stutter. */
+  /** Work out the other textures in the background, so switching sounds never stutters. */
   prewarm(): void
 }
 
@@ -908,7 +909,7 @@ interface NoiseData {
   right: Float32Array
 }
 
-/** Samples worked out ahead of time (`precomputeNoise`), waiting for their first buffer. */
+/** Samples worked out ahead of time (`warmTextures`), waiting for their first buffer. */
 const ready: Partial<Record<NoiseKind, NoiseData>> = {}
 
 /**
@@ -981,26 +982,65 @@ export function createNoiseBuffer(
   return buffer
 }
 
-/**
- * Work out the textures' samples in the background after launch, one per JS
- * turn and well apart, so the first sound starts at once instead of waiting
- * while its rain or surf is generated. Needs no audio context and doesn't
- * touch the audio session, so other apps' music keeps playing.
- */
-export function precomputeNoise(order: readonly NoiseKind[] = ALL_KINDS, gapMs = 350): void {
-  let i = 0
-  const next = () => {
-    while (i < order.length && ready[order[i]!]) i++
-    if (i >= order.length) return
-    const kind = order[i++]!
-    try {
-      ready[kind] = noiseData(kind)
-    } catch {
-      /* the buffer is made on demand instead */
-    }
-    if (i < order.length) setTimeout(next, gapMs)
+/** The textures each layer plays. */
+export const LAYER_TEXTURES: Record<LayerId, readonly NoiseKind[]> = {
+  white: ['white'],
+  pink: ['pink'],
+  brown: ['brown'],
+  rain: ['rain-patter', 'rain-near'],
+  waves: ['waves-surf'],
+  fire: ['fire-crackle', 'fire-bed'],
+  wind: ['wind-gust'],
+}
+
+/** The textures a mix needs, loudest layer first. */
+export function texturesFor(mix: Mix): NoiseKind[] {
+  return (Object.entries(mix.layers) as [LayerId, number][])
+    .filter(([, gain]) => gain > 0.001)
+    .sort((a, b) => b[1] - a[1])
+    .flatMap(([id]) => LAYER_TEXTURES[id])
+}
+
+/** Textures that already have a buffer, so nothing works them out again. */
+const built = new Set<NoiseKind>()
+const queue: NoiseKind[] = []
+let queueTimer: ReturnType<typeof setTimeout> | null = null
+const WARM_GAP_MS = 400
+
+const needed = (kind: NoiseKind) => !ready[kind] && !built.has(kind)
+
+function warmNext() {
+  queueTimer = null
+  let kind = queue.shift()
+  while (kind && !needed(kind)) kind = queue.shift()
+  if (!kind) return
+  try {
+    ready[kind] = noiseData(kind)
+  } catch {
+    /* the buffer is made on demand instead */
   }
-  setTimeout(next, gapMs)
+  if (queue.length > 0) queueTimer = setTimeout(warmNext, WARM_GAP_MS)
+}
+
+/**
+ * The one background queue for texture samples. Each is one JS turn of
+ * 30-40 ms, so they're worked out one at a time, well apart, and never twice:
+ * a texture already waiting or already in a buffer is skipped. Needs no
+ * audio context and doesn't touch the audio session, so other apps' music
+ * keeps playing.
+ */
+export function warmTextures(kinds: readonly NoiseKind[], startDelayMs = WARM_GAP_MS): void {
+  for (const kind of kinds) if (needed(kind) && !queue.includes(kind)) queue.push(kind)
+  if (queue.length > 0 && queueTimer === null) queueTimer = setTimeout(warmNext, startDelayMs)
+}
+
+/** Forget what was worked out (tests). */
+export function resetTextureCache(): void {
+  for (const kind of Object.keys(ready) as NoiseKind[]) delete ready[kind]
+  built.clear()
+  queue.length = 0
+  if (queueTimer) clearTimeout(queueTimer)
+  queueTimer = null
 }
 
 const ALL_KINDS: readonly NoiseKind[] = [
@@ -1017,39 +1057,19 @@ const ALL_KINDS: readonly NoiseKind[] = [
 
 export function createNoiseBufferBank(ctx: AudioContextLike): NoiseBufferBank {
   const cache: Partial<Record<NoiseKind, AudioBufferLike>> = {}
-  let prewarmStarted = false
-
-  const get = (kind: NoiseKind) => {
-    let existing = cache[kind]
-    if (!existing) {
-      existing = createNoiseBuffer(ctx, kind)
-      cache[kind] = existing
-    }
-    return existing
-  }
 
   return {
-    get,
-    prewarm() {
-      if (prewarmStarted) return
-      prewarmStarted = true
-      let i = 0
-      const next = () => {
-        if (i >= ALL_KINDS.length) return
-        const kind = ALL_KINDS[i++]!
-        if (!cache[kind]) {
-          try {
-            get(kind)
-          } catch {
-            /* ignore */
-          }
-        }
-        if (i < ALL_KINDS.length) {
-          // Each buffer is one uninterrupted JS turn; keep them well apart so taps stay responsive.
-          setTimeout(next, 900)
-        }
+    get(kind) {
+      let existing = cache[kind]
+      if (!existing) {
+        existing = createNoiseBuffer(ctx, kind)
+        cache[kind] = existing
+        built.add(kind)
       }
-      setTimeout(next, 3000)
+      return existing
+    },
+    prewarm() {
+      warmTextures(ALL_KINDS, 3000)
     },
   }
 }
