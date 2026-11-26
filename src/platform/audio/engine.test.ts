@@ -422,6 +422,36 @@ describe('createNeuroSoundEngine — lifecycle, soft-clipper & native compatibil
   })
 })
 
+describe('createNeuroSoundEngine — the sleep fade', () => {
+  const sleepFadeGain = (ctx: MockAudioContext, end: number) =>
+    ctx.gains.find((g) =>
+      g.gain.calls.some((c) => c.method === 'linearRampToValueAtTime' && c.args[0] === 0 && Math.abs(c.args[1]! - end) < 1e-6),
+    )!
+
+  it('fades to silence on the audio clock at the deadline', () => {
+    const { engine, contexts } = makeTestEngine({ initialState: 'running' })
+    engine.setMix(PRESETS[0]!.mix, 0.2)
+    engine.scheduleSleepFade!(60, 12)
+    const ctx = contexts[0]!
+    expect(sleepFadeGain(ctx, ctx.currentTime + 60)).toBeDefined()
+  })
+
+  // ISS-03.1: an edit during the last 12 s swells the sound back to full.
+  // Phase 1 step 3 keeps the fade.
+  it.skip('editing the mix during the fade keeps fading', () => {
+    const { engine, contexts } = makeTestEngine({ initialState: 'running' })
+    engine.setMix(PRESETS[0]!.mix, 0.2)
+    engine.scheduleSleepFade!(20, 12)
+    const ctx = contexts[0]!
+    const fade = sleepFadeGain(ctx, ctx.currentTime + 20)
+    ctx.currentTime += 15
+    const before = fade.gain.calls.length
+    engine.setMix(PRESETS[1]!.mix, 0.25)
+    const after = fade.gain.calls.slice(before)
+    expect(after.some((c) => c.method === 'linearRampToValueAtTime' && c.args[0] === 1)).toBe(false)
+  })
+})
+
 describe('createNeuroSoundEngine — background-safe layers, harmonic pad & AM descent', () => {
   it('synthesises all 7 layers + 4-voice harmonic pad + 0.1 Hz breath + AM LFO with zero JS timers', () => {
     const { engine, contexts } = makeTestEngine({ initialState: 'running', sampleRate: 8000 })
