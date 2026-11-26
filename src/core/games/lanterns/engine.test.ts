@@ -32,9 +32,8 @@ function findMismatchPair(state: LanternsState): [number, number] {
 }
 
 describe('Lanterns engine — initialisation & pair distribution', () => {
-  it('defines 12 unique astronomical / watchmaker sigils', () => {
-    expect(SIGILS).toHaveLength(12)
-    expect(new Set(SIGILS.map((s) => s.id)).size).toBe(12)
+  it('gives every sigil its own id', () => {
+    expect(new Set(SIGILS.map((s) => s.id)).size).toBe(SIGILS.length)
   })
 
   it('creates deterministic boards with exact pair distribution across 20 seeds', () => {

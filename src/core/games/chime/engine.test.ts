@@ -4,6 +4,7 @@ import {
   BASE_BALL_SPEED,
   CALM_SINGLE_HP_THRESHOLD,
   CALM_SPEED_FACTOR,
+  COURT_COLS,
   FORMATIONS,
   MIN_VERTICAL_ANGLE_RAD,
   PADDLE_HEIGHT,
@@ -76,12 +77,23 @@ describe('Chime engine', () => {
       }
     })
 
-    it('cycles formations with subtle symmetry mirroring on subsequent loops', () => {
-      const first = createChime({ seed: 77, calm: 0, levelIndex: 3 })
-      const secondCycle = createChime({ seed: 77, calm: 0, levelIndex: 3 + FORMATIONS.length })
-      expect(secondCycle.patternName).toBe(first.patternName)
-      expect(secondCycle.bricks).toHaveLength(first.bricks.length)
-      expect(secondCycle.levelNumber).toBe(first.levelNumber + FORMATIONS.length)
+    it('mirrors a formation left to right on its second time round', () => {
+      const cells = (st: ReturnType<typeof createChime>) => st.bricks.map((b) => `${b.col},${b.row}`).sort()
+      const mirrored = (st: ReturnType<typeof createChime>) =>
+        st.bricks.map((b) => `${COURT_COLS - 1 - b.col},${b.row}`).sort()
+      // A formation that isn't its own mirror image, or the check proves nothing.
+      const index = FORMATIONS.findIndex((_, i) => {
+        const st = createChime({ seed: 77, calm: 0, levelIndex: i })
+        return cells(st).join() !== mirrored(st).join()
+      })
+      expect(index).toBeGreaterThanOrEqual(0)
+      const first = createChime({ seed: 77, calm: 0, levelIndex: index })
+      const second = createChime({ seed: 77, calm: 0, levelIndex: index + FORMATIONS.length })
+      expect(second.patternName).toBe(first.patternName)
+      expect(cells(second)).toEqual(mirrored(first))
+      expect(cells(second)).not.toEqual(cells(first))
+      // Third time round it's back the right way.
+      expect(cells(createChime({ seed: 77, calm: 0, levelIndex: index + FORMATIONS.length * 2 }))).toEqual(cells(first))
     })
   })
 

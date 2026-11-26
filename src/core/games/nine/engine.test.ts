@@ -124,20 +124,54 @@ describe('Nine (Sudoku) pure engine', () => {
     expect(state.notes[peerIdx]).toEqual([otherDigit])
   })
 
+  it('counts solutions right on boards with a known answer', () => {
+    // Its own fixtures, so a bug in countSolutions can't hide behind the generator using it too.
+    const full = [...BASE_SOLUTIONS[0]!]
+    expect(countSolutions(full)).toBe(1)
+    const oneGap = [...full]
+    oneGap[40] = 0
+    expect(countSolutions(oneGap)).toBe(1)
+    // Two of the same digit in a row: no solution.
+    const broken = [...oneGap]
+    broken[1] = broken[0]!
+    expect(countSolutions(broken)).toBe(0)
+    // A rectangle whose corners can swap (a, b / b, a in one band and one stack): two solutions.
+    let rect: number[] | null = null
+    for (let r1 = 0; r1 < 9 && !rect; r1++)
+      for (let r2 = r1 + 1; r2 < 9 && !rect; r2++)
+        for (let c1 = 0; c1 < 9 && !rect; c1++)
+          for (let c2 = c1 + 1; c2 < 9 && !rect; c2++) {
+            const at = (r: number, c: number) => full[r * 9 + c]!
+            if (Math.floor(r1 / 3) !== Math.floor(r2 / 3) && Math.floor(c1 / 3) !== Math.floor(c2 / 3)) continue
+            if (at(r1, c1) === at(r2, c2) && at(r1, c2) === at(r2, c1)) rect = [r1 * 9 + c1, r1 * 9 + c2, r2 * 9 + c1, r2 * 9 + c2]
+          }
+    expect(rect).not.toBeNull()
+    const twoWays = [...full]
+    for (const i of rect!) twoWays[i] = 0
+    expect(countSolutions(twoWays)).toBe(2)
+    expect(countSolutions(new Array<number>(81).fill(0))).toBe(2)
+  })
+
   it('detects row, column, and 3×3 box conflicts without blocking input', () => {
-    let state = createNine({ seed: 23, calm: 0.4 })
-    const emptyIdx = state.givens.findIndex((g) => !g)
-    const r = rowOf(emptyIdx)
-    const c = colOf(emptyIdx)
-    const b = boxOf(emptyIdx)
+    const state = createNine({ seed: 23, calm: 0.4 })
+    const givenWhere = (empty: number, same: (i: number) => boolean) =>
+      state.givens.findIndex((g, i) => g && i !== empty && same(i))
+    // An empty cell with a given in its row, its column and its box, so all three are checked.
+    const emptyIdx = state.givens.findIndex(
+      (g, idx) =>
+        !g &&
+        givenWhere(idx, (i) => rowOf(i) === rowOf(idx)) >= 0 &&
+        givenWhere(idx, (i) => colOf(i) === colOf(idx)) >= 0 &&
+        givenWhere(idx, (i) => boxOf(i) === boxOf(idx)) >= 0,
+    )
+    expect(emptyIdx).toBeGreaterThanOrEqual(0)
+    const peers = [
+      givenWhere(emptyIdx, (i) => rowOf(i) === rowOf(emptyIdx)),
+      givenWhere(emptyIdx, (i) => colOf(i) === colOf(emptyIdx)),
+      givenWhere(emptyIdx, (i) => boxOf(i) === boxOf(emptyIdx)),
+    ]
 
-    // Find a given in the same row, same col, or same box.
-    const sameRowGiven = state.givens.findIndex((g, i) => g && i !== emptyIdx && rowOf(i) === r)
-    const sameColGiven = state.givens.findIndex((g, i) => g && i !== emptyIdx && colOf(i) === c)
-    const sameBoxGiven = state.givens.findIndex((g, i) => g && i !== emptyIdx && boxOf(i) === b)
-
-    for (const conflictPeer of [sameRowGiven, sameColGiven, sameBoxGiven]) {
-      if (conflictPeer < 0) continue
+    for (const conflictPeer of peers) {
       const dupDigit = state.values[conflictPeer]!
       const placed = inputDigit(selectCell(state, emptyIdx), dupDigit)
       const conflicts = getConflicts(placed)

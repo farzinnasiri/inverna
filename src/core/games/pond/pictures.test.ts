@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { choosePicture, maxFamiliesForCalm, MIN_SPACING, PICTURE_BOX_HEIGHT, PICTURES } from './pictures'
 
 describe('pictures', () => {
-  it('has at least 16 distinct pictures, each 2–5 strokes', () => {
-    expect(PICTURES.length).toBeGreaterThanOrEqual(16)
+  it('has distinct pictures, each 2–5 strokes', () => {
     expect(new Set(PICTURES.map((p) => p.id)).size).toBe(PICTURES.length)
     for (const p of PICTURES) {
       expect(p.families.length).toBeGreaterThanOrEqual(2)

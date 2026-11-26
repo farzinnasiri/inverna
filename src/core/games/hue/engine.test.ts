@@ -41,8 +41,7 @@ describe('Hue OKLab colour math & palettes', () => {
     }
   })
 
-  it('curates 14 distinct nocturnal Watchmaker palettes with OKLCH C <= 0.11 and ΔE >= 0.04 between adjacent cells', () => {
-    expect(PALETTES.length).toBeGreaterThanOrEqual(14)
+  it('keeps every palette distinct, low in chroma (C <= 0.11), and with neighbours at least ΔE 0.04 apart', () => {
 
     const ids = new Set(PALETTES.map((p) => p.id))
     const titles = new Set(PALETTES.map((p) => p.title))

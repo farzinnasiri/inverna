@@ -47,15 +47,7 @@ it('every Weave pattern has exactly one solution, so hints can trust the answer 
     const rc = sol.map((r) => computeLineClue(r))
     const cc = Array.from({ length: size }, (_, c) => computeLineClue(sol.map((r) => r[c]!)))
     const n = countSolutions(rc, cc, size)
-    if (n !== 1) {
-      const fixes: string[] = []
-      for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-        const t = sol.map((row) => row.slice()); t[r]![c] = t[r]![c] ? 0 : 1
-        const trc = t.map((row) => computeLineClue(row)); const tcc = Array.from({ length: size }, (_, cc2) => computeLineClue(t.map((row) => row[cc2]!)))
-        if (countSolutions(trc, tcc, size, 2) === 1) fixes.push(`(${r},${c})`)
-      }
-      report.push(`${p.id} ${n} sols; unique single flips: ${fixes.join(' ')}`)
-    }
+    if (n !== 1) report.push(`${p.id}: ${n} solutions`)
   }
   expect(report).toEqual([])
 }, 120000)

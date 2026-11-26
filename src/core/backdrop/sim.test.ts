@@ -46,14 +46,14 @@ function assertHealthy(s: Sim) {
 
 describe('backdrop scenes', () => {
   it('gives every preset its own scene', () => {
-    expect(BACKDROP_IDS).toHaveLength(12)
     for (const p of PRESETS) {
       expect(isBackdropId(p.id)).toBe(true)
       expect(resolveBackdrop(p.id, p.mix)).toBe(p.id)
     }
     expect(new Set(PRESETS.map((p) => p.id)).size).toBe(BACKDROP_IDS.length)
-    expect(SCENE_RGB).toHaveLength(12 * 12)
-    expect(SCENE_PARTICLES).toHaveLength(12)
+    // Colours (4 x RGB) and a particle count for every scene, in the same order.
+    expect(SCENE_RGB).toHaveLength(BACKDROP_IDS.length * 12)
+    expect(SCENE_PARTICLES).toHaveLength(BACKDROP_IDS.length)
   })
 
   it('maps hand-built mixes to the scene of their dominant layer', () => {

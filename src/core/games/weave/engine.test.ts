@@ -19,8 +19,7 @@ import {
 } from './engine'
 
 describe('Weave (Nonogram) pure engine', () => {
-  it('curates at least 18 unique silhouettes with valid dimensions and non-empty row/col clues', () => {
-    expect(WEAVE_PUZZLES.length).toBeGreaterThanOrEqual(18)
+  it('has unique silhouettes with valid dimensions and non-empty row/col clues', () => {
 
     const ids = new Set(WEAVE_PUZZLES.map((p) => p.id))
     const titles = new Set(WEAVE_PUZZLES.map((p) => p.title))

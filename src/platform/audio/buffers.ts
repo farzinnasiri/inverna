@@ -960,6 +960,11 @@ function noiseData(kind: NoiseKind, seconds = KIND_SECONDS[kind], contextRate = 
   return { sampleRate, left: outL, right: outR }
 }
 
+/** Whether a texture's samples are ready and waiting (for tests and diagnostics). */
+export function isPrecomputed(kind: NoiseKind): boolean {
+  return ready[kind] !== undefined
+}
+
 export function createNoiseBuffer(
   ctx: AudioContextLike,
   kind: NoiseKind,

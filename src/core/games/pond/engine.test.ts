@@ -247,10 +247,20 @@ describe('pond: strokes and families', () => {
     expect(loops(r.events)[0]?.muddy).toBe(false)
     expect(r.s.families[2]!.doneAt).not.toBeNull()
 
+    // The deep one spoils the loop, and is shown as the culprit right away...
     const deep = { id: 901, phase: 0, x: cx, y: cy + 0.03 }
-    r = run(drawLasso({ ...s0, sleepers: [deep] }, fam, 0, 0.06), 3000)
-    expect(loops(r.events)[0]?.muddy).toBe(true)
-    expect(r.s.culprits.length + (r.s.timeMs > CULPRIT_MS ? 1 : 0)).toBeGreaterThan(0)
+    let st = drawLasso({ ...s0, sleepers: [deep] }, fam, 0, 0.06)
+    const seen: PondEvent[] = []
+    for (let t = 0; t < 3000 && loops(seen).length === 0; t += 16) {
+      const [ev, next] = takeEvents(tickPond(st, 16, 0))
+      seen.push(...ev)
+      st = next
+    }
+    expect(loops(seen)[0]?.muddy).toBe(true)
+    expect(st.culprits).toEqual([expect.objectContaining({ x: deep.x, y: deep.y })])
+    // ...and stops being shown once CULPRIT_MS has passed.
+    st = run(st, CULPRIT_MS + 200).s
+    expect(st.culprits).toEqual([])
   })
 
   it('cannot be finished by one giant loop round the whole picture', () => {
