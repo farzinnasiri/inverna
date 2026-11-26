@@ -1,0 +1,10 @@
+{
+  // Our own `.web` files, which the main check skips (it prefers `.native`).
+  // Packages resolve as usual: picking their `.web` typings too would report
+  // false errors in code that is correct (Lucide, SVG and RN style props).
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleSuffixes": [""]
+  },
+  "include": ["app/**/*.web.ts", "app/**/*.web.tsx", "src/**/*.web.ts", "src/**/*.web.tsx"]
+}

@@ -86,10 +86,10 @@ credentials: ## Verify GitHub Actions signing secrets for iOS
 
 check: typecheck test ## Run typechecks (app + zero-DOM core) and all Vitest suites
 
-typecheck: ## Type check Expo app + pure zero-DOM src/core
+typecheck: ## Type check the app, the pure src/core, and our .web files
 	pnpm run typecheck
 
-test: ## Run all unit tests (13 game engines + highscores + sound + night + session)
+test: ## Run all unit tests
 	pnpm test
 
 doctor: ## Check Expo SDK & dependency health

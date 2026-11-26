@@ -12,7 +12,7 @@
     "web": "expo start --web --lan",
     "ios": "expo start --ios",
     "android": "expo start --android",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "build": "node scripts/export-web.mjs",
     "deploy": "pnpm build && npx wrangler deploy",
