@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FADE_SECONDS, sessionDone, sessionLevels, sessionProgress, type Session } from './session'
+import { FADE_SECONDS, sessionDone, sessionEnd, sessionLevels, sessionProgress, type Session } from './session'
 
 describe('wind-down session curve', () => {
   const s: Session = { startedAt: 1_000_000, minutes: 15, presetId: 'rainfall' }
@@ -31,5 +31,12 @@ describe('wind-down session curve', () => {
     expect(sessionProgress(s, s.startedAt + 7.5 * 60_000)).toBeCloseTo(0.5, 4)
     expect(sessionDone(s, s.startedAt + 14 * 60_000)).toBe(false)
     expect(sessionDone(s, s.startedAt + 15 * 60_000)).toBe(true)
+  })
+})
+
+describe('wind-down end', () => {
+  it('ends at its deadline, not when the phone is next unlocked', () => {
+    const s: Session = { startedAt: Date.UTC(2026, 10, 2, 22, 0), minutes: 30, presetId: null }
+    expect(sessionEnd(s)).toBe(Date.UTC(2026, 10, 2, 22, 30))
   })
 })

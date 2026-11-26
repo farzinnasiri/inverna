@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   bedtimeSide,
   combineFilters,
@@ -105,6 +105,20 @@ describe('tonight-only bedtime', () => {
     expect(nightKey(new Date(2026, 10, 25, 0, 30))).toBe('2026-11-24')
     expect(nightKey(new Date(2026, 10, 25, 5, 59))).toBe('2026-11-24')
     expect(nightKey(new Date(2026, 10, 25, 6, 1))).toBe('2026-11-25')
+  })
+
+  it('keys the night right on the nights the clocks change', () => {
+    vi.stubEnv('TZ', 'Europe/Rome')
+    try {
+      // Spring forward (29 March, 02:00 → 03:00): 06:30 is the new day.
+      expect(nightKey(new Date(2026, 2, 29, 6, 30))).toBe('2026-03-29')
+      expect(nightKey(new Date(2026, 2, 29, 5, 30))).toBe('2026-03-28')
+      // Fall back (25 October, 03:00 → 02:00): 06:30 is the new day too.
+      expect(nightKey(new Date(2026, 9, 25, 6, 30))).toBe('2026-10-25')
+      expect(nightKey(new Date(2026, 9, 25, 5, 30))).toBe('2026-10-24')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('moves tonight only and expires on its own', () => {

@@ -39,10 +39,13 @@ const STEP = 15
 const WIDTH_STEP = 30
 const EVENING_START = 18 * 60
 
-/** Minutes after 6 PM for a clock time, or null if it's daytime (6 AM to 6 PM). */
+/**
+ * Minutes after 6 PM for a clock time, or null if it's daytime. The evening
+ * runs from 6:00 PM up to (not including) 6:00 AM, the same edge as nightKey.
+ */
 export function eveningMinute(h: number, m: number): number | null {
   const off = (h * 60 + m - EVENING_START + 1440) % 1440
-  return off <= 12 * 60 ? off : null
+  return off < 12 * 60 ? off : null
 }
 
 function minuteToHHMM(minute: number): string {

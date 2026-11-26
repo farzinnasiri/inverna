@@ -33,11 +33,6 @@ import { useReducedMotion } from './hooks'
 import { HandoffTitle, itemDelay, Rise } from './motion'
 import { SoundGlyph } from './SoundGlyph'
 
-/** The evening this moment belongs to (rolls over at 06:00). */
-export function todayNightKey(now = new Date()): string {
-  return nightKey(now)
-}
-
 type Step = 'day' | 'now' | 'result'
 
 /** Every answer gets a picture as well as a word. */
@@ -93,7 +88,7 @@ export function NightCheckIn() {
 
   const close = () => {
     // Asked once a night, answered or not.
-    if (mode === 'tonight') set({ lastCheckInDate: todayNightKey() })
+    if (mode === 'tonight') set({ checkInAskedNight: nightKey(new Date()) })
     setMode(null)
   }
 
@@ -111,7 +106,8 @@ export function NightCheckIn() {
       tonightDay: day ?? 'calm',
       tonightNow: n,
       tonightIntent: plan.intent,
-      lastCheckInDate: todayNightKey(),
+      checkInAskedNight: nightKey(new Date()),
+      checkInAnsweredNight: nightKey(new Date()),
       // Tonight's sound, unless one is already playing.
       ...(useSound.getState().playing ? null : { sessionPreset: plan.sounds[0] }),
     })

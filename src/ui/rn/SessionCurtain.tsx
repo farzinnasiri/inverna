@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native'
 import { formatBedtime12h, formatHHMM, nightKey } from '@/core/night'
-import { sessionDone, sessionLevels } from '@/core/session'
+import { sessionDone, sessionEnd, sessionLevels } from '@/core/session'
 import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSession } from '@/ui/state/session'
@@ -49,7 +49,8 @@ export function SessionCurtain() {
         sound.setMaster(vol * lvl.volume, 0.8)
       }
       if (sessionDone(session, now) && !ended) {
-        const d = new Date(now)
+        // Lights out was the deadline, even if the phone was asleep until later.
+        const d = new Date(sessionEnd(session))
         useSettings.getState().set({
           lastLightsOut: formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes())),
           lastLightsOutNight: nightKey(d),

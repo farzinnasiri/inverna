@@ -161,7 +161,10 @@ export function bedtimeAround(schedule: Schedule, now: Date): { previous: Date |
  * runs until 06:00, so 12:30 AM still belongs to the evening before.
  */
 export function nightKey(now: Date): string {
-  const d = new Date(now.getTime() - 6 * 3600_000)
+  // Calendar fields, not "now minus 6 hours": on the night the clocks change
+  // an hour goes missing or repeats, and a fixed offset lands on the wrong day.
+  const d = new Date(now)
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 

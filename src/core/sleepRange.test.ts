@@ -16,7 +16,9 @@ describe('sleep range learning', () => {
     expect(eveningMinute(18, 0)).toBe(0)
     expect(eveningMinute(23, 30)).toBe(330)
     expect(eveningMinute(0, 45)).toBe(405)
-    expect(eveningMinute(6, 0)).toBe(720)
+    expect(eveningMinute(5, 59)).toBe(719)
+    // 06:00 is the morning, as it is for nightKey.
+    expect(eveningMinute(6, 0)).toBeNull()
     expect(eveningMinute(14, 0)).toBeNull()
   })
 

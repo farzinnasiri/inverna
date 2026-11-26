@@ -62,9 +62,11 @@ export interface SettingsState {
   onboarded: boolean
   /** Most recently opened game (gets the 2-wide Continue tile on Home). */
   lastGame: GameId | null
-  /** Nightly check-in date stamp (YYYY-MM-DD) so it asks gently once per night. */
-  lastCheckInDate: string | null
-  /** Tonight's check-in answers (reset by lastCheckInDate each night). */
+  /** nightKey() of the night the check-in was last offered, so it asks once a night. */
+  checkInAskedNight: string | null
+  /** nightKey() of the night the answers below belong to. */
+  checkInAnsweredNight: string | null
+  /** The last check-in's answers (tonight's only when checkInAnsweredNight is tonight). */
   tonightDay: DayAnswer | null
   tonightNow: NowAnswer | null
   /** What Inverna decided from the check-in: which kind of games lead tonight. */
@@ -151,7 +153,8 @@ const SAVED: { [K in Exclude<keyof SettingsState, 'set' | 'setSchedule' | 'recor
   sleepTimer: isNumber,
   onboarded: isBoolean,
   lastGame: isNullable(isGameId),
-  lastCheckInDate: isNullable(isString),
+  checkInAskedNight: isNullable(isString),
+  checkInAnsweredNight: isNullable(isString),
   tonightDay: isNullable(isOneOf(['good', 'calm', 'busy', 'stressful', 'exhausting', 'sad'] as const)),
   tonightNow: isNullable(isOneOf(['sleepy', 'relaxed', 'worn_out', 'overthinking', 'wide_awake', 'restless'] as const)),
   tonightIntent: isNullable(isIntent),
@@ -190,7 +193,8 @@ export const useSettings = create<SettingsState>()(
       sleepTimer: -1, // until lights out
       onboarded: false,
       lastGame: null,
-      lastCheckInDate: null,
+      checkInAskedNight: null,
+      checkInAnsweredNight: null,
       tonightDay: null,
       tonightNow: null,
       tonightIntent: null,
@@ -230,7 +234,7 @@ export const useSettings = create<SettingsState>()(
     {
       name: 'settings',
       storage: kvStorage,
-      version: 8,
+      version: 9,
       merge: (saved, current) => {
         const next = pickValid(saved, current, SAVED)
         // Their own sounds are kept one by one: a damaged one never costs the rest.
@@ -311,6 +315,13 @@ export const useSettings = create<SettingsState>()(
           // The check-in asks different questions now.
           next = { ...next, tonightDay: null, tonightNow: null, tonightIntent: null, lastCheckInDate: null }
           delete next.usualIntent
+        }
+        if (version < 9) {
+          // One date stamp meant both "asked" and "answered"; dismissing the
+          // check-in re-dated the night before's answers. Now there are two.
+          const { lastCheckInDate, ...rest } = next
+          const stamp = typeof lastCheckInDate === 'string' ? lastCheckInDate : null
+          next = { ...rest, checkInAskedNight: stamp, checkInAnsweredNight: rest.tonightIntent ? stamp : null }
         }
         return next
       },

@@ -56,6 +56,11 @@ export function sessionLevels(s: Session, now: number): SessionLevels {
   }
 }
 
+/** When the wind-down ends: its deadline, whenever the app happens to notice. */
+export function sessionEnd(s: Session): number {
+  return s.startedAt + s.minutes * 60_000
+}
+
 export function sessionDone(s: Session, now: number): boolean {
   return sessionElapsed(s, now) >= s.minutes * 60
 }

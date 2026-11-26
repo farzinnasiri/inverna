@@ -15,12 +15,12 @@ async function hydrate(state: Record<string, unknown>, version: number) {
 
 describe('settings: loading what was saved', () => {
   it('loads a current save as it was', async () => {
-    const st = await hydrate({ onboarded: true, userName: 'Sam', volume: 0.4, sleepTimer: 45 }, 8)
+    const st = await hydrate({ onboarded: true, userName: 'Sam', volume: 0.4, sleepTimer: 45 }, 9)
     expect(st).toMatchObject({ onboarded: true, userName: 'Sam', volume: 0.4, sleepTimer: 45 })
   })
 
   it('fills in anything the save is missing with the defaults', async () => {
-    const st = await hydrate({ onboarded: true }, 8)
+    const st = await hydrate({ onboarded: true }, 9)
     expect(st.customSounds).toEqual([])
     expect(st.autoDescent).toBe(true)
   })
@@ -49,12 +49,19 @@ describe('settings: loading what was saved', () => {
   it('forgets check-in answers from before the questions changed (v3 → v4)', async () => {
     const st = await hydrate({ tonightIntent: 'calm', lastCheckInDate: '2026-01-01' }, 3)
     expect(st.tonightIntent).toBeNull()
-    expect(st.lastCheckInDate).toBeNull()
+    expect(st.checkInAnsweredNight).toBeNull()
+  })
+
+  it('splits the check-in stamp into asked and answered (v8 → v9)', async () => {
+    const answered = await hydrate({ lastCheckInDate: '2026-11-02', tonightIntent: 'melt' }, 8)
+    expect(answered).toMatchObject({ checkInAskedNight: '2026-11-02', checkInAnsweredNight: '2026-11-02' })
+    const dismissed = await hydrate({ lastCheckInDate: '2026-11-02', tonightIntent: null }, 8)
+    expect(dismissed).toMatchObject({ checkInAskedNight: '2026-11-02', checkInAnsweredNight: null })
   })
 
   // ISS-19.3: each field is checked; one that doesn't fit keeps its default.
   it('a damaged field falls back to its default', async () => {
-    const st = await hydrate({ onboarded: true, volume: 'loud', playLayout: { night: 'x', order: 7 } }, 8)
+    const st = await hydrate({ onboarded: true, volume: 'loud', playLayout: { night: 'x', order: 7 } }, 9)
     expect(st.onboarded).toBe(true)
     expect(st.volume).toBe(0.85)
     expect(st.playLayout).toBeNull()
@@ -62,9 +69,9 @@ describe('settings: loading what was saved', () => {
 
   it('drops a saved sound that is damaged but keeps the others', async () => {
     const good = { id: 'mine-1', name: 'Rain', hint: '', icon: 'rain', createdAt: 1, mix: { layers: { rain: 0.5 }, band: null, bandGain: 0.3, carrier: 140 } }
-    const st = await hydrate({ customSounds: [good] }, 8)
+    const st = await hydrate({ customSounds: [good] }, 9)
     expect(st.customSounds).toHaveLength(1)
-    const st2 = await hydrate({ customSounds: [good, { ...good, id: 'mine-2', mix: { layers: { lava: 1 } } }] }, 8)
+    const st2 = await hydrate({ customSounds: [good, { ...good, id: 'mine-2', mix: { layers: { lava: 1 } } }] }, 9)
     expect(st2.customSounds.map((c) => c.id)).toEqual(['mine-1'])
   })
 })

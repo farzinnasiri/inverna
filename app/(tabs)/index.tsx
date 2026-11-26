@@ -72,7 +72,8 @@ export default function HomeScreen() {
   const onboarded = useSettings((s) => s.onboarded)
   const name = useSettings((s) => s.userName)
   const lastGame = useSettings((s) => s.lastGame)
-  const lastCheckInDate = useSettings((s) => s.lastCheckInDate)
+  const checkInAskedNight = useSettings((s) => s.checkInAskedNight)
+  const checkInAnsweredNight = useSettings((s) => s.checkInAnsweredNight)
   const tonightIntent = useSettings((s) => s.tonightIntent)
   const lastLightsOutNight = useSettings((s) => s.lastLightsOutNight)
   const tonightBedtime = useSettings((s) => s.tonightBedtime)
@@ -145,10 +146,10 @@ export default function HomeScreen() {
   const nearBedtime = nearBedtimeFor(evening, now)
   useEffect(() => {
     if (!onboarded || !nearBedtime || checkInOpen) return
-    if (lastCheckInDate === nightKey(now)) return
+    if (checkInAskedNight === nightKey(now)) return
     const timer = setTimeout(() => setCheckIn('tonight'), 600)
     return () => clearTimeout(timer)
-  }, [onboarded, nearBedtime, lastCheckInDate, now, checkInOpen, setCheckIn])
+  }, [onboarded, nearBedtime, checkInAskedNight, now, checkInOpen, setCheckIn])
 
   // The layout is set once a night, so tiles never move while someone is
   // using Play (a game opened counts as a play, which changes favourites).
@@ -174,7 +175,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!layoutFresh && onboarded) setSettings({ playLayout: layout })
   }, [layoutFresh, layout, onboarded, setSettings])
-  const tonightPlan = lastCheckInDate === night ? tonightIntent : null
+  const tonightPlan = checkInAnsweredNight === night ? tonightIntent : null
   const ordered = useMemo(() => layout.order.map(gameMeta), [layout])
   const wideIds = useMemo(() => new Set<GameId>(layout.wide), [layout])
   const picks = useMemo(

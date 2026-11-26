@@ -60,14 +60,13 @@ describe('reminders', () => {
   // ISS-06.2: ids come from UTC days, so across the spring change two nights
   // can share one id and one reminder is lost. Phase 1 step 5 uses local dates.
   it.skip('every night keeps its own reminder across daylight saving', async () => {
-    const tz = process.env.TZ
-    process.env.TZ = 'Europe/Rome'
+    vi.stubEnv('TZ', 'Europe/Rome')
     try {
       const late: Schedule = { ...schedule, bedtime: '02:00', leadMinutes: 30 }
       await planReminders(late, MESSAGES, { now: new Date('2026-03-26T12:00:00+01:00') })
       expect(centre.scheduled.size).toBe(7)
     } finally {
-      process.env.TZ = tz
+      vi.unstubAllEnvs()
     }
   })
 
