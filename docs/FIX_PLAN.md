@@ -221,8 +221,24 @@ Each needs logic in the app, not only screens.
    opens. Without the purchase the app doesn't work: entitlement checked with
    StoreKit on the device (not a flag in saved data), Restore Purchases, and no
    way around it by editing storage. Development builds skip it; Beta uses
-   Apple's sandbox. Design, copy and price come from the research below and go
-   to Farzin before anything is built.
+   Apple's sandbox. $9.99 for now (to be discussed again), Gemini's Version B
+   ("Your evening is set up") with the anchor line from Version C
+   ([research/PAYWALL.md](research/PAYWALL.md)). From that research:
+   - the price on the button comes from StoreKit (`displayPrice`), never
+     typed in, and the screen says "one-time purchase, no subscription";
+   - Restore Purchases, Privacy Policy and Terms of Use (Apple's standard
+     EULA) are on the paywall itself, before buying;
+   - a plain note in the small print: made to help you relax before bed, not
+     to diagnose or treat a sleep condition;
+   - the "Ready for tonight" list reflects what onboarding actually set up;
+   - onboarding says early, in one quiet line, that Inverna is a one-time
+     purchase after setup, so the paywall is never a surprise;
+   - the scene keeps moving behind the paywall;
+   - App Store Connect: the non-consumable product with the regional price
+     ladder (about 100% / 75% / 50% / 35–40% of the US price by region),
+     Family Sharing on, attached to the first submission, and review notes
+     that explain how to test buying and restoring. The first two lines of
+     the App Store description say it's a one-time purchase.
 2. **Rating prompt.** Apple's own in-app review sheet, shown rarely and only to
    people who use Inverna regularly, right after something good (a finished
    wind-down or round). Never on a first night, never twice close together.
@@ -235,19 +251,16 @@ Each needs logic in the app, not only screens.
    the phone (no name, bedtime or check-in answers). Waits for Farzin to
    connect PostHog.
 
-## Research running now (for Phase 5)
+## Research (for Phase 5)
 
-- **Paywall:** layout, copy and conversion patterns for a one-time purchase,
-  within Apple's guidelines.
-- **Price:** what comparable one-time-purchase sleep and wellbeing apps charge,
-  then checked independently by a second agent. Comes back to Farzin as
-  options.
+Done: [research/PAYWALL.md](research/PAYWALL.md) (Gemini) and
+[research/PRICING.md](research/PRICING.md) (Astra). Price is $9.99 for now;
+talk about it again when the plan is done.
 
 ## Waiting on Farzin
 
 - Contact and support email for the privacy and support pages.
-- PostHog connection (Phase 5).
-- Price and paywall choice, once the research is in.
+- PostHog connection (Phase 5, last).
 
 ## Done means
 
