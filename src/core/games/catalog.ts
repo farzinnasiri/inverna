@@ -33,6 +33,11 @@ export interface GameMeta {
   /** Mood affinity used by Tonight Check-in to rank and morph tiles. */
   mood: GameMood
   status: GameStatus
+  /**
+   * `shared`: the Easy / Medium / Hard on the door, kept in settings (read
+   * through `useCalm(id)`). `own`: the game picks its own (Nine, Hue, Rally).
+   */
+  difficulty: 'shared' | 'own'
   /** How to play, the same three short lines for every game. */
   rules: GameRules
 }
@@ -55,6 +60,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Quiet planning',
     mood: 'calm',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Reveal the picture hidden in the lotus buds, one stroke at a time.',
       play: 'Draw a loop around one whole family of matching buds and the koi swims it: that stroke of the picture draws itself. A stroke takes one clean loop.',
@@ -69,6 +75,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Visual order',
     mood: 'calm',
     status: 'ready',
+    difficulty: 'own',
     rules: {
       goal: 'Arrange the colour tiles so every row and column blends smoothly from corner to corner.',
       play: 'Tap two tiles to swap them, or drag one onto another. Tiles with a small diamond dot are locked in place.',
@@ -83,6 +90,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Quiet focus',
     mood: 'focus',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Connect every matching pair of shapes with a line and cover every square on the board.',
       play: 'Drag from a shape to its match. Lines cannot cross, so drawing over another line cuts it back.',
@@ -97,6 +105,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Sequential rhythm',
     mood: 'calm',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Put the numbered tiles in order from 1, starting at the top left, with the empty space at the bottom right.',
       play: 'Tap any tile in the same row or column as the empty space to slide it over, or swipe the board.',
@@ -111,6 +120,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Quiet focus',
     mood: 'focus',
     status: 'ready',
+    difficulty: 'own',
     rules: {
       goal: 'Fill the grid so every row, column, and 3x3 box holds the numbers 1 to 9 with no repeats.',
       play: 'Tap an empty square, then tap a number below. Turn on Notes to jot down possible numbers inside a square.',
@@ -125,6 +135,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Patient deduction',
     mood: 'focus',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Fill the right squares to uncover a hidden picture.',
       play: 'Side numbers show groups of filled squares in order (2 1 means two filled, a gap, then one). Drag to fill, or Mark empties.',
@@ -139,6 +150,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Gentle logic',
     mood: 'calm',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Turn off every lit square until the whole board is dark.',
       play: 'Tap any square to flip its light, along with the squares directly above, below, left, and right of it.',
@@ -153,6 +165,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Soft recall',
     mood: 'calm',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Find every matching pair of hidden symbols on the board.',
       play: 'Tap two tiles to flip them over. Matching pairs stay open; two different tiles flip back after a moment.',
@@ -167,6 +180,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Spatial focus',
     mood: 'light',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Stack the falling blocks to make full horizontal rows so they clear away.',
       play: 'Tap the board to rotate, drag sideways to move, swipe down to drop, and swipe up to hold. Or use the buttons.',
@@ -181,6 +195,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Gentle planning',
     mood: 'focus',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Combine matching numbers to build higher tiles and reach 2048.',
       play: 'Swipe up, down, left, or right to slide all tiles at once. Matching tiles that touch merge into double their number.',
@@ -195,6 +210,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Tactile release',
     mood: 'light',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Clear groups of matching stones from the board.',
       play: 'Tap any group of two or more touching stones of the same colour to drop them away. Bigger groups score more points.',
@@ -209,6 +225,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Calm precision',
     mood: 'light',
     status: 'ready',
+    difficulty: 'shared',
     rules: {
       goal: 'Bounce the ball off your paddle to break every block in the wall.',
       play: 'Tap to launch the ball, then drag the bar below to move your paddle. Hitting near an edge changes the angle.',
@@ -223,6 +240,7 @@ export const GAMES: readonly GameMeta[] = [
     effect: 'Steady rhythm',
     mood: 'light',
     status: 'ready',
+    difficulty: 'own',
     rules: {
       goal: 'Keep the ball bouncing back and forth across the court as long as you can.',
       play: 'Drag the bar below the court to move your paddle. Hit the ball near an edge to send it at a sharper angle.',

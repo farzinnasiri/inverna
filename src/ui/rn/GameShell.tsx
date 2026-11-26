@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, Fragment, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { Award, Bell, BellOff, ChevronLeft, CircleHelp, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react-native'
-import { eveningState } from '@/core/evening'
 import { feel } from '@/ui/feel'
 import { gameMeta, type GameId } from '@/core/games/catalog'
+import { bedtimeNudgeDue, SHELL_START, shellPause, shellReducer, type ShellEvent } from '@/core/games/shell'
 import { nightKey } from '@/core/night'
 import { readJSON } from '@/core/storage'
 import { formatScoreValue, HIGH_SCORE_SPECS } from '@/core/highscores'
@@ -48,15 +48,19 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
 /** Height of the floating top bar (styles.top). */
 const TOP_BAR_HEIGHT = 46
 
-/** Games whose difficulty is the shared Easy / Medium / Hard (through `useCalm(gameId)`, or read directly, as Pond does). */
-const SHARED_DIFFICULTY = new Set<GameId>(['thread', 'drift', 'weave', 'dim', 'lanterns', 'settle', 'kindle', 'cascade', 'chime', 'pond'])
 const DIFFICULTIES: readonly { value: Difficulty; label: string }[] = [
   { value: 'easy', label: doorCopy.easy },
   { value: 'medium', label: doorCopy.medium },
   { value: 'hard', label: doorCopy.hard },
 ]
-/** How long after bedtime the in-game prompt may still appear. */
-const NUDGE_WINDOW_MIN = 45
+/** What a game can ask of the shell around it. */
+interface GameShellApi {
+  /** Open the New game sheet (as the top bar's button does). */
+  openNewGame: () => void
+}
+const GameShellContext = createContext<GameShellApi>({ openNewGame: () => {} })
+/** For a game's own "New puzzle" button: the shell's New game sheet. */
+export const useGameShell = () => useContext(GameShellContext)
 
 /**
  * Shared slimmed Liquid Glass Watchmaker frame for all 13 games.
@@ -115,31 +119,29 @@ export function GameShell({
   const reducedMotion = useReducedMotion()
   const meta = gameMeta(gameId)
   const spec = HIGH_SCORE_SPECS[gameId]
-  // One sheet at a time on top of the game. Opening Help or Sound pauses play;
-  // closing it returns to wherever it was opened from: back to play from the
-  // top bar, back to the Pause sheet from Pause. Play never resumes unseen.
-  // The door opens first: difficulty, Continue or New game. It counts as a
-  // sheet so the Pause sheet stays out of the way while it's up.
+  // One sheet at a time on top of the game, and where closing it goes back
+  // to: the door, play, or Pause (core/games/shell). Play never resumes unseen.
   const [hadSave] = useState(() => readJSON<unknown>(`game:${gameId}`, null) !== null)
-  const [sheet, setSheet] = useState<{ kind: 'door' | 'new' | 'help' | 'audio' | 'nudge'; fromPause: boolean } | null>(() => ({
-    kind: 'door',
-    fromPause: false,
-  }))
-  const doorOpen = sheet?.kind === 'door'
-  const nudgeOpen = sheet?.kind === 'nudge'
-  const helpOpen = sheet?.kind === 'help'
-  const audioOpen = sheet?.kind === 'audio'
-  const newOpen = sheet?.kind === 'new'
-  const openSheet = (kind: 'help' | 'audio' | 'new') => {
-    const fromPause = paused
-    if (!paused && ready) onPauseChange(true)
-    setSheet({ kind, fromPause: fromPause || !ready })
+  const [shell, setShell] = useState(SHELL_START)
+  const shellRef = useRef(shell)
+  shellRef.current = shell
+  const go = (event: ShellEvent) => {
+    const prev = shellRef.current
+    const next = shellReducer(prev, event)
+    if (next === prev) return
+    shellRef.current = next
+    setShell(next)
+    const pause = shellPause(prev, next)
+    if (pause !== null && readyRef.current) onPauseChange(pause)
   }
-  const closeSheet = () => {
-    const from = sheet
-    setSheet(null)
-    if (from && !from.fromPause && ready) onPauseChange(false)
-  }
+  const sheet = shell.sheet
+  const doorOpen = sheet === 'door'
+  const nudgeOpen = sheet === 'nudge'
+  const helpOpen = sheet === 'help'
+  const audioOpen = sheet === 'audio'
+  const newOpen = sheet === 'new'
+  const openSheet = (kind: 'help' | 'audio' | 'new') => go({ type: 'open', sheet: kind, paused: pausedRef.current || !ready })
+  const closeSheet = () => go({ type: 'close' })
 
   // Hold play while the door is up (games with their own start gate aren't running yet).
   useEffect(() => {
@@ -147,44 +149,56 @@ export function GameShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const enter = (fresh: boolean) => {
-    if (fresh) (onNewGame ?? onRestart)?.()
-    setSheet(null)
-    if (ready) onPauseChange(false)
-    onReady?.()
-  }
-  const newGame = onNewGame ?? onRestart
-  /** From the New game sheet: deal a new one (or replay this one), then play. */
-  const startOver = (same: boolean) => {
-    if (same) onRestart?.()
+  // Difficulty chosen on the door or the New game sheet is only a choice
+  // until a new game starts; Continue keeps the saved game as it was.
+  const difficulty = useSettings((s) => s.difficulty[gameId] ?? s.defaultDifficulty)
+  const [staged, setStaged] = useState<Difficulty | null>(null)
+  const shownDifficulty = staged ?? difficulty
+  // A new game is dealt on the render after the difficulty is saved, so the
+  // game's own handlers see it.
+  const [deal, setDeal] = useState<{ same: boolean } | null>(null)
+  useEffect(() => {
+    if (!deal) return
+    setDeal(null)
+    if (deal.same) onRestart?.()
     else newGame?.()
-    setSheet(null)
-    if (ready) onPauseChange(false)
     onReady?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deal])
+  const commitDifficulty = () => {
+    const changed = staged !== null && staged !== difficulty
+    if (changed) {
+      const st = useSettings.getState()
+      st.set({ difficulty: { ...st.difficulty, [gameId]: staged } })
+    }
+    setStaged(null)
+    return changed
   }
 
-  const difficulty = useSettings((s) => s.difficulty[gameId] ?? s.defaultDifficulty)
-  const setDifficulty = (d: Difficulty) => {
-    const st = useSettings.getState()
-    st.set({ difficulty: { ...st.difficulty, [gameId]: d } })
+  const newGame = onNewGame ?? onRestart
+  /** From the door: carry on, or a fresh game (also when this is the first one and the difficulty moved). */
+  const enter = (fresh: boolean) => {
+    const changed = fresh || !hadSave ? commitDifficulty() : (setStaged(null), false)
+    go({ type: 'enter' })
+    if (fresh || changed) setDeal({ same: false })
+    else onReady?.()
+  }
+  /** From the New game sheet: deal a new one (or replay this one), then play. */
+  const startOver = (same: boolean) => {
+    if (!same) commitDifficulty()
+    else setStaged(null)
+    go({ type: 'startOver' })
+    setDeal({ same })
   }
 
   // Bedtime arrives mid-game: ask once a night, gently, and let them choose.
   const userName = useSettings((s) => s.userName)
   const nudgedNight = useSettings((s) => s.bedtimeNudgeNight)
-  const sheetRef = useRef(sheet)
-  sheetRef.current = sheet
   useEffect(() => {
     const check = () => {
       const now = new Date()
-      if (useSettings.getState().bedtimeNudgeNight === nightKey(now) || sheetRef.current) return
-      const ev = eveningState(currentSchedule(now), now)
-      const justPast = ev.kind === 'past' && (ev.minutesSinceBedtime ?? 99) <= NUDGE_WINDOW_MIN
-      const atBedtime = ev.kind === 'winding' && (ev.minutesToBedtime ?? 99) <= 0
-      if (!justPast && !atBedtime) return
-      const fromPause = pausedRef.current
-      if (!fromPause && readyRef.current) onPauseChange(true)
-      setSheet({ kind: 'nudge', fromPause })
+      if (!bedtimeNudgeDue(currentSchedule(now), now, useSettings.getState().bedtimeNudgeNight)) return
+      go({ type: 'open', sheet: 'nudge', paused: pausedRef.current })
     }
     check()
     const id = setInterval(check, 30_000)
@@ -203,7 +217,7 @@ export function GameShell({
       closeSheet()
       return
     }
-    setSheet(null)
+    setShell({ sheet: null, returnTo: 'play' })
     if (choice === 'phone-down') {
       feel('commit')
       // Tonight's sound plays on and fades out by itself; the screen can sleep.
@@ -291,6 +305,7 @@ export function GameShell({
   const padBottom = Math.max(insets.bottom, isCompact ? 6 : 10)
 
   return (
+    <GameShellContext.Provider value={{ openNewGame: () => openSheet('new') }}>
     <View
       style={[
         styles.root,
@@ -507,9 +522,9 @@ export function GameShell({
         <Text style={[styles.kicker, { color: color.ink3 }]}>{meta.classic}</Text>
         <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
         <Text style={[styles.doorGoal, { color: color.ink2 }]}>{readyHint ?? meta.rules.goal}</Text>
-        {SHARED_DIFFICULTY.has(gameId) ? (
+        {meta.difficulty === 'shared' ? (
           <View style={styles.doorPicker}>
-            <Segmented label={doorCopy.difficulty} options={DIFFICULTIES} value={difficulty} onChange={setDifficulty} />
+            <Segmented label={doorCopy.difficulty} options={DIFFICULTIES} value={shownDifficulty} onChange={setStaged} />
           </View>
         ) : null}
         {readyExtra ? <View style={styles.doorPicker}>{readyExtra}</View> : null}
@@ -530,7 +545,7 @@ export function GameShell({
               <Text style={[styles.readyBtnText, { color: color.accent }]}>{doorCopy.newGame}</Text>
             </Button>
           )}
-          <Button variant="ghost" size="sm" block onPress={() => setSheet({ kind: 'help', fromPause: false })}>
+          <Button variant="ghost" size="sm" block onPress={() => openSheet('help')}>
             How to play
           </Button>
         </View>
@@ -540,9 +555,9 @@ export function GameShell({
       <Sheet open={newOpen} onClose={closeSheet} label={`${doorCopy.newGame}, ${meta.name}`}>
         <Text style={[styles.kicker, { color: color.ink3 }]}>{doorCopy.newGame}</Text>
         <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
-        {SHARED_DIFFICULTY.has(gameId) ? (
+        {meta.difficulty === 'shared' ? (
           <View style={styles.doorPicker}>
-            <Segmented label={doorCopy.difficulty} options={DIFFICULTIES} value={difficulty} onChange={setDifficulty} />
+            <Segmented label={doorCopy.difficulty} options={DIFFICULTIES} value={shownDifficulty} onChange={setStaged} />
           </View>
         ) : null}
         {readyExtra ? <View style={styles.doorPicker}>{readyExtra}</View> : null}
@@ -606,18 +621,18 @@ export function GameShell({
             <PauseDoor
               label="Sound"
               icon={<Volume2 size={18} strokeWidth={1.6} color={ambientPlaying ? color.accent : color.ink2} />}
-              onPress={() => setSheet({ kind: 'audio', fromPause: true })}
+              onPress={() => openSheet('audio')}
             />
             <PauseDoor
               label="Rules"
               icon={<CircleHelp size={18} strokeWidth={1.6} color={color.ink2} />}
-              onPress={() => setSheet({ kind: 'help', fromPause: true })}
+              onPress={() => openSheet('help')}
             />
             {newGame ? (
               <PauseDoor
                 label={doorCopy.newGame}
                 icon={<RotateCcw size={18} strokeWidth={1.6} color={color.ink2} />}
-                onPress={() => setSheet({ kind: 'new', fromPause: true })}
+                onPress={() => openSheet('new')}
               />
             ) : null}
           </View>
@@ -628,6 +643,7 @@ export function GameShell({
         </View>
       </Sheet>
     </View>
+    </GameShellContext.Provider>
   )
 }
 

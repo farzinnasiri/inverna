@@ -24,7 +24,7 @@ import {
 } from '@/core/games/nine/engine'
 import { radius } from '@/design/tokens'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { Completion, GameShell, useGameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { Segmented } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
 import { useCalm, useFeedback, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
@@ -135,7 +135,6 @@ export function NineScreen({ onExit }: GameScreenProps) {
   const state = save.state
 
   const [started, setStarted] = useState(false)
-  const [newPuzzle, setNewPuzzle] = useState(false)
   const [difficulty, setDifficulty] = useState<NineDifficulty>(state.difficulty ?? 'medium')
   const [isPaused, setPaused] = useState(false)
   const paused = isPaused || !started
@@ -280,15 +279,17 @@ export function NineScreen({ onExit }: GameScreenProps) {
 
   const handleBegin = useCallback(() => {
     const current = stateRef.current
-    const replace = newPuzzle || difficulty !== (current.difficulty ?? 'medium')
+    // Continue keeps a game in progress; an untouched board is dealt again
+    // at the difficulty chosen on the door.
+    const untouched = current.undoStack.length === 0 && !current.solved
+    const replace = untouched && difficulty !== (current.difficulty ?? 'medium')
     const puzzle = replace ? nextPuzzle(current, calm, difficulty) : current
     const next = selectEmpty(puzzle)
     stateRef.current = next
     setSave((prev) => ({ version: 1, state: next, completed: isValidSave(prev) ? prev.completed : 0 }))
     setShowCompletion(next.solved)
-    setNewPuzzle(false)
     setStarted(true)
-  }, [newPuzzle, difficulty, calm, setSave])
+  }, [difficulty, calm, setSave])
 
   /** New game sheet: a fresh puzzle at the difficulty picked there. */
   const handleNewGame = useCallback(() => {
@@ -297,15 +298,8 @@ export function NineScreen({ onExit }: GameScreenProps) {
     const next = selectEmpty(nextPuzzle(stateRef.current, calm, difficulty))
     stateRef.current = next
     setSave((prev) => ({ version: 1, state: next, completed: isValidSave(prev) ? prev.completed : 0 }))
-    setNewPuzzle(false)
   }, [calm, difficulty, setSave])
 
-  const chooseNewPuzzle = useCallback(() => {
-    if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
-    setShowCompletion(false)
-    setNewPuzzle(true)
-    setStarted(false)
-  }, [])
 
   const moveSelection = useCallback(
     (dRow: number, dCol: number) => {
@@ -435,9 +429,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
             </KeypadButton>
           </View>
 
-          <Pressable accessibilityRole="button" onPress={chooseNewPuzzle} disabled={isPaused} style={styles.newPuzzle}>
-            <Text style={[styles.actionBtnText, { color: color.ink2 }]}>New puzzle</Text>
-          </Pressable>
+<NewPuzzleButton disabled={isPaused} color={color.ink2} />
           {KEYPAD_ROWS.map((digits) => (
             <View key={digits[0]} style={styles.keyRow}>
               {digits.map((digit) => {
@@ -698,3 +690,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 })
+
+/** The same New game sheet as the top bar's button (ISS-08: this used to leave the board behind a door that never opened). */
+function NewPuzzleButton({ disabled, color }: { disabled: boolean; color: string }) {
+  const { openNewGame } = useGameShell()
+  return (
+    <Pressable accessibilityRole="button" onPress={openNewGame} disabled={disabled} style={styles.newPuzzle}>
+      <Text style={[styles.actionBtnText, { color }]}>New puzzle</Text>
+    </Pressable>
+  )
+}
