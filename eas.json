@@ -27,6 +27,16 @@
         "APP_VARIANT": "beta"
       }
     },
+    "simulator": {
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "beta"
+      },
+      "ios": {
+        "simulator": true,
+        "buildConfiguration": "Release"
+      }
+    },
     "beta": {
       "distribution": "store",
       "env": {
@@ -50,6 +60,7 @@
     "beta": {
       "ios": {
         "bundleIdentifier": "com.oooflabs.inverna.beta",
+        "ascAppId": "6839721993",
         "appleTeamId": "LFJY887CD3",
         "ascApiKeyPath": "$HOME/.config/oooflabs/apple/AuthKey_Q6F666S4RG.p8",
         "ascApiKeyId": "Q6F666S4RG",
@@ -59,6 +70,7 @@
     "production": {
       "ios": {
         "bundleIdentifier": "com.oooflabs.inverna",
+        "ascAppId": "6839721977",
         "appleTeamId": "LFJY887CD3",
         "ascApiKeyPath": "$HOME/.config/oooflabs/apple/AuthKey_Q6F666S4RG.p8",
         "ascApiKeyId": "Q6F666S4RG",
