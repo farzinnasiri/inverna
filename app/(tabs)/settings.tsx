@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
-import { ChevronDown, ChevronRight, ChevronUp, Flame, Moon, Snowflake, Sun, Trash2 } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, ChevronUp, ExternalLink, Flame, Moon, Snowflake, Sun, Trash2 } from 'lucide-react-native'
 import { brightnessForDim, formatRange } from '@/core/night'
 import { feel } from '@/ui/feel'
 import { clearAll } from '@/core/storage'
@@ -15,6 +15,7 @@ import { scrollEndClearance, useResponsiveLayout } from '@/ui/rn/hooks'
 import { SleepAround } from '@/ui/rn/SleepAround'
 import { useNightFilterMetrics } from '@/ui/rn/NightFilterOverlay'
 import { ScienceSheet } from '@/ui/rn/ScienceSheet'
+import { PRIVACY_URL, SUPPORT_URL } from '@/ui/links'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
@@ -197,6 +198,33 @@ export default function SettingsScreen() {
               </View>
               <ChevronRight size={17} strokeWidth={1.65} color={color.ink3} />
             </Pressable>
+          </GlassSurface>
+
+          <GlassSurface variant="card" radius={22} style={styles.card}>
+            {(
+              [
+                [settingsCopy.privacy, settingsCopy.privacyNote, PRIVACY_URL],
+                [settingsCopy.support, settingsCopy.supportNote, SUPPORT_URL],
+              ] as const
+            ).map(([label, note, url], i) => (
+              <Pressable
+                key={url}
+                onPress={() => void Linking.openURL(url)}
+                accessibilityRole="link"
+                accessibilityLabel={label}
+                style={({ pressed }) => [
+                  styles.row,
+                  i > 0 && [styles.rowDiv, { borderTopColor: color.line }],
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowLabel, { color: color.ink }]}>{label}</Text>
+                  <Text style={[styles.rowNote, { color: color.ink3 }]}>{note}</Text>
+                </View>
+                <ExternalLink size={16} strokeWidth={1.65} color={color.ink3} />
+              </Pressable>
+            ))}
           </GlassSurface>
 
           {confirmWipe ? (

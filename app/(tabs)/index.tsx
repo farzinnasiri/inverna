@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useIsFocused, useRouter } from 'expo-router'
 import { Award, Moon, Pause, Play } from 'lucide-react-native'
@@ -10,6 +10,9 @@ import { profileIntent } from '@/core/profile'
 import { bestFor, formatBestCompact } from '@/core/highscores'
 import { eveningState, windowProgress, type EveningState } from '@/core/evening'
 import { formatBedtime12h, formatHHMM, nightKey, overrideActive } from '@/core/night'
+import { openWhenQuiet } from '@/ui/rn/promptGate'
+import { reminderOfferDue } from '@/core/reminderOffer'
+import { useShallow } from 'zustand/react/shallow'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { greeting, play as copy } from '@/ui/copy'
 import { ContinuePreview } from '@/ui/rn/ContinuePreview'
@@ -147,9 +150,32 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!onboarded || !nearBedtime || checkInOpen) return
     if (checkInAskedNight === nightKey(now)) return
-    const timer = setTimeout(() => setCheckIn('tonight'), 600)
-    return () => clearTimeout(timer)
+    // Not on top of a permission dialog or the end of onboarding (NAT-05).
+    return openWhenQuiet(() => setCheckIn('tonight'), 600)
   }, [onboarded, nearBedtime, checkInAskedNight, now, checkInOpen, setCheckIn])
+
+  // Now and then, while reminders are off, offer one (core/reminderOffer).
+  // Tonight's check-in comes first, and nothing else may be open.
+  const playFocused = useIsFocused()
+  const anySheetOpen = useNav((s) => s.checkIn !== null || s.windDownOpen || s.mixOpen || s.reminderOffer)
+  const reminderOfferState = useSettings(
+    useShallow((s) => ({
+      reminders: s.reminders,
+      onboarded: s.onboarded,
+      onboardedNight: s.onboardedNight,
+      lastOfferAt: s.reminderOfferAt,
+      declines: s.reminderOfferDeclines,
+    })),
+  )
+  const checkInPending = nearBedtime && checkInAskedNight !== nightKey(now)
+  const offerDue = Platform.OS !== 'web' && reminderOfferDue(reminderOfferState, now)
+  useEffect(() => {
+    if (!playFocused || anySheetOpen || checkInPending || !offerDue) return
+    return openWhenQuiet(() => {
+      useSettings.getState().set({ reminderOfferAt: Date.now() })
+      useNav.getState().setReminderOffer(true)
+    }, 1500)
+  }, [playFocused, anySheetOpen, checkInPending, offerDue])
 
   // The layout is set once a night, so tiles never move while someone is
   // using Play (a game opened counts as a play, which changes favourites).

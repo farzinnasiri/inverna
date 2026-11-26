@@ -103,8 +103,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'react-native-audio-api',
       {
         iosBackgroundMode: true,
-        iosMicrophonePermission:
-          'Inverna uses its audio engine strictly for offline sleep soundscape synthesis and never accesses your microphone.',
+        // No microphone permission: Inverna never records. If an upload ever
+        // flags a missing purpose string, it comes back with this wording.
         androidForegroundService: true,
         androidFSTypes: ['mediaPlayback'],
         androidFSStopWithTask: true,
@@ -125,6 +125,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         color: '#C2A15F',
         defaultChannel: 'bedtime',
+        // Local reminders only: no push, so no APNs entitlement.
+        enableRemoteNotifications: false,
       },
     ],
   ],

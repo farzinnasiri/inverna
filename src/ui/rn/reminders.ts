@@ -3,6 +3,7 @@ import { AppState } from 'react-native'
 import { notifications } from '@/platform'
 import { reminders as lines } from '@/ui/copy'
 import { useSettings } from '@/ui/state/settings'
+import { whileAsking } from './promptGate'
 
 /** This week's reminder lines, with the name in some of them. */
 function messages(name: string) {
@@ -18,7 +19,8 @@ export async function planRemindersNow({ ask = false }: { ask?: boolean } = {}) 
     await notifications.clearReminders()
     return 'denied' as const
   }
-  return notifications.planReminders(st.schedule, messages(st.userName), { ask })
+  const plan = () => notifications.planReminders(st.schedule, messages(st.userName), { ask })
+  return ask ? whileAsking(plan) : plan()
 }
 
 /**

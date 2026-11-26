@@ -12,12 +12,15 @@ interface NavState {
   windDownOpen: boolean
   mixOpen: boolean
   checkIn: CheckInMode | null
+  /** The bedtime-reminder offer is up. */
+  reminderOffer: boolean
   setTab: (tab: Tab) => void
   openGame: (id: GameId) => void
   closeGame: () => void
   setWindDownOpen: (open: boolean) => void
   setMixOpen: (open: boolean) => void
   setCheckIn: (mode: CheckInMode | null) => void
+  setReminderOffer: (open: boolean) => void
 }
 
 export const useNav = create<NavState>()((set) => ({
@@ -26,6 +29,7 @@ export const useNav = create<NavState>()((set) => ({
   windDownOpen: false,
   mixOpen: false,
   checkIn: null,
+  reminderOffer: false,
   setTab: (tab) => set({ tab }),
   openGame: (game) => {
     useSettings.getState().set({ lastGame: game })
@@ -35,4 +39,5 @@ export const useNav = create<NavState>()((set) => ({
   setWindDownOpen: (windDownOpen) => set({ windDownOpen }),
   setMixOpen: (mixOpen) => set({ mixOpen }),
   setCheckIn: (checkIn) => set({ checkIn }),
+  setReminderOffer: (reminderOffer) => set({ reminderOffer }),
 }))

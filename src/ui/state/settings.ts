@@ -73,8 +73,14 @@ export interface SettingsState {
   tonightIntent: NightIntent | null
   /** First name, if they shared it. Used sparingly: greetings and reminders. */
   userName: string
-  /** Daily reminder when it's time to wind down. */
+  /** Daily reminder when it's time to wind down. Off until they turn it on. */
   reminders: boolean
+  /** nightKey() of the night onboarding finished (the reminder offer waits until after it). */
+  onboardedNight: string | null
+  /** When the reminder offer was last shown (ms). */
+  reminderOfferAt: number | null
+  /** Times they said "Not now" to it. */
+  reminderOfferDeclines: number
   /** Chosen difficulty per game (games without their own difficulty use it through `useCalm`). */
   difficulty: Partial<Record<GameId, Difficulty>>
   /** Difficulty for games not set one by one; from onboarding. */
@@ -160,6 +166,9 @@ const SAVED: { [K in Exclude<keyof SettingsState, 'set' | 'setSchedule' | 'recor
   tonightIntent: isNullable(isIntent),
   userName: isString,
   reminders: isBoolean,
+  onboardedNight: isNullable(isString),
+  reminderOfferAt: isNullable(isNumber),
+  reminderOfferDeclines: isNumber,
   difficulty: (v) => isRecord(v) && Object.entries(v).every(([k, d]) => isGameId(k) && isDifficulty(d)),
   defaultDifficulty: isDifficulty,
   profile: isNullable(isProfile),
@@ -199,7 +208,10 @@ export const useSettings = create<SettingsState>()(
       tonightNow: null,
       tonightIntent: null,
       userName: '',
-      reminders: true,
+      reminders: false,
+      onboardedNight: null,
+      reminderOfferAt: null,
+      reminderOfferDeclines: 0,
       difficulty: {},
       defaultDifficulty: 'medium',
       profile: null,
@@ -234,7 +246,7 @@ export const useSettings = create<SettingsState>()(
     {
       name: 'settings',
       storage: kvStorage,
-      version: 9,
+      version: 10,
       merge: (saved, current) => {
         const next = pickValid(saved, current, SAVED)
         // Their own sounds are kept one by one: a damaged one never costs the rest.
@@ -322,6 +334,11 @@ export const useSettings = create<SettingsState>()(
           const { lastCheckInDate, ...rest } = next
           const stamp = typeof lastCheckInDate === 'string' ? lastCheckInDate : null
           next = { ...rest, checkInAskedNight: stamp, checkInAnsweredNight: rest.tonightIntent ? stamp : null }
+        }
+        if (version < 10) {
+          // Reminders became opt-in, offered now and then. Someone already set
+          // up keeps their choice; the offer may show them from tomorrow on.
+          next = { ...next, onboardedNight: next.onboarded ? '1970-01-01' : null, reminders: next.reminders === true }
         }
         return next
       },

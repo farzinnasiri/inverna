@@ -239,10 +239,16 @@ Each needs logic in the app, not only screens.
      Family Sharing on, attached to the first submission, and review notes
      that explain how to test buying and restoring. The first two lines of
      the App Store description say it's a one-time purchase.
-2. **Rating prompt.** Apple's own in-app review sheet, shown rarely and only to
+2. **Live Activity for a wind-down.** The time left until lights out on the
+   Lock Screen and in the Dynamic Island while a wind-down runs (Farzin wants
+   the reminder offer to offer it too). It's new: a widget extension through
+   `expo-widgets`, its own bundle id and signing for each of Dev, Beta and
+   the App Store app, and a cloud build to check it. Once it works, the
+   reminder offer gains a second switch for it.
+3. **Rating prompt.** Apple's own in-app review sheet, shown rarely and only to
    people who use Inverna regularly, right after something good (a finished
    wind-down or round). Never on a first night, never twice close together.
-3. **Analytics and error reports (PostHog).** Alongside Apple's App Store
+4. **Analytics and error reports (PostHog).** Alongside Apple's App Store
    analytics, so we aren't limited to what Apple shows. EU cloud, anonymous
    IDs, a short fixed list of events (onboarding steps and drop-off, features
    used, time of day, country from IP then discarded). Every crash and every

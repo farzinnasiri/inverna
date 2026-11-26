@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { applyTokens } from '@/design/tokens'
 import { sound } from '@/platform'
 import { NightCheckIn } from '@/ui/rn/NightCheckIn'
+import { ReminderOfferSheet } from '@/ui/rn/ReminderOfferSheet'
 import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
 import { LaunchVeil } from '@/ui/rn/LaunchVeil'
 import { useReminderPlanner } from '@/ui/rn/reminders'
@@ -112,6 +113,7 @@ export default function RootLayout() {
 
           <WindDownSheet />
           <NightCheckIn />
+          <ReminderOfferSheet />
           <SessionCurtain />
           <NightFilterOverlay />
           <LaunchVeil />

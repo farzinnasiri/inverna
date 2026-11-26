@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { KeyboardAvoidingView, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import Animated, {
   ReduceMotion,
   useAnimatedStyle,
@@ -28,6 +28,7 @@ import {
   Waves,
 } from 'lucide-react-native'
 import { eveningState } from '@/core/evening'
+import { nightKey } from '@/core/night'
 import { feel } from '@/ui/feel'
 import type { SciencePillarKey } from '@/ui/copy'
 import {
@@ -57,6 +58,8 @@ import { InvernaMark } from './InvernaMark'
 import { AnswerLayer, EASE_OUT, EdgeSwipeBack, HandoffTitle, itemDelay, Rise } from './motion'
 import { MindTangle } from './MindTangle'
 import { SleepAround } from './SleepAround'
+import { PRIVACY_URL } from '@/ui/links'
+import { holdPrompts } from './promptGate'
 import { planRemindersNow } from './reminders'
 import { DescentCurve, PillarIcon, ScienceLink, ScienceSheet } from './ScienceSheet'
 import { SoundGlyph } from './SoundGlyph'
@@ -181,8 +184,11 @@ export function Onboarding() {
     const kind = eveningState(currentSchedule(), new Date()).kind
     if (useSound.getState().playing && kind !== 'winding' && kind !== 'asleepRange' && kind !== 'past') stopSound(1.2)
     const final = { ...profile, volume: useSound.getState().volume }
+    // Play's first prompts wait until the change of screen has settled.
+    holdPrompts(2500)
     set({
       onboarded: true,
+      onboardedNight: nightKey(new Date()),
       userName: name.trim(),
       // Answers set the starting point: games, difficulty, sounds, wind-down length.
       ...(answered
@@ -194,6 +200,7 @@ export function Onboarding() {
           }
         : null),
     })
+    // Only asks iOS if they turned the reminder on themselves (Skip never asks).
     if (useSettings.getState().reminders) void planRemindersNow({ ask: true })
     if (reduced) {
       router.replace('/')
@@ -461,6 +468,9 @@ export function Onboarding() {
                     />
                   </GlassSurface>
                   <Text style={[styles.note, { color: color.ink3 }]}>{copy.name.note}</Text>
+                  <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(PRIVACY_URL)} hitSlop={10}>
+                    <Text style={[styles.note, styles.link, { color: color.ink2 }]}>{copy.name.privacy}</Text>
+                  </Pressable>
                 </Rise>
               ) : null}
     </>
@@ -876,6 +886,9 @@ const styles = StyleSheet.create({
   note: {
     fontSize: 13,
     marginLeft: 4,
+  },
+  link: {
+    textDecorationLine: 'underline',
   },
   footer: {
     flexDirection: 'row',
