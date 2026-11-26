@@ -5,12 +5,13 @@ import Animated, {
   interpolateColor,
   ReduceMotion,
   useAnimatedProps,
+  useDerivedValue,
   useSharedValue,
-  withRepeat,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated'
 import Svg, { Path } from 'react-native-svg'
+import { useAmbientTime, useCovered } from './ambientClock'
 
 const AnimatedPath = Animated.createAnimatedComponent(Path)
 
@@ -89,16 +90,14 @@ function Strand({
 export function MindTangle({ busy, height = 150, reduced }: { busy: number; height?: number; reduced: boolean }) {
   const [w, setW] = useState(0)
   const busySV = useSharedValue(busy)
-  const clock = useSharedValue(0)
+  const covered = useCovered()
+  const time = useAmbientTime(!reduced && !covered)
+  // 0..1 every 14 seconds, on the shared clock.
+  const clock = useDerivedValue(() => (time.get() / 14) % 1)
 
   useEffect(() => {
     busySV.set(withTiming(busy, { duration: 260, easing: Easing.out(Easing.quad), reduceMotion: ReduceMotion.System }))
   }, [busy, busySV])
-
-  useEffect(() => {
-    if (reduced) return
-    clock.set(withRepeat(withTiming(1, { duration: 14_000, easing: Easing.linear }), -1, false))
-  }, [clock, reduced])
 
   return (
     <View

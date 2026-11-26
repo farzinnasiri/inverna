@@ -72,6 +72,15 @@ export function useAmbientTime(active: boolean): SharedValue<number> {
   return local
 }
 
+/**
+ * 0 → 1 → 0 over `periodS` seconds, eased like a sine: the shape of a
+ * `withRepeat(withTiming(1, sine in-out), -1, true)` loop, on this clock.
+ */
+export function swing(t: number, periodS: number, phaseS = 0): number {
+  'worklet'
+  return 0.5 - 0.5 * Math.cos((2 * Math.PI * (t + phaseS)) / periodS)
+}
+
 /* --- Covered: a sheet is over the screen ---------------------------------- */
 
 let covers = 0

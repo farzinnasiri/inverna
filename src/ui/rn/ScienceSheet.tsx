@@ -3,13 +3,11 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, {
   Easing,
   ReduceMotion,
-  cancelAnimation,
   useAnimatedProps,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withDelay,
-  withRepeat,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated'
 import Svg, { Circle, Defs, LinearGradient, Line, Path, Rect, Stop } from 'react-native-svg'
@@ -24,6 +22,7 @@ import {
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Button, Sheet } from './controls'
 import { GlassSurface } from './Glass'
+import { swing, useAmbientTime } from './ambientClock'
 import { useFeedback, useReducedMotion } from './hooks'
 
 const AnimatedPath = Animated.createAnimatedComponent(Path)
@@ -165,41 +164,14 @@ export function DescentCurve({ draw = true, delay = 220 }: { draw?: boolean; del
 function AttentionVisual({ active }: { active: boolean }) {
   const { color } = useTokenColors()
   const reduced = useReducedMotion()
-  const jitter = useSharedValue(0)
-  const glide = useSharedValue(0)
-
-  useEffect(() => {
-    if (!active || reduced) {
-      cancelAnimation(jitter)
-      cancelAnimation(glide)
-      jitter.set(0)
-      glide.set(0.35)
-      return
-    }
-    jitter.set(
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 420, easing: Easing.inOut(Easing.quad), reduceMotion: ReduceMotion.System }),
-          withTiming(-0.7, { duration: 310, easing: Easing.inOut(Easing.quad), reduceMotion: ReduceMotion.System }),
-          withTiming(0.85, { duration: 360, easing: Easing.inOut(Easing.quad), reduceMotion: ReduceMotion.System }),
-          withTiming(-0.9, { duration: 290, easing: Easing.inOut(Easing.quad), reduceMotion: ReduceMotion.System }),
-        ),
-        -1,
-        true,
-      ),
-    )
-    glide.set(
-      withRepeat(
-        withTiming(1, { duration: 4600, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-        -1,
-        true,
-      ),
-    )
-    return () => {
-      cancelAnimation(jitter)
-      cancelAnimation(glide)
-    }
-  }, [active, reduced, jitter, glide])
+  const time = useAmbientTime(active && !reduced)
+  // Restless: a quick, uneven back and forth. Steady: one slow glide.
+  const jitter = useDerivedValue(() => {
+    if (reduced || !active) return 0
+    const t = time.get()
+    return 0.6 * Math.sin(t * 4.3) + 0.4 * Math.sin(t * 7.1 + 1.3)
+  })
+  const glide = useDerivedValue(() => (reduced || !active ? 0.35 : swing(time.get(), 9.2)))
 
   const jitterDotA = useAnimatedStyle(() => ({
     transform: [{ translateX: jitter.get() * 26 }],
@@ -250,7 +222,6 @@ function BrainwaveVisualizer({ active }: { active: boolean }) {
   const { haptic } = useFeedback()
   const [selected, setSelected] = useState<WaveBandKey>('alpha')
   const [trackWidth, setTrackWidth] = useState(OSC_WIDTH)
-  const offset = useSharedValue(0)
 
   const band = useMemo(
     () => copy.sound.bands.find((b) => b.key === selected) ?? copy.sound.bands[1]!,
@@ -267,23 +238,11 @@ function BrainwaveVisualizer({ active }: { active: boolean }) {
     [spec.secondaryCycles, spec.amplitude],
   )
 
-  useEffect(() => {
-    cancelAnimation(offset)
-    offset.set(0)
-    if (!active || reduced) return
-    offset.set(
-      withRepeat(
-        withTiming(-trackWidth, {
-          duration: spec.durationMs,
-          easing: Easing.linear,
-          reduceMotion: ReduceMotion.System,
-        }),
-        -1,
-        false,
-      ),
-    )
-    return () => cancelAnimation(offset)
-  }, [active, reduced, spec.durationMs, trackWidth, offset])
+  const time = useAmbientTime(active && !reduced)
+  // The wave scrolls one track width per cycle of its band.
+  const offset = useDerivedValue(() =>
+    reduced || !active ? 0 : -trackWidth * (((time.get() * 1000) / spec.durationMs) % 1),
+  )
 
   const waveStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: offset.get() }],
@@ -378,26 +337,8 @@ function BrainwaveVisualizer({ active }: { active: boolean }) {
 function SpectrumVisual({ active }: { active: boolean }) {
   const { color } = useTokenColors()
   const reduced = useReducedMotion()
-  const pulse = useSharedValue(0.65)
-
-  useEffect(() => {
-    if (!active || reduced) {
-      cancelAnimation(pulse)
-      pulse.set(0.75)
-      return
-    }
-    pulse.set(
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 2200, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-          withTiming(0.45, { duration: 2200, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-        ),
-        -1,
-        false,
-      ),
-    )
-    return () => cancelAnimation(pulse)
-  }, [active, reduced, pulse])
+  const time = useAmbientTime(active && !reduced)
+  const pulse = useDerivedValue(() => (reduced || !active ? 0.75 : 0.45 + 0.55 * swing(time.get(), 4.4)))
 
   const markerStyle = useAnimatedStyle(() => ({
     opacity: pulse.get(),

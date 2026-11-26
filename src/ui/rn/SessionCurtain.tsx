@@ -4,6 +4,7 @@ import { formatBedtime12h, formatHHMM, nightKey } from '@/core/night'
 import { sessionDone, sessionEnd, sessionLevels } from '@/core/session'
 import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { useCoverScreen } from './ambientClock'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
@@ -24,6 +25,8 @@ export function SessionCurtain() {
   const stopSound = useSound((s) => s.stop)
 
   const [curtainOpacity, setCurtainOpacity] = useState(0)
+  // Goodnight is opaque: everything moving underneath rests (games pause through useBackgroundPause).
+  useCoverScreen(ended)
 
   useEffect(() => {
     const tick = () => {
@@ -62,8 +65,8 @@ export function SessionCurtain() {
     }
 
     tick()
-    // Nothing to watch: no wind-down session and no sleep timer running.
-    if (!session && !(playing && stopAt)) return
+    // Nothing to watch: no wind-down in progress (none, or already at Goodnight) and no sleep timer running.
+    if ((!session || ended) && !(playing && stopAt)) return
     const id = setInterval(tick, 1000)
     const appSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') tick()

@@ -210,13 +210,17 @@ export function useAppActive(): boolean {
   return active
 }
 
-/** Calls `onBackground` when app moves to background or web tab hides. */
+/** Calls `onBackground` when the app moves to the background, the web tab hides, or Goodnight covers the screen. */
 export function useBackgroundPause(onBackground: () => void): void {
   const cb = useRef(onBackground)
   cb.current = onBackground
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') cb.current()
+    })
+    // The wind-down ended under a game: pause it (and checkpoint) like leaving the app.
+    const unsubSession = useSession.subscribe((s, prev) => {
+      if (s.ended && !prev.ended) cb.current()
     })
     const onVis = () => {
       if (typeof document !== 'undefined' && document.hidden) cb.current()
@@ -226,6 +230,7 @@ export function useBackgroundPause(onBackground: () => void): void {
     }
     return () => {
       sub.remove()
+      unsubSession()
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', onVis)
       }

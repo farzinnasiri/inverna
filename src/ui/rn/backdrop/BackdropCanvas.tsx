@@ -139,7 +139,28 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
   }, [playing, descent, breathHz, env, frameInterval])
   useEffect(subscribeMotifCues, [])
 
-  const time = useAmbientTime(active)
+  // With Reduce Motion the scene is drawn once per change, without the clock.
+  const time = useAmbientTime(active && !reduced)
+  useAnimatedReaction(
+    () => ({ scene: target.get(), d: dims.get(), still: reducedSV.get() }),
+    (cur) => {
+      'worklet'
+      if (!cur.still) return
+      const rs = state.get()
+      if (!rs || rs.sim.W !== cur.d.W || rs.sim.H !== cur.d.H) {
+        const sim = createSim(cur.d.W, cur.d.H, cur.scene, seed)
+        simSnap(sim, cur.scene)
+        prewarm(sim, FIRST_PREWARM)
+        state.set({ sim, gfx: rs?.gfx ?? null, acc: 0 })
+      } else if (cur.scene !== rs.sim.sceneB) {
+        simSnap(rs.sim, cur.scene)
+        prewarm(rs.sim, 3)
+      } else {
+        return
+      }
+      tick.set(tick.get() + 1)
+    },
+  )
   useAnimatedReaction(
     () => time.get(),
     (now, prev) => {

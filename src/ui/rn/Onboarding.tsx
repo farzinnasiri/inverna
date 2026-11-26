@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import Animated, {
-  Easing,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
-  withRepeat,
   withTiming,
 } from 'react-native-reanimated'
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
@@ -52,6 +49,7 @@ import { onboarding as copy } from '@/ui/copy'
 import { currentSchedule, useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
 import { AmbientBackdrop } from './AmbientBackdrop'
+import { swing, useAmbientTime, useCovered } from './ambientClock'
 import { Button, FRAME_MAX_WIDTH, PillSlider, Slider, Toggle } from './controls'
 import { GlassLens, GlassSurface } from './Glass'
 import { useReducedMotion, useResponsiveLayout } from './hooks'
@@ -558,12 +556,9 @@ export function Onboarding() {
 
 /** The intro's mark in a glass lens over the fire, drifting a few points up and down. */
 function FloatingLens({ reduced }: { reduced: boolean }) {
-  const drift = useSharedValue(0)
-  useEffect(() => {
-    if (reduced) return
-    drift.set(withRepeat(withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin) }), -1, true))
-  }, [drift, reduced])
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: -4 + 8 * drift.get() }] }))
+  const covered = useCovered()
+  const time = useAmbientTime(!reduced && !covered)
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: -4 + 8 * swing(time.get(), 8.4) }] }))
   return (
     <Animated.View style={style}>
       <GlassLens size={164} bounce="#FF9A4A" light="#FFE3C2">
@@ -585,17 +580,12 @@ const PILLAR_TINT: Record<SciencePillarKey, { glow: string; wash: string; edge: 
 }
 
 function PillarGlow({ id, tint, delay, reduced }: { id: string; tint: string; delay: number; reduced: boolean }) {
-  const breath = useSharedValue(reduced ? 0.6 : 0)
-  useEffect(() => {
-    if (reduced) return
-    breath.set(
-      withDelay(delay, withRepeat(withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }), -1, true)),
-    )
-  }, [breath, delay, reduced])
-  const style = useAnimatedStyle(() => ({
-    opacity: 0.5 + 0.5 * breath.get(),
-    transform: [{ scaleX: 0.97 + 0.05 * breath.get() }],
-  }))
+  const covered = useCovered()
+  const time = useAmbientTime(!reduced && !covered)
+  const style = useAnimatedStyle(() => {
+    const breath = reduced ? 0.6 : swing(time.get(), 6.4, -delay / 1000)
+    return { opacity: 0.5 + 0.5 * breath, transform: [{ scaleX: 0.97 + 0.05 * breath }] }
+  })
   return (
     <Animated.View pointerEvents="none" style={[styles.pillarGlow, style]}>
       <Svg width="100%" height="100%">
