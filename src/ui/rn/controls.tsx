@@ -732,19 +732,29 @@ export function Sheet({
     translateY.set(withTiming(0, { duration: 300, easing: ease }))
   }, [open, translateY, backdropOpacity])
 
+  // Dragging it down runs exactly what tapping outside runs: the latest
+  // onClose, not the one from the first render (ISS-15.2).
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
   const dismissResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => g.dy > 14 && Math.abs(g.dy) > Math.abs(g.dx) * 1.3,
+      // The grab area is only for dragging, so it takes the touch at once
+      // and doesn't give it up (NAT-06: on device the drag never started).
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.set(g.dy)
+        translateY.set(Math.max(0, g.dy))
       },
       onPanResponderRelease: (_, g) => {
         if (g.dy > 80 || g.vy > 0.6) {
-          onClose()
+          onCloseRef.current()
         } else {
           translateY.set(withSpring(0, { duration: 260, dampingRatio: 1 }))
         }
+      },
+      onPanResponderTerminate: () => {
+        translateY.set(withSpring(0, { duration: 260, dampingRatio: 1 }))
       },
     }),
   ).current
@@ -1010,8 +1020,9 @@ const styles = StyleSheet.create({
   },
   sheetGrabArea: {
     width: '100%',
-    paddingTop: 10,
-    paddingBottom: 14,
+    // A strip to drag from, not just the 4pt bar.
+    paddingTop: 12,
+    paddingBottom: 16,
     alignItems: 'center',
   },
   sheetGrab: {
