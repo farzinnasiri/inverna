@@ -201,7 +201,7 @@ export const studioGuides: Record<'sounds' | 'chords' | 'pulse', StudioGuide> = 
   pulse: {
     title: 'Pulse',
     intro:
-      'A slow rhythm woven into the sound. The brain tends to fall in step with a steady rhythm, so a slower one can help you settle. ' +
+      'A slow rhythm woven into the sound. Studies suggest the brain can fall in step with a steady rhythm, so a slower one may help you settle. ' +
       'The evidence is promising but still modest. With headphones it is a soft beat between your ears; on a speaker, a gentle sway.',
     sections: [
       {
@@ -210,7 +210,7 @@ export const studioGuides: Record<'sounds' | 'chords' | 'pulse', StudioGuide> = 
           { id: 'off', name: 'Off', use: 'Just the sound. For when any pulse distracts you.' },
           { id: 'alpha', name: 'Relax', tag: 'α 8–12 Hz', use: 'Calm but awake. While you wind down: reading, a game, tidying up.' },
           { id: 'theta', name: 'Drift off', tag: 'θ 4–8 Hz', use: 'The edge of sleep. Lying in bed, ready to fall asleep. A good default.' },
-          { id: 'delta', name: 'Deep sleep', tag: 'δ 1–4 Hz', use: 'Deep sleep. To help you stay asleep through the night.' },
+          { id: 'delta', name: 'Deep sleep', tag: 'δ 1–4 Hz', use: 'The slowest rhythm. For lying in the dark once you’re ready to sleep, and for sound that plays on through the night.' },
         ],
       },
       {
@@ -238,7 +238,7 @@ export const onboarding = {
     /** The intro has no question; the lens and the name lead. */
     title: '',
     tagline: 'Made for busy minds and night owls.',
-    subline: 'Calm games, soft sound and warm light ease you from your phone to sleep.',
+    subline: 'Calm games, soft sound and warm light to help you get from your phone to sleep.',
     button: 'See how it works',
   },
   science: {
@@ -250,12 +250,12 @@ export const onboarding = {
       {
         key: 'attention' as SciencePillarKey,
         title: 'Attention',
-        body: 'Gentle play holds your focus so racing thoughts can’t take over.',
+        body: 'Gentle play gives your mind something easy to hold, so racing thoughts have less room.',
       },
       {
         key: 'sound' as SciencePillarKey,
         title: 'Sound',
-        body: 'Adaptive audio slows your pace from alert beta toward calm alpha and theta.',
+        body: 'The sound’s pulse slows as bedtime gets closer, from a lively pace to a slow, sleepy one.',
       },
       {
         key: 'light' as SciencePillarKey,
@@ -310,6 +310,7 @@ export const onboarding = {
     title: 'What should I call you?',
     placeholder: 'First name',
     note: 'Optional. It stays on this phone.',
+    privacy: 'Privacy policy',
     button: 'All set',
   },
 }
@@ -357,6 +358,10 @@ export const settingsCopy = {
   reminderLabel: 'Bedtime reminder',
   reminderNote: 'Sends a quiet reminder an hour before bed.',
   reminderDenied: 'Turn on notifications in iPhone Settings.',
+  privacy: 'Privacy policy',
+  privacyNote: 'What stays on your phone, and what doesn’t',
+  support: 'Help and support',
+  supportNote: 'Questions, problems, ideas',
   howItWorks: 'How Inverna works',
   howItWorksNote: 'The three-pillar system and science behind it',
   erase: 'Erase all data',
@@ -396,11 +401,11 @@ export const scienceSheet = {
     points: [
       {
         label: 'Mechanism',
-        text: 'Verbal overthinking and visuospatial tasks compete for the same limited working memory. Gentle spatial puzzles occupy that bandwidth, similar to cognitive shuffling, leaving less room for anxious loops.',
+        text: 'Studies suggest verbal overthinking and visuospatial tasks compete for the same limited working memory. Gentle spatial puzzles can occupy that bandwidth, similar to cognitive shuffling, leaving less room for anxious loops.',
       },
       {
         label: 'Effect',
-        text: 'Breaks the sleep-effort paradox without timers, streaks, or failure states that trigger cortisol or dopamine spikes.',
+        text: 'Takes the effort out of trying to fall asleep: no timers, streaks or failure states pushing you to keep going.',
       },
     ],
     sources: [
@@ -429,7 +434,7 @@ export const scienceSheet = {
         name: 'Alpha',
         hz: '8–12 Hz',
         state: 'Relaxed wakefulness, eyes resting, inner chatter loosening.',
-        role: 'Inverna’s acoustic descent begins near the Alpha-Theta border (~7.8 Hz) to ease mental grip.',
+        role: 'Inverna’s acoustic descent begins near the Alpha-Theta border (~7.8 Hz).',
       },
       {
         key: 'theta',
@@ -455,11 +460,11 @@ export const scienceSheet = {
       },
       {
         label: '0.1 Hz breath pacing',
-        text: 'Subtle ~10-second volume swells (~6 breaths/min) mirror cardiorespiratory resonance to encourage parasympathetic calm.',
+        text: 'Subtle ~10-second volume swells (~6 breaths/min) match the pace of slow breathing, which studies link to a calmer body.',
       },
       {
         label: 'Harmonic key lock',
-        text: 'Every game tap is quantized to your soundscape’s scale (D Dorian, F Lydian, G Minor 9) so nothing jars the auditory cortex.',
+        text: 'Every game tap is quantized to your soundscape’s scale (D Dorian, F Lydian, G Minor 9) so nothing sounds out of place.',
       },
     ],
     sources: [
@@ -471,7 +476,7 @@ export const scienceSheet = {
   light: {
     key: 'light' as SciencePillarKey,
     kicker: 'Pillar 3 · Circadian optics',
-    title: 'Protecting melatonin after dark',
+    title: 'Less blue light after dark',
     spectrum: {
       startNm: '400 nm',
       peakLabel: '460–480 nm melanopsin peak',
@@ -486,7 +491,7 @@ export const scienceSheet = {
       },
       {
         label: 'Effect',
-        text: 'True #000000 OLED pixels stay physically off while warm, low-blue surfaces dim gradually toward bedtime so dark-adapted eyes stay calm.',
+        text: 'True #000000 OLED pixels stay physically off while warm, low-blue surfaces dim gradually toward bedtime, easier on eyes used to the dark.',
       },
     ],
     sources: [
@@ -494,7 +499,7 @@ export const scienceSheet = {
       { label: 'Circadian rhythm', url: 'https://en.wikipedia.org/wiki/Circadian_rhythm' },
     ] satisfies readonly ScienceSource[],
   },
-  footnote: 'Grounded in cognitive, acoustic, and circadian research to support wind-down habits. Not a medical device.',
+  footnote: 'Built on cognitive, acoustic and circadian research to support a wind-down habit. Inverna can help you relax before bed, but it isn’t a medical device and doesn’t diagnose or treat sleep problems.',
   close: 'Got it',
 }
 
@@ -508,6 +513,18 @@ export const reminders: readonly { title: string; named: string; body: string }[
   { title: 'An hour until bed', named: 'An hour until bed, {name}', body: 'Check in when you’re ready and I’ll set up your night.' },
   { title: 'Winding down soon', named: 'Winding down soon, {name}', body: 'No rush. Your games and sleep sound are here when you want them.' },
 ]
+
+/** Now and then, while reminders are off: would they like one? */
+export const reminderOffer = {
+  title: 'Want a nudge before bed?',
+  body: 'Evenings slip away fast. I can send one quiet reminder an hour before your bedtime, so you start winding down in time.',
+  detail: 'No sound, one a night. Tap it and I’ll ask how your day was and set up your night.',
+  yes: 'Remind me',
+  notNow: 'Not now',
+  denied: 'Notifications are off for Inverna. You can turn them on in iPhone Settings.',
+  openSettings: 'Open Settings',
+  done: 'You’ll hear from me an hour before bed.',
+}
 
 export const bedtimeNudge = {
   title: (name: string) => named('It’s your bedtime', name),
