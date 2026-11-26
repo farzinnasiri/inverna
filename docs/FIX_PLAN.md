@@ -173,6 +173,18 @@ Only after behaviour is right, and measured, not guessed.
 - One place for the web head and service-worker registration.
 - Build workflow (ISS-07, iOS parts): no `eval` of dispatch input, pnpm pinned,
   submit a named build rather than "latest".
+- Faster cloud builds (a Release simulator build took 35 minutes), in
+  `.github/workflows/eas-build.yml`:
+  - simulator builds for `arm64` only (`ARCHS=arm64 EXCLUDED_ARCHS=x86_64`):
+    the cloud simulators are Apple Silicon, so building x86_64 too doubles
+    the native compile;
+  - a CocoaPods and build cache keyed on `pnpm-lock.yaml` and `app.config.ts`
+    (the current key hashes `ios/Podfile.lock` before `pod install` creates
+    it, so it's always empty), plus `ccache` for the C/C++/ObjC++ pods;
+  - prebuilt React Native frameworks (`RCT_USE_PREBUILT_RNCORE=1`,
+    `RCT_USE_RN_DEP=1`) if RN 0.88 with Expo 58 supports them, checked with a
+    build;
+  - the pnpm store cached in `actions/setup-node`.
 - `expo-blur` and pnpm versions pinned to the SDK matrix.
 
 ## Phase 5 — Store features (last, after everything above works)
