@@ -7,6 +7,7 @@ const { useSettings } = await import('./settings')
 
 /** Write a stored settings blob the way zustand's persist does, then load it. */
 async function hydrate(state: Record<string, unknown>, version: number) {
+  useSettings.setState(useSettings.getInitialState(), true)
   kv().setItem(NAMESPACE + 'settings', JSON.stringify({ state, version }))
   await useSettings.persist.rehydrate()
   return useSettings.getState()
@@ -51,12 +52,19 @@ describe('settings: loading what was saved', () => {
     expect(st.lastCheckInDate).toBeNull()
   })
 
-  // ISS-19.3: a damaged save is trusted as it is. Phase 1 step 1 checks each
-  // field and falls back to the default for one that doesn't fit.
-  it.skip('a damaged field falls back to its default', async () => {
+  // ISS-19.3: each field is checked; one that doesn't fit keeps its default.
+  it('a damaged field falls back to its default', async () => {
     const st = await hydrate({ onboarded: true, volume: 'loud', playLayout: { night: 'x', order: 7 } }, 8)
     expect(st.onboarded).toBe(true)
     expect(st.volume).toBe(0.85)
     expect(st.playLayout).toBeNull()
+  })
+
+  it('drops a saved sound that is damaged but keeps the others', async () => {
+    const good = { id: 'mine-1', name: 'Rain', hint: '', icon: 'rain', createdAt: 1, mix: { layers: { rain: 0.5 }, band: null, bandGain: 0.3, carrier: 140 } }
+    const st = await hydrate({ customSounds: [good] }, 8)
+    expect(st.customSounds).toHaveLength(1)
+    const st2 = await hydrate({ customSounds: [good, { ...good, id: 'mine-2', mix: { layers: { lava: 1 } } }] }, 8)
+    expect(st2.customSounds.map((c) => c.id)).toEqual(['mine-1'])
   })
 })

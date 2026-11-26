@@ -7,7 +7,8 @@ import {
   recordScore,
   type HighScoreTable,
 } from '@/core/highscores'
-import { kvStorage } from './settings'
+import { isNumber, isRecord, pickValid } from '@/core/decode'
+import { kvStorage } from './storage'
 
 interface HighScoresState {
   table: HighScoreTable
@@ -41,6 +42,11 @@ export const useHighScores = create<HighScoresState>()(
       name: 'highscores',
       storage: kvStorage,
       version: 1,
+      // Records keep only well-formed entries; anything else is dropped.
+      merge: (saved, current) =>
+        pickValid(saved, current, {
+          table: (v) => isRecord(v) && Object.values(v).every((e) => isRecord(e) && isNumber(e.value) && isNumber(e.updatedAt)),
+        }),
     },
   ),
 )

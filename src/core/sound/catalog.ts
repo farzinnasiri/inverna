@@ -1,4 +1,4 @@
-import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from './harmonics'
+import { DEFAULT_HARMONIC_KEY, HARMONIC_KEYS, type HarmonicKeyId } from './harmonics'
 
 /**
  * Sound catalogue: pure data. Every sound in Inverna is synthesised in real time
@@ -78,6 +78,19 @@ export interface CustomSound {
   createdAt: number
 }
 
+export function isCustomSound(v: unknown): v is CustomSound {
+  if (typeof v !== 'object' || v === null) return false
+  const c = v as Record<string, unknown>
+  return (
+    typeof c.id === 'string' &&
+    typeof c.name === 'string' &&
+    typeof c.hint === 'string' &&
+    CUSTOM_ICONS.includes(c.icon as SoundIconId) &&
+    isMix(c.mix) &&
+    num(c.createdAt)
+  )
+}
+
 /** Saved sounds have ids that can never clash with a preset's. */
 export const isCustomSoundId = (id: string | null | undefined): boolean => Boolean(id?.startsWith('mine-'))
 
@@ -139,6 +152,30 @@ export interface Mix {
   breathPacing?: boolean
   /** Slow stereo rocking width 0..1 for the harmonic field. */
   spatialMotion?: number
+}
+
+const LAYER_IDS: readonly string[] = ['rain', 'waves', 'fire', 'wind', 'brown', 'pink', 'white'] satisfies LayerId[]
+const BAND_IDS: readonly string[] = ['delta', 'theta', 'alpha', 'gamma'] satisfies BandId[]
+const MOTIFS: readonly string[] = ['nocturne', 'adagio', 'reverie'] satisfies ClassicalMotifStyle[]
+const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
+
+/** A saved mix the sound engine can play as it is. */
+export function isMix(v: unknown): v is Mix {
+  if (typeof v !== 'object' || v === null) return false
+  const m = v as Record<string, unknown>
+  const layers = m.layers
+  if (typeof layers !== 'object' || layers === null || Array.isArray(layers)) return false
+  for (const [id, gain] of Object.entries(layers)) if (!LAYER_IDS.includes(id) || !num(gain)) return false
+  return (
+    (m.band === null || BAND_IDS.includes(m.band as string)) &&
+    num(m.bandGain) &&
+    num(m.carrier) &&
+    (m.padGain === undefined || num(m.padGain)) &&
+    (m.harmonicKey === undefined || (typeof m.harmonicKey === 'string' && m.harmonicKey in HARMONIC_KEYS)) &&
+    (m.classicalMotif === undefined || m.classicalMotif === null || MOTIFS.includes(m.classicalMotif as string)) &&
+    (m.breathPacing === undefined || typeof m.breathPacing === 'boolean') &&
+    (m.spatialMotion === undefined || num(m.spatialMotion))
+  )
 }
 
 export const SILENT_MIX: Mix = {

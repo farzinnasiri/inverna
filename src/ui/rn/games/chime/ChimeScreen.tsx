@@ -18,6 +18,7 @@ import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { GlassSurface } from '@/ui/rn/Glass'
 import { Segmented } from '@/ui/rn/controls'
 import { gameDoor } from '@/ui/copy'
+import { isNumber, isOneOf, isRecord } from '@/core/decode'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
 
 type ChimeMode = 'endless' | 'classic'
@@ -42,6 +43,18 @@ interface UiMeta {
   blocksRemaining: number
   score: number
   solved: boolean
+}
+
+/** The save around the wall; the wall itself is checked on load (isValidChimeState). */
+function isValidSave(v: unknown): v is ChimeSave {
+  return (
+    isRecord(v) &&
+    v.version === 1 &&
+    isNumber(v.bestScore) &&
+    isNumber(v.boardsCleared) &&
+    isNumber(v.plays) &&
+    (v.mode === undefined || isOneOf(['endless', 'classic'])(v.mode))
+  )
 }
 
 const DEFAULT_SAVE: ChimeSave = {
@@ -203,7 +216,7 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
   const { cue, haptic } = useFeedback()
   const tokens = useTokenColors()
   const { color, pieces } = tokens
-  const [saved, setSaved] = useGameSave<ChimeSave>('chime', DEFAULT_SAVE)
+  const [saved, setSaved] = useGameSave('chime', DEFAULT_SAVE, isValidSave)
 
   const initialStateRef = useRef<ChimeState | null>(null)
   if (initialStateRef.current === null) {

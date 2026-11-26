@@ -121,8 +121,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
     state: createHue({ seed: Date.now() >>> 0, calm: DIFFICULTY_CALM.cozy }),
     completed: 0,
   }))
-  const [rawSave, setSave] = useGameSave<HueSave>('hue', fallback)
-  const save = isValidSave(rawSave) ? rawSave : fallback
+  const [save, setSave] = useGameSave('hue', fallback, isValidSave)
   const state = save.state
   const difficulty = save.difficulty
 

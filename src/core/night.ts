@@ -32,6 +32,24 @@ export interface Schedule {
   days: number[]
 }
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+
+/** A saved schedule that can be used as it is. */
+export function isSchedule(v: unknown): v is Schedule {
+  if (typeof v !== 'object' || v === null) return false
+  const s = v as Record<string, unknown>
+  return (
+    typeof s.enabled === 'boolean' &&
+    typeof s.bedtime === 'string' &&
+    HHMM.test(s.bedtime) &&
+    (s.rangeMinutes === undefined || (typeof s.rangeMinutes === 'number' && s.rangeMinutes >= 0)) &&
+    typeof s.leadMinutes === 'number' &&
+    s.leadMinutes >= 0 &&
+    Array.isArray(s.days) &&
+    s.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)
+  )
+}
+
 /** The range onboarding and Settings set: one hour, slid along the night. */
 export const DEFAULT_RANGE_MIN = 60
 
@@ -153,6 +171,12 @@ export interface BedtimeOverride {
   night: string
   /** "HH:MM", 24h. */
   bedtime: string
+}
+
+export function isBedtimeOverride(v: unknown): v is BedtimeOverride {
+  if (typeof v !== 'object' || v === null) return false
+  const o = v as Record<string, unknown>
+  return typeof o.night === 'string' && typeof o.bedtime === 'string' && HHMM.test(o.bedtime)
 }
 
 export function overrideActive(override: BedtimeOverride | null | undefined, now: Date): override is BedtimeOverride {

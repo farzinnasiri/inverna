@@ -19,6 +19,7 @@ import {
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Completion, GameActionButton, GameControlBar, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { GlassSurface } from '@/ui/rn/Glass'
+import { isNumber, isRecord } from '@/core/decode'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
 
 type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
@@ -48,6 +49,11 @@ interface UiMeta {
   undoCount: number
   boardComplete: boolean
   fallingEmpty: boolean
+}
+
+/** The save around the board; the board itself is checked on load (isValidCascadeState). */
+function isValidSave(v: unknown): v is CascadeSave {
+  return isRecord(v) && v.version === 1 && isNumber(v.bestScore) && isNumber(v.boardsCleared) && isNumber(v.plays)
 }
 
 const DEFAULT_SAVE: CascadeSave = {
@@ -174,7 +180,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
   const reduceMotion = useReducedMotion()
   const tokens = useTokenColors()
   const { color } = tokens
-  const [saved, setSaved] = useGameSave<CascadeSave>('cascade', DEFAULT_SAVE)
+  const [saved, setSaved] = useGameSave('cascade', DEFAULT_SAVE, isValidSave)
 
   const initialStateRef = useRef<CascadeState | null>(null)
   if (initialStateRef.current === null) {

@@ -41,6 +41,7 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Segmented } from '@/ui/rn/controls'
 import { Completion, GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { GlassPressable, GlassSurface } from '@/ui/rn/Glass'
+import { isNumber, isRecord } from '@/core/decode'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
 
 type LucideSvgIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string }>
@@ -51,6 +52,11 @@ interface SettleSave {
   state: SettleState | null
   bestLines: number
   plays: number
+}
+
+/** The save around the board; the board itself is checked on load (isValidSettleState). */
+function isValidSave(v: unknown): v is SettleSave {
+  return isRecord(v) && isNumber(v.bestLines) && isNumber(v.plays)
 }
 
 const DEFAULT_SAVE: SettleSave = {
@@ -220,7 +226,7 @@ export function SettleScreen({ onExit }: GameScreenProps) {
   const reduceMotion = useReducedMotion()
   const tokens = useTokenColors()
   const { color } = tokens
-  const [saved, setSaved] = useGameSave<SettleSave>('settle', DEFAULT_SAVE)
+  const [saved, setSaved] = useGameSave('settle', DEFAULT_SAVE, isValidSave)
 
   const [state, setState] = useState<SettleState>(() => {
     if (isValidSettleState(saved.state)) {

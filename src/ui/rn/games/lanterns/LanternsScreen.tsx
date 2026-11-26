@@ -376,8 +376,7 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
     state: createLanterns({ seed: Date.now() >>> 0, calm }),
     completed: 0,
   }))
-  const [rawSave, setSave] = useGameSave<LanternsSave>('lanterns', fallback)
-  const save = isValidSave(rawSave) ? rawSave : fallback
+  const [save, setSave] = useGameSave('lanterns', fallback, isValidSave)
   const state = save.state
 
   const [paused, setPaused] = useState(false)

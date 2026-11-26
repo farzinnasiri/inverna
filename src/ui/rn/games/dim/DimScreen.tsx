@@ -178,8 +178,7 @@ export function DimScreen({ onExit }: GameScreenProps) {
     completed: 0,
     undoStack: [],
   }))
-  const [rawSave, setSave] = useGameSave<DimSave>('dim', fallback)
-  const save = isValidSave(rawSave) ? rawSave : fallback
+  const [save, setSave] = useGameSave('dim', fallback, isValidSave)
   const state = save.state
   const undoStack = useMemo(() => save.undoStack ?? [], [save.undoStack])
 

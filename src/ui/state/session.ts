@@ -1,7 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Session } from '@/core/session'
-import { kvStorage } from './settings'
+import { isBoolean, isNullable, isNumber, isRecord, isString, pickValid } from '@/core/decode'
+import { kvStorage } from './storage'
+
+const isSession = (v: unknown): v is Session =>
+  isRecord(v) && isNumber(v.startedAt) && isNumber(v.minutes) && v.minutes > 0 && isNullable(isString)(v.presetId)
 
 interface SessionState {
   session: Session | null
@@ -21,6 +25,11 @@ export const useSession = create<SessionState>()(
       finish: () => set({ ended: true }),
       dismiss: () => set({ session: null, ended: false }),
     }),
-    { name: 'session', storage: kvStorage, version: 1 },
+    {
+      name: 'session',
+      storage: kvStorage,
+      version: 1,
+      merge: (saved, current) => pickValid(saved, current, { session: isNullable(isSession), ended: isBoolean }),
+    },
   ),
 )

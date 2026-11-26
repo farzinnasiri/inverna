@@ -1,8 +1,8 @@
 /**
  * Key-value persistence contract.
  *
- * Synchronous on purpose: web uses localStorage, React Native will use
- * react-native-mmkv (also synchronous), so call sites never change.
+ * Synchronous on purpose: web uses localStorage and iOS uses expo-sqlite's
+ * localStorage, so call sites never change.
  * Everything lives on-device. Clearing site data clears progress — by design.
  */
 export interface KeyValueStore {
@@ -40,6 +40,22 @@ export function readJSON<T>(key: string, fallback: T): T {
   if (raw == null) return fallback
   try {
     return JSON.parse(raw) as T
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Read a saved value and keep it only if `isValid` accepts it. Anything
+ * missing, unreadable or the wrong shape gives `fallback`, so a damaged save
+ * can never break the screen that reads it.
+ */
+export function loadSaved<T>(key: string, fallback: T, isValid: (v: unknown) => v is T): T {
+  const raw = active.getItem(NAMESPACE + key)
+  if (raw == null) return fallback
+  try {
+    const value: unknown = JSON.parse(raw)
+    return isValid(value) ? value : fallback
   } catch {
     return fallback
   }

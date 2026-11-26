@@ -3,7 +3,7 @@ import { AccessibilityInfo, AppState, Platform, useWindowDimensions } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { GameId } from '@/core/games/catalog'
 import { bestFor, formatScoreValue } from '@/core/highscores'
-import { readJSON, writeJSON } from '@/core/storage'
+import { loadSaved, writeJSON } from '@/core/storage'
 import { sessionLevels } from '@/core/session'
 import type { CueName } from '@/core/sound/engine'
 import { haptics, sound } from '@/platform'
@@ -35,25 +35,26 @@ export function useGameLoop(callback: (dtMs: number) => void, running: boolean):
   }, [running])
 }
 
-/** Per-game JSON persistence via universal sync KeyValueStore (`expo-sqlite` on native, `localStorage` on web). */
-export function useGameSave<T>(id: GameId, fallback: T): [T, (next: T | ((prev: T) => T)) => void] {
+/**
+ * A game's save, kept on the device. `isSave` is the game's own check of what
+ * was stored: anything it rejects (missing, damaged, an old shape) loads as
+ * `fallback`. Each change is written to disk once, outside React's updater.
+ */
+export function useGameSave<T>(
+  id: GameId,
+  fallback: T,
+  isSave: (v: unknown) => v is T,
+): [T, (next: T | ((prev: T) => T)) => void] {
   const key = `game:${id}`
-  const [value, setValue] = useState<T>(() => {
-    const stored = readJSON<T>(key, fallback)
-    // A stored `null` or a value of the wrong shape must never brick a game.
-    if (stored === null || stored === undefined) return fallback
-    if (fallback !== null && typeof fallback === 'object' && (typeof stored !== 'object' || Array.isArray(stored) !== Array.isArray(fallback))) {
-      return fallback
-    }
-    return stored
-  })
+  const [value, setValue] = useState<T>(() => loadSaved(key, fallback, isSave))
+  const latest = useRef(value)
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {
-      setValue((prev) => {
-        const v = typeof next === 'function' ? (next as (p: T) => T)(prev) : next
-        writeJSON(key, v)
-        return v
-      })
+      const v = typeof next === 'function' ? (next as (p: T) => T)(latest.current) : next
+      if (Object.is(v, latest.current)) return
+      latest.current = v
+      writeJSON(key, v)
+      setValue(v)
     },
     [key],
   )

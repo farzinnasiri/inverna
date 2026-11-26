@@ -131,8 +131,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
     state: createNine({ seed: Date.now() >>> 0, calm, difficulty: 'medium' }),
     completed: 0,
   }))
-  const [rawSave, setSave] = useGameSave<NineSave>('nine', fallback)
-  const save = isValidSave(rawSave) ? rawSave : fallback
+  const [save, setSave] = useGameSave('nine', fallback, isValidSave)
   const state = save.state
 
   const [started, setStarted] = useState(false)

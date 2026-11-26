@@ -45,6 +45,7 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Button, Segmented } from '@/ui/rn/controls'
 import { useSettings, type Difficulty } from '@/ui/state/settings'
 import { GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
+import { isArrayOf, isNumber, isOneOf, isRecord, isString } from '@/core/decode'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useReducedMotion } from '@/ui/rn/hooks'
 import { paintingLabelY, type FloraFrame, type PondFrame } from './draw'
 import { buildFlora, buildFrame, paintingReadyAt, pondColors, REST_FADE_MS, type PondColors } from './frame'
@@ -62,6 +63,18 @@ interface PondSave {
   mode?: PondMode
   /** Endless: the level it has settled at for you, 0..1. */
   level?: number
+}
+
+/** The save around the pond; the pond itself is checked on load (isPondState). */
+function isValidSave(v: unknown): v is PondSave {
+  return (
+    isRecord(v) &&
+    isNumber(v.teach) &&
+    isNumber(v.plays) &&
+    isArrayOf(isString)(v.recent) &&
+    (v.mode === undefined || isOneOf(['pictures', 'endless'])(v.mode)) &&
+    (v.level === undefined || isNumber(v.level))
+  )
 }
 
 const DEFAULT_SAVE: PondSave = { state: null, teach: 0, plays: 0, recent: [], mode: 'pictures' }
@@ -106,7 +119,7 @@ export function PondScreen({ onExit }: GameScreenProps) {
   const calm = useCalm()
   const reduced = useReducedMotion()
   const { cue, haptic } = useFeedback()
-  const [saved, setSaved] = useGameSave<PondSave>('pond', DEFAULT_SAVE)
+  const [saved, setSaved] = useGameSave('pond', DEFAULT_SAVE, isValidSave)
   const difficulty = useSettings((st) => st.difficulty.pond ?? st.defaultDifficulty)
   const difficultyRef = useRef(difficulty)
   difficultyRef.current = difficulty

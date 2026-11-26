@@ -111,8 +111,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
     state: createWeave({ seed: Date.now() >>> 0, calm }),
     completed: 0,
   }))
-  const [rawSave, setSave] = useGameSave<WeaveSave>('weave', fallback)
-  const save = isValidSave(rawSave) ? rawSave : fallback
+  const [save, setSave] = useGameSave('weave', fallback, isValidSave)
   const state = save.state
 
   const [paused, setPaused] = useState(false)

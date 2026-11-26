@@ -21,12 +21,18 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { GameShell, type GameScreenProps } from '@/ui/rn/GameShell'
 import { Segmented } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
+import { isNumber, isRecord } from '@/core/decode'
 import { useCalm, useFeedback, useGameLoop, useGameSave, useKeys, useResponsiveLayout } from '@/ui/rn/hooks'
 
 interface RallySave {
   state: RallyState | null
   difficulty: RallyDifficulty
   bestRally: number
+}
+
+/** The save around the court; the court itself is checked on load (isValidRallyState). */
+function isValidSave(v: unknown): v is RallySave {
+  return isRecord(v) && isNumber(v.bestRally) && isDifficulty(v.difficulty)
 }
 
 const DEFAULT_SAVE: RallySave = {
@@ -77,7 +83,7 @@ export function RallyScreen({ onExit }: GameScreenProps) {
   const { cue, haptic } = useFeedback()
   const tokens = useTokenColors()
   const { color, pieces } = tokens
-  const [saved, setSaved] = useGameSave<RallySave>('rally', DEFAULT_SAVE)
+  const [saved, setSaved] = useGameSave('rally', DEFAULT_SAVE, isValidSave)
 
   const initialStateRef = useRef<RallyState | null>(null)
   if (initialStateRef.current === null) {

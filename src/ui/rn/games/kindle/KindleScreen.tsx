@@ -383,8 +383,7 @@ export function KindleScreen({ onExit }: GameScreenProps) {
     bestScore: 0,
     plays: 1,
   }))
-  const [rawSave, setSave] = useGameSave<KindleSave>('kindle', fallback)
-  const save = isValidSave(rawSave) ? rawSave : fallback
+  const [save, setSave] = useGameSave('kindle', fallback, isValidSave)
   // A restored board shows at rest: don't replay the last merge, spawn or
   // "make room" from the previous visit. Live states pass through untouched.
   const restoredRef = useRef(save.state)

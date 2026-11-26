@@ -184,8 +184,7 @@ export function DriftScreen({ onExit }: GameScreenProps) {
     completed: 0,
     undoStack: [],
   }))
-  const [rawSave, setSave] = useGameSave<DriftSave>('drift', fallback)
-  const save = isValidSave(rawSave) ? rawSave : fallback
+  const [save, setSave] = useGameSave('drift', fallback, isValidSave)
   const state = save.state
   const undoStack = useMemo(
     () =>

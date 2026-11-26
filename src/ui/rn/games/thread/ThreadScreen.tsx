@@ -280,8 +280,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
     state: createThread({ seed: Date.now() >>> 0, calm }),
     completed: 0,
   }))
-  const [rawSave, setSave] = useGameSave<ThreadSave>('thread', fallback)
-  const initialSave = isValidSave(rawSave) ? rawSave : fallback
+  const [initialSave, setSave] = useGameSave('thread', fallback, isValidSave)
 
   const [state, setState] = useState<ThreadState>(() => sanitizeLoadedState(initialSave.state))
   const [paused, setPaused] = useState(false)
