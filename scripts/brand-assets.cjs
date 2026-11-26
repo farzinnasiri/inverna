@@ -64,6 +64,15 @@ CanvasKitInit({ locateFile: (f) => path.join(path.dirname(ck), f) }).then((CK) =
   png('assets/images/splash-mark.png', 1024, 1024, null)
   // Browser tab.
   png('assets/images/favicon.png', 64, 46, INK)
+  // Web app (PWA) icons; the maskable 512 keeps the mark inside the 80% safe circle.
+  png('public/icon-192.png', 192, 116, INK)
+  png('public/icon-512.png', 512, 310, INK)
+  png('public/apple-touch-icon.png', 180, 109, INK)
+  fs.writeFileSync(
+    path.join(ROOT, 'public/icon.svg'),
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="rgb(${INK.join(',')})"/><path transform="translate(101 101) scale(1.2109)" fill="#FFFFFF" d="${D}"/></svg>\n`,
+  )
+  console.log('wrote public/icon.svg')
 
   // iOS Icon Composer bundles.
   for (const [name, fill] of Object.entries(FILLS)) {
