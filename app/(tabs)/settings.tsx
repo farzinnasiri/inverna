@@ -53,7 +53,8 @@ export default function SettingsScreen() {
   // Erase everything and start again from the first onboarding page.
   const eraseAll = () => {
     feel('commit')
-    useSound.getState().stop(0.2)
+    // Nothing of theirs stays on the lock screen or can be resumed from it (ISS-04).
+    useSound.getState().reset()
     useSession.getState().dismiss()
     useHighScores.getState().clearAll()
     useNav.setState({ checkIn: null, windDownOpen: false, mixOpen: false })

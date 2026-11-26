@@ -6,6 +6,7 @@ const engine = vi.hoisted(() => {
   const calls: { name: string; args: unknown[] }[] = []
   const pause: (() => void)[] = []
   const play: ((mix: unknown) => void)[] = []
+  const interruption: ((event: unknown) => void)[] = []
   const rec =
     (name: string) =>
     (...args: unknown[]) => {
@@ -15,7 +16,14 @@ const engine = vi.hoisted(() => {
     calls,
     pause,
     play,
+    interruption,
     sound: {
+      prepare: rec('prepare'),
+      reset: rec('reset'),
+      onInterruption: (fn: (event: unknown) => void) => {
+        interruption.push(fn)
+        return () => {}
+      },
       unlock: async () => {},
       setMix: rec('setMix'),
       setDescent: rec('setDescent'),
@@ -44,15 +52,20 @@ vi.mock('@/platform', () => ({ sound: engine.sound, bootPlatform: () => {} }))
 
 const { useSound } = await import('./sound')
 const { useSettings } = await import('./settings')
+const { useSession } = await import('./session')
 
 const RAIN: Mix = { ...SILENT_MIX, layers: { rain: 0.6 } }
 const preset = PRESETS[0]!
 const last = (name: string) => [...engine.calls].reverse().find((c) => c.name === name)
+const interrupt = (event: unknown) => {
+  for (const fn of engine.interruption) fn(event)
+}
 
 beforeEach(() => {
   useSound.getState().stop(0)
   useSound.setState({ presetId: null, mix: null, mixMeta: null })
   useSettings.setState({ sleepTimer: 30 })
+  useSession.setState({ session: null, ended: false })
   engine.calls.length = 0
   vi.useRealTimers()
 })
@@ -128,21 +141,75 @@ describe('sound store: the lock screen and interruptions', () => {
     expect(useSound.getState().stopAt).not.toBeNull()
   })
 
-  // ISS-03: today an interruption forgets the deadline, and resuming after it
-  // starts a fresh full-length timer. Phase 1 step 3 keeps one deadline.
-  it.skip('resuming after an interruption keeps the original deadline', () => {
+  // ISS-03.2: a call keeps the deadline; afterwards the sound comes back with
+  // what's left of the timer, not a fresh one.
+  it('resuming after an interruption keeps the original deadline', () => {
     useSound.getState().playPreset(preset.id, 30)
-    const stopAt = useSound.getState().stopAt
+    const stopAt = useSound.getState().stopAt!
+    interrupt({ phase: 'began' })
+    expect(useSound.getState()).toMatchObject({ playing: false, interrupted: true, stopAt })
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 10 * 60_000 })
-    for (const fn of engine.pause) fn()
-    for (const fn of engine.play) fn(preset.mix)
-    expect(useSound.getState().stopAt).toBe(stopAt)
+    interrupt({ phase: 'ended', shouldResume: true })
+    expect(useSound.getState()).toMatchObject({ playing: true, stopAt })
+    expect(last('scheduleSleepFade')?.args[0]).toBeCloseTo((stopAt - Date.now()) / 1000, 0)
   })
 
-  // ISS-15.3: setTimer renames a saved sound to "Your mix" on the lock screen.
-  it.skip("changing the timer keeps a saved sound's name", () => {
+  it("doesn't play again when the deadline passed during the interruption", () => {
+    useSound.getState().playPreset(preset.id, 30)
+    interrupt({ phase: 'began' })
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 31 * 60_000 })
+    interrupt({ phase: 'ended', shouldResume: true })
+    expect(useSound.getState().playing).toBe(false)
+    expect(last('stop')?.args[1]).toEqual({ hideNotification: true })
+  })
+
+  it("doesn't play again when the sound was stopped during the interruption", () => {
+    useSound.getState().playPreset(preset.id, 30)
+    interrupt({ phase: 'began' })
+    useSound.getState().stop()
+    engine.calls.length = 0
+    interrupt({ phase: 'ended', shouldResume: true })
+    expect(useSound.getState().playing).toBe(false)
+    expect(last('setMix')).toBeUndefined()
+  })
+
+  it("doesn't play again when the OS says not to", () => {
+    useSound.getState().playPreset(preset.id, 30)
+    interrupt({ phase: 'began' })
+    interrupt({ phase: 'ended', shouldResume: false })
+    expect(useSound.getState()).toMatchObject({ playing: false, interrupted: false, stopAt: null })
+  })
+
+  // ISS-15.3: setTimer used to rename a saved sound to "Your mix" on the lock screen.
+  it("changing the timer keeps a saved sound's name", () => {
     useSound.getState().playMix(RAIN, undefined, { title: 'Mine', hint: 'Rain', icon: 'rain' })
     useSound.getState().setTimer(60)
     expect((last('setNowPlayingMeta')?.args[0] as { title: string }).title).toBe('Mine')
+  })
+})
+
+describe('sound store: one deadline', () => {
+  it('a wind-down in progress ends the sound with it, even with a longer timer', () => {
+    useSession.setState({ session: { startedAt: Date.now(), minutes: 20, presetId: null }, ended: false })
+    useSound.getState().playPreset(preset.id, 60)
+    const end = useSession.getState().session!.startedAt + 20 * 60_000
+    expect(useSound.getState().stopAt).toBe(end)
+  })
+
+  it('starting a wind-down moves the deadline of what is playing', () => {
+    useSound.getState().playPreset(preset.id, 0)
+    expect(useSound.getState().stopAt).toBeNull()
+    useSession.getState().start(15, preset.id)
+    expect(useSound.getState().stopAt).toBe(useSession.getState().session!.startedAt + 15 * 60_000)
+    useSession.getState().dismiss()
+    expect(useSound.getState().stopAt).toBeNull()
+  })
+
+  // ISS-04: Erase all data leaves nothing to show or resume on the lock screen.
+  it('reset forgets what was loaded', () => {
+    useSound.getState().playMix(RAIN, undefined, { id: 'mine-1', title: 'Mine', hint: '', icon: 'rain' })
+    useSound.getState().reset()
+    expect(useSound.getState()).toMatchObject({ playing: false, presetId: null, mix: null, mixMeta: null, stopAt: null })
+    expect(last('reset')).toBeDefined()
   })
 })

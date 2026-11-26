@@ -1,6 +1,6 @@
 import type { DescentSnapshot } from '@/core/sound/arc'
 import { isSilent, LAYERS, type LayerId, type Mix } from '@/core/sound/catalog'
-import type { CueName, NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
+import type { CueName, InterruptionEvent, NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { createBinauralController, type BinauralController } from './binaural'
 import { createNoiseBufferBank, texturesFor, warmTextures, type NoiseBufferBank } from './buffers'
@@ -30,6 +30,8 @@ export interface NeuroEngineHooks {
   bindRemoteControls?: (handlers: {
     onPause: () => void
     onPlay: () => void
+    /** The OS took the audio (`began`) or gave it back (`ended`). */
+    onInterruption: (event: InterruptionEvent) => void
     /** True while ambient sound is playing (not paused or stopped). */
     isPlaying: () => boolean
   }) => () => void
@@ -138,6 +140,7 @@ export function createNeuroSoundEngine({
   const layerTeardownTimers = new Map<LayerId, ReturnType<typeof setTimeout>>()
   const externalPauseListeners = new Set<() => void>()
   const externalPlayListeners = new Set<(mix: Mix) => void>()
+  const interruptionListeners = new Set<(event: InterruptionEvent) => void>()
   let stopTimer: ReturnType<typeof setTimeout> | null = null
   let remoteBound = false
 
@@ -188,6 +191,12 @@ export function createNeuroSoundEngine({
         const mix = lastAudibleMix
         applyMix(mix, 1.0)
         for (const fn of externalPlayListeners) fn(mix)
+      },
+      onInterruption: (event) => {
+        // Quiet at once; whether to play again is the caller's decision, so
+        // a deadline or a stop that happened meanwhile always wins.
+        if (event.phase === 'began' && running) stopAmbient(0.3, false)
+        for (const fn of interruptionListeners) fn(event)
       },
       isPlaying: () => running,
     })
@@ -543,6 +552,8 @@ export function createNeuroSoundEngine({
 
   const applyMix = (mix: Mix, fadeSeconds = 1.5) => {
     const safeFade = Math.max(0, Number.isFinite(fadeSeconds) ? fadeSeconds : 1.5)
+    // A change while playing is an edit: it never touches the sleep fade.
+    const starting = !running
     lastMix = mix
     if (!isSilent(mix)) lastAudibleMix = mix
     if (mix.harmonicKey) {
@@ -577,8 +588,8 @@ export function createNeuroSoundEngine({
     })
 
     rampParam(g.ambientGateGain.gain, 1, Math.min(safeFade, 0.35), g.ctx.currentTime)
-    // If a previous sleep timer already faded sleepFadeGain down, bring it back cleanly on play
-    if (paramNow(g.sleepFadeGain.gain, g.ctx.currentTime) < 0.99) {
+    // Starting again after a sleep timer faded out: bring the gain back up.
+    if (starting && paramNow(g.sleepFadeGain.gain, g.ctx.currentTime) < 0.99) {
       clearSleepFadeOnGraph(g, Math.min(safeFade, 0.35))
     }
 
@@ -746,6 +757,20 @@ export function createNeuroSoundEngine({
       nowPlayingMeta = meta
       if (running) {
         hooks?.onNowPlayingUpdate?.(meta, 'playing')
+      }
+    },
+
+    reset() {
+      stopAmbient(0, true)
+      lastMix = null
+      lastAudibleMix = null
+      nowPlayingMeta = null
+    },
+
+    onInterruption(listener) {
+      interruptionListeners.add(listener)
+      return () => {
+        interruptionListeners.delete(listener)
       }
     },
 

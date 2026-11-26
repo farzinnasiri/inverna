@@ -5,7 +5,7 @@ import { BANDS, LAYERS, PRESETS, presetById, SILENT_MIX, type Mix } from '@/core
 import type { CueName } from '@/core/sound/engine'
 import { HARMONIC_KEYS, harmonicKeyMeta } from '@/core/sound/harmonics'
 import { NOISE_BUFFER_SECONDS } from './buffers'
-import { createNeuroSoundEngine } from './index'
+import { createNeuroSoundEngine, type NeuroEngineHooks } from './index'
 import type { AudioContextLike, AudioContextStateLike, BiquadFilterTypeLike } from './types'
 
 interface ParamCall {
@@ -436,9 +436,8 @@ describe('createNeuroSoundEngine — the sleep fade', () => {
     expect(sleepFadeGain(ctx, ctx.currentTime + 60)).toBeDefined()
   })
 
-  // ISS-03.1: an edit during the last 12 s swells the sound back to full.
-  // Phase 1 step 3 keeps the fade.
-  it.skip('editing the mix during the fade keeps fading', () => {
+  // ISS-03.1: an edit during the last 12 s used to swell the sound back to full.
+  it('editing the mix during the fade keeps fading', () => {
     const { engine, contexts } = makeTestEngine({ initialState: 'running' })
     engine.setMix(PRESETS[0]!.mix, 0.2)
     engine.scheduleSleepFade!(20, 12)
@@ -449,6 +448,29 @@ describe('createNeuroSoundEngine — the sleep fade', () => {
     engine.setMix(PRESETS[1]!.mix, 0.25)
     const after = fade.gain.calls.slice(before)
     expect(after.some((c) => c.method === 'linearRampToValueAtTime' && c.args[0] === 1)).toBe(false)
+  })
+})
+
+describe('createNeuroSoundEngine — interruptions', () => {
+  it('goes quiet when a call starts and waits to be told to play again', () => {
+    let remote: Parameters<NonNullable<NeuroEngineHooks['bindRemoteControls']>>[0] | null = null
+    const events: unknown[] = []
+    const engine = createNeuroSoundEngine({
+      createContext: () => new MockAudioContext({ initialState: 'running' }),
+      hooks: {
+        bindRemoteControls: (handlers) => {
+          remote = handlers
+          return () => {}
+        },
+      },
+    })
+    engine.onInterruption?.((e) => events.push(e))
+    engine.setMix(PRESETS[0]!.mix, 0.2)
+    remote!.onInterruption({ phase: 'began' })
+    expect(engine.isRunning).toBe(false)
+    remote!.onInterruption({ phase: 'ended', shouldResume: true })
+    expect(engine.isRunning).toBe(false)
+    expect(events).toEqual([{ phase: 'began' }, { phase: 'ended', shouldResume: true }])
   })
 })
 

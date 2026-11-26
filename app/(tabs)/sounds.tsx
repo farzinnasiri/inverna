@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ComponentRef } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react'
 import {
   Pressable,
   ScrollView,
@@ -47,7 +47,7 @@ interface SoundItem {
 
 const PAGE_SIZE = 6
 
-const metaOf = (c: CustomSound): MixMeta => ({ title: c.name, hint: c.hint, icon: c.icon })
+const metaOf = (c: CustomSound): MixMeta => ({ id: c.id, title: c.name, hint: c.hint, icon: c.icon })
 
 const clockIn = (minutes: number) => {
   const d = new Date(Date.now() + minutes * 60_000)
@@ -85,6 +85,7 @@ export default function SoundsScreen() {
   const playing = useSound((s) => s.playing)
   const activePresetId = useSound((s) => s.presetId)
   const activeMix = useSound((s) => s.mix)
+  const activeMeta = useSound((s) => s.mixMeta)
   const descent = useSound((s) => s.descent)
   const volume = useSound((s) => s.volume)
   const setVolume = useSound((s) => s.setVolume)
@@ -115,7 +116,13 @@ export default function SoundsScreen() {
   const [pagerWidth, setPagerWidth] = useState(0)
   const pagerRef = useRef<ComponentRef<typeof ScrollView>>(null)
 
-  const currentId = activePresetId ?? selectedId
+  // What's on screen: what's playing, or while stopped what they picked last
+  // (so Play after swiping plays the one they swiped to).
+  const playingId = activePresetId ?? activeMeta?.id ?? 'custom'
+  useEffect(() => {
+    if (playing) setSelectedId(playingId)
+  }, [playing, playingId])
+  const currentId = playing ? playingId : selectedId
   // What they liked in onboarding comes first on each page.
   const profile = useSettings((s) => s.profile)
   const orderedPresets = useMemo(

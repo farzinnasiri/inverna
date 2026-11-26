@@ -143,9 +143,7 @@ export function createPlatformSoundEngine(): SoundEngine {
     hooks: {
       onPrepareSession: prepareSession,
       onNowPlayingUpdate: updateNowPlaying,
-      bindRemoteControls: ({ onPause, onPlay, isPlaying }) => {
-        // Resume after an interruption (a call, Siri) only if we were playing when it began.
-        let resumeAfterInterruption = false
+      bindRemoteControls: ({ onPause, onPlay, onInterruption }) => {
         const subs: ({ remove?: () => void } | undefined)[] = []
         try {
           subs.push(
@@ -159,15 +157,13 @@ export function createPlatformSoundEngine(): SoundEngine {
           )
           subs.push(
             AudioManager.addSystemEventListener('interruption', (ev) => {
+              sessionActive = false
               if (ev.type === 'began') {
-                resumeAfterInterruption = isPlaying()
-                sessionActive = false
-                onPause()
+                onInterruption({ phase: 'began' })
               } else if (ev.type === 'ended') {
-                sessionActive = false
-                const resume = ev.shouldResume && resumeAfterInterruption
-                resumeAfterInterruption = false
-                if (resume) void prepareSession().then(() => onPlay())
+                // The sound store decides whether to play again (not past its deadline, not stopped meanwhile).
+                if (ev.shouldResume) void prepareSession().then(() => onInterruption({ phase: 'ended', shouldResume: true }))
+                else onInterruption({ phase: 'ended', shouldResume: false })
               }
             }),
           )

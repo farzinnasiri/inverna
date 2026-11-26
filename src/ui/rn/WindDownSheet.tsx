@@ -5,7 +5,7 @@ import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
-import { UNTIL_LIGHTS_OUT, useSound } from '@/ui/state/sound'
+import { useSound } from '@/ui/state/sound'
 import { Button, Segmented, Sheet } from './controls'
 
 const DURATIONS = [
@@ -37,11 +37,8 @@ export function WindDownSheet() {
     const now = new Date()
     const end = new Date(now.getTime() + minutes * 60_000)
     set({ tonightBedtime: { night: nightKey(now), bedtime: formatHHMM(end.getHours(), end.getMinutes()) } })
+    // A sound already playing now fades out by this lights out (the sound store follows the session).
     startSession(minutes, useSound.getState().presetId)
-    // A sound already playing now fades out at this lights out.
-    if (useSound.getState().playing && useSettings.getState().sleepTimer === UNTIL_LIGHTS_OUT) {
-      useSound.getState().setTimer(UNTIL_LIGHTS_OUT)
-    }
     setOpen(false)
   }
 

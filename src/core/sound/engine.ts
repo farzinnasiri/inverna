@@ -12,6 +12,8 @@ export interface NowPlayingMeta {
   scene?: SoundSceneId
 }
 
+export type InterruptionEvent = { phase: 'began' } | { phase: 'ended'; shouldResume: boolean }
+
 export interface SoundEngine {
   unlock(): Promise<void>
   /**
@@ -34,6 +36,13 @@ export interface SoundEngine {
   cue(name: CueName, volume?: number): void
   setCuesEnabled(enabled: boolean): void
   setNowPlayingMeta?(meta: NowPlayingMeta | null): void
+  /** Forget what played (Erase all data): stop now, hide Now Playing, keep nothing to resume. */
+  reset?(): void
+  /**
+   * The OS took the audio (a call, Siri) and gave it back. On `began` the
+   * engine has already gone quiet; on `ended` it waits to be told to play.
+   */
+  onInterruption?(listener: (event: InterruptionEvent) => void): () => void
   onExternalPause?(listener: () => void): () => void
   /** OS Play (headphones, lock screen); `mix` is what resumed. */
   onExternalPlay?(listener: (mix: Mix) => void): () => void
