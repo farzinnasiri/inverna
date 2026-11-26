@@ -5,6 +5,7 @@ import { DEFAULT_SCHEDULE, type Schedule } from '@/core/night'
 const centre = vi.hoisted(() => ({
   status: 'granted' as string,
   asked: 0,
+  dismissed: 0,
   scheduled: new Map<string, { date: Date }>(),
 }))
 
@@ -18,6 +19,9 @@ vi.mock('expo-notifications', () => ({
   },
   getAllScheduledNotificationsAsync: async () => [...centre.scheduled.keys()].map((identifier) => ({ identifier })),
   cancelScheduledNotificationAsync: async (id: string) => void centre.scheduled.delete(id),
+  dismissAllNotificationsAsync: async () => {
+    centre.dismissed++
+  },
   scheduleNotificationAsync: async ({ identifier, trigger }: { identifier: string; trigger: { date: Date } }) => {
     centre.scheduled.set(identifier, { date: trigger.date })
     return identifier
@@ -57,9 +61,9 @@ describe('reminders', () => {
     expect(centre.scheduled.size).toBe(0)
   })
 
-  // ISS-06.2: ids come from UTC days, so across the spring change two nights
-  // can share one id and one reminder is lost. Phase 1 step 5 uses local dates.
-  it.skip('every night keeps its own reminder across daylight saving', async () => {
+  // ISS-06.2: ids came from UTC days, so across the spring change two nights
+  // could share one id and one reminder was lost.
+  it('every night keeps its own reminder across daylight saving', async () => {
     vi.stubEnv('TZ', 'Europe/Rome')
     try {
       const late: Schedule = { ...schedule, bedtime: '02:00', leadMinutes: 30 }
@@ -70,12 +74,31 @@ describe('reminders', () => {
     }
   })
 
-  // ISS-06.1: turning reminders off while a plan is still running loses, and
-  // the plan schedules the week anyway. Phase 1 step 5 makes off always win.
-  it.skip('turning reminders off wins over a plan still running', async () => {
+  // ISS-06.1: turning reminders off while a plan was still running used to
+  // lose, and the plan scheduled the week anyway.
+  it('turning reminders off wins over a plan still running', async () => {
     const plan = planReminders(schedule, MESSAGES, { now: new Date(2026, 10, 2, 12, 0) })
     await clearReminders()
-    await plan
+    expect(await plan).toBe('superseded')
     expect(centre.scheduled.size).toBe(0)
+  })
+
+  it('the newest plan is the one that stays', async () => {
+    const first = planReminders(schedule, MESSAGES, { now: new Date(2026, 10, 2, 12, 0) })
+    const later: Schedule = { ...schedule, bedtime: '22:00' }
+    const second = planReminders(later, MESSAGES, { now: new Date(2026, 10, 2, 12, 0) })
+    await Promise.all([first, second])
+    const hours = new Set([...centre.scheduled.values()].map((v) => v.date.getHours()))
+    expect([...hours]).toEqual([21])
+  })
+
+  it('names each reminder by its local date', async () => {
+    await planReminders(schedule, MESSAGES, { now: new Date(2026, 10, 2, 12, 0) })
+    expect([...centre.scheduled.keys()].sort()[0]).toBe('inverna-winddown-2026-11-02')
+  })
+
+  it('Erase all data also clears delivered reminders', async () => {
+    await clearReminders({ delivered: true })
+    expect(centre.dismissed).toBe(1)
   })
 })

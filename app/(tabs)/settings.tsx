@@ -58,7 +58,8 @@ export default function SettingsScreen() {
     useSession.getState().dismiss()
     useHighScores.getState().clearAll()
     useNav.setState({ checkIn: null, windDownOpen: false, mixOpen: false })
-    void notifications.clearReminders()
+    // Scheduled ones and any still in Notification Centre (they can carry their name).
+    void notifications.clearReminders({ delivered: true })
     clearAll()
     useSettings.setState(useSettings.getInitialState())
     setConfirmWipe(false)
