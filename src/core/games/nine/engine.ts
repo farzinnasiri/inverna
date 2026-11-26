@@ -7,6 +7,9 @@ export const MAX_UNDO = 15
 export interface NineSnapshot {
   values: number[]
   notes: number[][]
+  /** Counters before the step (missing in saves from before undo restored them). */
+  moves?: number
+  hintsUsed?: number
 }
 
 export type NineDifficulty = 'easy' | 'medium' | 'hard' | 'expert'
@@ -359,6 +362,8 @@ function pushUndo(state: NineState): NineSnapshot[] {
   const entry: NineSnapshot = {
     values: state.values.slice(),
     notes: cloneNotes(state.notes),
+    moves: state.moves,
+    hintsUsed: state.hintsUsed,
   }
   const next = [...state.undoStack, entry]
   return next.length > MAX_UNDO ? next.slice(next.length - MAX_UNDO) : next
@@ -581,6 +586,8 @@ export function undoNine(state: NineState): NineState {
     ...state,
     values: prev.values.slice(),
     notes: cloneNotes(prev.notes),
+    moves: prev.moves ?? state.moves,
+    hintsUsed: prev.hintsUsed ?? state.hintsUsed,
     undoStack: state.undoStack.slice(0, -1),
   }
 }

@@ -75,6 +75,7 @@ export function GameShell({
   score,
   commitScore = true,
   hideBest = false,
+  scoreVariant,
   ready = true,
   readyHint,
   readyExtra,
@@ -94,6 +95,8 @@ export function GameShell({
   commitScore?: boolean
   /** Hide personal-best pill/records (e.g. calm non-competitive Pond). */
   hideBest?: boolean
+  /** Board size, for games whose sizes keep separate records (Drift, Lanterns). */
+  scoreVariant?: string
   /** Set false on games that show a forgiving pre-game start/difficulty card. */
   ready?: boolean
   readyHint?: string
@@ -249,6 +252,7 @@ export function GameShell({
     gameId,
     hideBest ? null : score,
     !hideBest && commitScore,
+    scoreVariant,
   )
   const clearGameBest = useHighScores((s) => s.clearGame)
   const [pulseBest, setPulseBest] = useState(false)

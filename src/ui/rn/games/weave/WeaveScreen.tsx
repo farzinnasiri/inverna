@@ -111,7 +111,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
     state: createWeave({ seed: Date.now() >>> 0, calm }),
     completed: 0,
   }))
-  const [save, setSave] = useGameSave('weave', fallback, isValidSave)
+  const [save, setSave, flushSave] = useGameSave('weave', fallback, isValidSave)
   const state = save.state
 
   const [paused, setPaused] = useState(false)
@@ -181,11 +181,15 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
 
       const didSolve = !curr.solved && next.solved
       stateRef.current = next
-      setSave((prev) => ({
-        version: 1,
-        state: next,
-        completed: (isValidSave(prev) ? prev.completed : 0) + (didSolve ? 1 : 0),
-      }))
+      // Mid-stroke cells wait: the stroke is written once, when it ends or solves (ISS-17).
+      setSave(
+        (prev) => ({
+          version: 1,
+          state: next,
+          completed: (isValidSave(prev) ? prev.completed : 0) + (didSolve ? 1 : 0),
+        }),
+        { defer: !didSolve },
+      )
 
       if (didSolve) {
         triggerSolved()
@@ -373,6 +377,27 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
     paintCellRef.current(row, col, stroke.strokeValue, false)
   }
 
+  /** Paint every cell from the stroke's last cell to the finger's cell. */
+  const strokeTo = (stroke: DragStroke, dx: number, dy: number) => {
+    // The touch target can change as its cell is painted. Keep the original grid origin.
+    const hit = cellFromLocal(stroke.startX + dx, stroke.startY + dy)
+    if (!hit) return
+    if (hit.row === stroke.lastRow && hit.col === stroke.lastCol) return
+    const steps = walkCells(stroke.lastRow, stroke.lastCol, hit.row, hit.col)
+    stroke.lastRow = hit.row
+    stroke.lastCol = hit.col
+    for (const step of steps) {
+      if (stateRef.current.solved) return
+      applyDragCell(stroke, step.row, step.col)
+    }
+  }
+  const flushRef = useRef(flushSave)
+  flushRef.current = flushSave
+  const endStroke = () => {
+    dragRef.current = null
+    flushRef.current()
+  }
+
   const [panResponder] = useState(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => !pausedRef.current && !stateRef.current.solved,
@@ -404,31 +429,19 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
         const stroke = dragRef.current
         if (!stroke) return
         if (pausedRef.current || stateRef.current.solved || g.numberActiveTouches > 1) {
-          dragRef.current = null
+          endStroke()
           return
         }
-
-        // The touch target can change as its cell is painted. Keep the original grid origin.
-        const hit = cellFromLocal(stroke.startX + g.dx, stroke.startY + g.dy)
-        if (!hit) return
-        if (hit.row === stroke.lastRow && hit.col === stroke.lastCol) return
-
-        const steps = walkCells(stroke.lastRow, stroke.lastCol, hit.row, hit.col)
-        stroke.lastRow = hit.row
-        stroke.lastCol = hit.col
-        for (const step of steps) {
-          if (stateRef.current.solved) {
-            dragRef.current = null
-            return
-          }
-          applyDragCell(stroke, step.row, step.col)
-        }
+        strokeTo(stroke, g.dx, g.dy)
       },
-      onPanResponderRelease: () => {
-        dragRef.current = null
+      onPanResponderRelease: (_, g) => {
+        // The last move before lifting can skip cells: paint up to where the finger ended (ISS-17).
+        const stroke = dragRef.current
+        if (stroke && !pausedRef.current && !stateRef.current.solved) strokeTo(stroke, g.dx, g.dy)
+        endStroke()
       },
       onPanResponderTerminate: () => {
-        dragRef.current = null
+        endStroke()
       },
     }),
   )

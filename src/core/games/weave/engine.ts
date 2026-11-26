@@ -399,10 +399,10 @@ export function isWeaveSolved(
   return true
 }
 
-/** Allowed grid sizes for a given calm level (0..1). */
+/** Allowed grid sizes for a given calm level (0..1): Hard (0) [8, 7], Medium (0.3) [7, 5], Easy (0.7) [5]. */
 export function allowedSizesForCalm(calm: number): readonly (5 | 7 | 8)[] {
   const c = clamp01(calm)
-  if (c < 0.35) return [8, 7]
+  if (c < 0.15) return [8, 7]
   if (c < 0.65) return [7, 5]
   return [5]
 }

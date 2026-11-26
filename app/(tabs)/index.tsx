@@ -7,7 +7,7 @@ import { arrangeGames, tonightPicks } from '@/core/games/arrange'
 import { feel } from '@/ui/feel'
 import { GAMES, gameMeta, type GameId } from '@/core/games/catalog'
 import { profileIntent } from '@/core/profile'
-import { bestFor, formatBestCompact } from '@/core/highscores'
+import { latestBest, formatBestCompact } from '@/core/highscores'
 import { eveningState, windowProgress, type EveningState } from '@/core/evening'
 import { formatBedtime12h, formatHHMM, nightKey, overrideActive } from '@/core/night'
 import { openWhenQuiet } from '@/ui/rn/promptGate'
@@ -338,7 +338,7 @@ export default function HomeScreen() {
               const isLead = idx === 0
               const isPick = picks.has(game.id)
               const isLastPlayed = lastGame === game.id
-              const best = game.id !== 'pond' ? bestFor(highScores, game.id) : null
+              const best = game.id !== 'pond' ? latestBest(highScores, game.id) : null
               const compactBest = game.id !== 'pond' ? formatBestCompact(game.id, best) : null
               const hasPreview = isLead && ['kindle', 'hue', 'cascade', 'thread'].includes(game.id)
               const roomy = tileHeight >= 80
@@ -513,7 +513,7 @@ function GamePeek({ id, pick, onPlay }: { id: GameId; pick: boolean; onPlay: () 
   const meta = gameMeta(id)
   const plays = useSettings((s) => s.plays[id] ?? 0)
   const table = useHighScores((s) => s.table)
-  const best = id !== 'pond' ? formatBestCompact(id, bestFor(table, id)) : null
+  const best = id !== 'pond' ? formatBestCompact(id, latestBest(table, id)) : null
   const facts = [
     pick ? copy.pickChip : null,
     best ? copy.peekBest(best) : null,

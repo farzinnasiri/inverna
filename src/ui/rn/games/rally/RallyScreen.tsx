@@ -151,6 +151,9 @@ export function RallyScreen({ onExit }: GameScreenProps) {
     )
   }, [])
 
+  /** The player's paddle has touched the ball since the last point. */
+  const hitThisPointRef = useRef(false)
+
   // Simulate on JS and send only the moving pieces to Reanimated.
   useGameLoop(
     useCallback(
@@ -168,12 +171,18 @@ export function RallyScreen({ onExit }: GameScreenProps) {
           } else if (next.event === 'paddle') {
             cue('place', 0.72)
             // Felt only off your own paddle (the ball heads away, up the table); the far paddle is just heard.
-            if (next.ball.vy < 0) haptic('settle')
+            if (next.ball.vy < 0) {
+              haptic('settle')
+              hitThisPointRef.current = true
+            }
           } else if (next.event === 'scorePlayer') {
             cue('clear', 0.85)
-            haptic('reward')
+            // Felt only if they played the point: a point won with no touch isn't theirs (ISS-17).
+            if (hitThisPointRef.current) haptic('reward')
+            hitThisPointRef.current = false
             persist(next)
           } else if (next.event === 'scoreAi') {
+            hitThisPointRef.current = false
             cue('undo', 0.52)
             persist(next)
           }
@@ -293,15 +302,16 @@ export function RallyScreen({ onExit }: GameScreenProps) {
           if (!playingRef.current || width <= 0 || !Number.isFinite(locationX)) return
           gestureRef.current = { width, startX: locationX }
           steerTo(locationX, width)
-          touchRef.current.handleServeNow()
         },
         onPanResponderMove: (_, { dx }) => {
           const gesture = gestureRef.current
           if (!playingRef.current || !gesture) return
           steerTo(gesture.startX + dx, gesture.width)
         },
-        onPanResponderRelease: () => {
+        onPanResponderRelease: (_, { dx, dy }) => {
           gestureRef.current = null
+          // A tap serves a waiting ball; moving the paddle into place doesn't (ISS-17).
+          if (Math.hypot(dx, dy) < 10) touchRef.current.handleServeNow()
         },
         onPanResponderTerminate: () => {
           gestureRef.current = null

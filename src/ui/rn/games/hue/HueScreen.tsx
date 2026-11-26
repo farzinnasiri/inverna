@@ -365,7 +365,6 @@ export function HueScreen({ onExit }: GameScreenProps) {
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('tap', 0.6)
-    haptic('tick')
   }, [cancelDrag, clearHint, selectTile, setSave, cue, haptic])
 
   // A difficulty tapped mid-puzzle waits for the next one; on an untouched

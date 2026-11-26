@@ -396,6 +396,8 @@ export function KindleScreen({ onExit }: GameScreenProps) {
 
   const milestoneTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const stateRef = useRef(state)
+  // This round already reached 2048 (its haptic is felt once).
+  const celebratedRef = useRef(state.bestTile >= 2048)
   stateRef.current = state
   const pausedRef = useRef(paused)
   pausedRef.current = paused
@@ -436,7 +438,9 @@ export function KindleScreen({ onExit }: GameScreenProps) {
 
       if (next.justReached2048) {
         cue('chime', 0.95)
-        haptic('complete')
+        // Felt once a round: undoing and merging 2048 again doesn't repeat it (ISS-17).
+        if (!celebratedRef.current) haptic('complete')
+        celebratedRef.current = true
         showMilestone()
       } else if (next.lastMergeMax >= 128) {
         cue('clear', 0.85)
@@ -494,6 +498,7 @@ export function KindleScreen({ onExit }: GameScreenProps) {
   }, [cue, haptic, setSave, fallback])
 
   const doRestart = useCallback(() => {
+    celebratedRef.current = false
     if (milestoneTimerRef.current) clearTimeout(milestoneTimerRef.current)
     setMilestoneNotice(false)
     const fresh = createKindle({ seed: Date.now() >>> 0, calm: calmRef.current })

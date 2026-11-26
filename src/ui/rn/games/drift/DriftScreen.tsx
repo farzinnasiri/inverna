@@ -340,7 +340,6 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const doNextPuzzle = useCallback(() => {
@@ -359,7 +358,6 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
@@ -374,19 +372,27 @@ export function DriftScreen({ onExit }: GameScreenProps) {
   const doMoveDirRef = useRef(doMoveDir)
   doMoveDirRef.current = doMoveDir
 
+  // The slide is decided when the finger lifts, from the whole swipe, so a
+  // swipe that starts one way and settles another goes where it ended (ISS-17).
   const [panResponder] = useState(() => {
-    let direction: Direction
+    // PanResponder zeroes dx/dy when it takes over from the tile press: keep what came before.
+    let lead = { dx: 0, dy: 0 }
     return PanResponder.create({
       onMoveShouldSetPanResponder: (_, g) => {
         const ax = Math.abs(g.dx)
         const ay = Math.abs(g.dy)
         if (pausedRef.current || stateRef.current.solved || Math.max(ax, ay) <= 14) return false
-
-        // PanResponder zeroes dx/dy when it takes over from the tile press.
-        direction = ax > ay ? (g.dx > 0 ? 'right' : 'left') : g.dy > 0 ? 'down' : 'up'
+        lead = { dx: g.dx, dy: g.dy }
         return true
       },
-      onPanResponderGrant: () => doMoveDirRef.current(direction),
+      onPanResponderRelease: (_, g) => {
+        if (pausedRef.current || stateRef.current.solved) return
+        const dx = lead.dx + g.dx
+        const dy = lead.dy + g.dy
+        if (Math.max(Math.abs(dx), Math.abs(dy)) <= 14) return
+        const direction: Direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'
+        doMoveDirRef.current(direction)
+      },
     })
   })
 
@@ -453,6 +459,7 @@ export function DriftScreen({ onExit }: GameScreenProps) {
     <GameShell
       gameId="drift"
       score={state.moves}
+      scoreVariant={`${state.size}x${state.size}`}
       commitScore={state.solved}
       stats={[
         { label: 'Moves', value: state.moves },

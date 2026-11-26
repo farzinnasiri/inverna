@@ -69,3 +69,15 @@ describe('highscores', () => {
     expect(formatBestCompact('drift', null)).toBeNull()
   })
 })
+
+describe('records by board size', () => {
+  it('keeps a separate fewest-moves record for each size', async () => {
+    const { recordScore, bestFor, latestBest } = await import('./highscores')
+    let t = recordScore({}, 'drift', 40, 1, '3x3').table
+    t = recordScore(t, 'drift', 120, 2, '4x4').table
+    // A 4×4 board's 120 moves don't lose to a 3×3's 40.
+    expect(bestFor(t, 'drift', '3x3')).toBe(40)
+    expect(bestFor(t, 'drift', '4x4')).toBe(120)
+    expect(latestBest(t, 'drift')).toBe(120)
+  })
+})

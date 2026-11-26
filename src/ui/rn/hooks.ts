@@ -39,26 +39,45 @@ export function useGameLoop(callback: (dtMs: number) => void, running: boolean):
  * A game's save, kept on the device. `isSave` is the game's own check of what
  * was stored: anything it rejects (missing, damaged, an old shape) loads as
  * `fallback`. Each change is written to disk once, outside React's updater.
+ * `{ defer: true }` updates the screen but waits to write (one write per drag,
+ * not one per painted cell); `flush()` writes what's waiting, and leaving the
+ * game does too.
  */
-export function useGameSave<T>(
+export function useGameSave<T extends object>(
   id: GameId,
-  fallback: T,
+  /** A value, or a function so a fresh board is only made when there's no save. */
+  fallback: T | (() => T),
   isSave: (v: unknown) => v is T,
-): [T, (next: T | ((prev: T) => T)) => void] {
+): [T, (next: T | ((prev: T) => T), opts?: { defer?: boolean }) => void, () => void] {
   const key = `game:${id}`
-  const [value, setValue] = useState<T>(() => loadSaved(key, fallback, isSave))
+  const [value, setValue] = useState<T>(() => {
+    const NONE = {} as T
+    const loaded = loadSaved<T>(key, NONE, isSave)
+    return loaded !== NONE ? loaded : typeof fallback === 'function' ? (fallback as () => T)() : fallback
+  })
   const latest = useRef(value)
+  const dirty = useRef(false)
   const set = useCallback(
-    (next: T | ((prev: T) => T)) => {
+    (next: T | ((prev: T) => T), opts?: { defer?: boolean }) => {
       const v = typeof next === 'function' ? (next as (p: T) => T)(latest.current) : next
       if (Object.is(v, latest.current)) return
       latest.current = v
-      writeJSON(key, v)
+      if (opts?.defer) dirty.current = true
+      else {
+        dirty.current = false
+        writeJSON(key, v)
+      }
       setValue(v)
     },
     [key],
   )
-  return [value, set]
+  const flush = useCallback(() => {
+    if (!dirty.current) return
+    dirty.current = false
+    writeJSON(key, latest.current)
+  }, [key])
+  useEffect(() => flush, [flush])
+  return [value, set, flush]
 }
 
 /**
@@ -69,19 +88,21 @@ export function useHighScore(
   gameId: GameId,
   candidate: number | null | undefined,
   shouldCommit = true,
+  /** Board size or similar, for games whose sizes keep separate records. */
+  variant?: string,
 ): { best: number | null; formattedBest: string | null; isNewBest: boolean } {
   const table = useHighScores((s) => s.table)
   const record = useHighScores((s) => s.record)
   const [isNewBest, setIsNewBest] = useState(false)
-  const best = bestFor(table, gameId)
+  const best = bestFor(table, gameId, variant)
 
   useEffect(() => {
     if (!shouldCommit || candidate == null || candidate <= 0) return
-    const res = record(gameId, candidate)
+    const res = record(gameId, candidate, variant)
     if (res.isNewBest) {
       setIsNewBest(true)
     }
-  }, [gameId, candidate, shouldCommit, record])
+  }, [gameId, candidate, shouldCommit, record, variant])
 
   const formattedBest = best !== null ? formatScoreValue(gameId, best) : null
   return { best, formattedBest, isNewBest }

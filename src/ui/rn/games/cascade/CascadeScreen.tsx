@@ -450,7 +450,6 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     syncUiMeta(next)
     redraw()
     cue('tap', 0.55)
-    haptic('tick')
     persist(next, true)
   }, [cue, haptic, persist, redraw, syncUiMeta])
 

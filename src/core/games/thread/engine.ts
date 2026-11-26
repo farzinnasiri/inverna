@@ -5,8 +5,8 @@
  * JSON state in, plain state out. Ports to React Native / Expo unchanged.
  *
  * Calm progression:
- * - calm < 0.35: engaging 7×7 and 6×6 boards (5–7 pairs)
- * - 0.35 <= calm < 0.65: moderate 6×6 boards (5–6 pairs)
+ * - calm < 0.15: engaging 7×7 and 6×6 boards (5–7 pairs)
+ * - 0.15 <= calm < 0.65: moderate 6×6 boards (5–6 pairs)
  * - calm >= 0.65: gentle 5×5 boards (4–5 pairs)
  */
 import { createRng } from '../../rng'
@@ -453,14 +453,14 @@ export function isBoardSolved(
 
 /**
  * Select board size for a given `calm` level (0..1) and 1-based puzzle number:
- * - calm >= 0.65: gentle 5×5 boards
- * - 0.35 <= calm < 0.65: moderate 6×6 boards
- * - calm < 0.35: engaging 7×7 and 6×6 boards
+ * - calm >= 0.65: gentle 5×5 boards (Easy, or late in a wind-down)
+ * - 0.15 <= calm < 0.65: moderate 6×6 boards (Medium is 0.3)
+ * - calm < 0.15: engaging 7×7 and 6×6 boards (Hard is 0)
  */
 export function sizeForCalm(calm: number, puzzleNumber = 1): BoardSize {
   const c = clamp01(calm)
   if (c >= 0.65) return 5
-  if (c >= 0.35) return 6
+  if (c >= 0.15) return 6
   return puzzleNumber % 3 === 2 ? 6 : 7
 }
 

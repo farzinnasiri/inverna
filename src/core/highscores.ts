@@ -16,7 +16,14 @@ export interface HighScoreEntry {
   readonly updatedAt: number
 }
 
-export type HighScoreTable = Partial<Record<GameId, HighScoreEntry>>
+/**
+ * Keyed by game, or `game:variant` for games whose boards differ in size
+ * (Drift 3×3 and 4×4, Lanterns 6 and 8 pairs), so one size's record never
+ * stands for another's.
+ */
+export type HighScoreTable = Partial<Record<string, HighScoreEntry>>
+
+export const scoreKey = (gameId: GameId, variant?: string): string => (variant ? `${gameId}:${variant}` : gameId)
 
 export const EMPTY_HIGH_SCORES: HighScoreTable = {}
 
@@ -50,9 +57,20 @@ export function isBetterScore(gameId: GameId, candidate: number, currentBest: nu
   return spec.mode === 'higher' ? clean > currentBest : clean < currentBest
 }
 
-export function bestFor(table: HighScoreTable, gameId: GameId): number | null {
-  const entry = table[gameId]
+export function bestFor(table: HighScoreTable, gameId: GameId, variant?: string): number | null {
+  const entry = table[scoreKey(gameId, variant)]
   return entry && Number.isFinite(entry.value) && entry.value > 0 ? entry.value : null
+}
+
+/** The record set most recently in any size of a game (for Play's tiles). */
+export function latestBest(table: HighScoreTable, gameId: GameId): number | null {
+  let latest: HighScoreEntry | null = null
+  for (const [key, entry] of Object.entries(table)) {
+    if (!entry || !(key === gameId || key.startsWith(`${gameId}:`))) continue
+    if (!Number.isFinite(entry.value) || entry.value <= 0) continue
+    if (!latest || entry.updatedAt > latest.updatedAt) latest = entry
+  }
+  return latest ? latest.value : null
 }
 
 export function recordScore(
@@ -60,8 +78,9 @@ export function recordScore(
   gameId: GameId,
   candidate: number,
   nowMs: number,
+  variant?: string,
 ): { table: HighScoreTable; isNewBest: boolean; best: number | null } {
-  const current = bestFor(table, gameId)
+  const current = bestFor(table, gameId, variant)
   if (!isBetterScore(gameId, candidate, current)) {
     return { table, isNewBest: false, best: current }
   }
@@ -69,7 +88,7 @@ export function recordScore(
   return {
     table: {
       ...table,
-      [gameId]: { value, updatedAt: nowMs },
+      [scoreKey(gameId, variant)]: { value, updatedAt: nowMs },
     },
     isNewBest: true,
     best: value,

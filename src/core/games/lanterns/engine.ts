@@ -63,7 +63,7 @@ export interface LanternCard {
 
 export interface LanternsState {
   cols: 4
-  rows: 3 | 4
+  rows: 3 | 4 | 5
   cards: LanternCard[]
   /** Index of the first face-up unmatched card awaiting a second pick, else null. */
   firstIndex: number | null
@@ -72,7 +72,7 @@ export interface LanternsState {
   /** Total pairs attempted (increments on every second card flip). */
   moves: number
   matchedPairs: number
-  totalPairs: 6 | 8
+  totalPairs: 6 | 8 | 10
   puzzleNumber: number
   solved: boolean
   rngState: number
@@ -85,12 +85,14 @@ export interface CreateLanternsOptions {
 }
 
 export const CALM_THRESHOLD = 0.5
+/** Below this, the largest board: Hard (calm 0) gets its own size (ISS-17). */
+export const HARD_THRESHOLD = 0.15
 
-/** Choose grid dimensions from calm: 4×4 (8 pairs) below 0.5, calming to 4×3 (6 pairs) at >= 0.5. */
-export function layoutForCalm(calm: number): { cols: 4; rows: 3 | 4; totalPairs: 6 | 8 } {
-  return calm >= CALM_THRESHOLD
-    ? { cols: 4, rows: 3, totalPairs: 6 }
-    : { cols: 4, rows: 4, totalPairs: 8 }
+/** Grid from calm: 4×5 (10 pairs) for Hard, 4×4 (8 pairs) for Medium, 4×3 (6 pairs) from 0.5 (Easy, or late in a wind-down). */
+export function layoutForCalm(calm: number): { cols: 4; rows: 3 | 4 | 5; totalPairs: 6 | 8 | 10 } {
+  if (calm >= CALM_THRESHOLD) return { cols: 4, rows: 3, totalPairs: 6 }
+  if (calm >= HARD_THRESHOLD) return { cols: 4, rows: 4, totalPairs: 8 }
+  return { cols: 4, rows: 5, totalPairs: 10 }
 }
 
 /** Look up the display label for a sigil ID. */

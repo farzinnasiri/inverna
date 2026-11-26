@@ -12,8 +12,8 @@ import { kvStorage } from './storage'
 
 interface HighScoresState {
   table: HighScoreTable
-  record: (gameId: GameId, candidate: number) => { isNewBest: boolean; best: number | null }
-  bestOf: (gameId: GameId) => number | null
+  record: (gameId: GameId, candidate: number, variant?: string) => { isNewBest: boolean; best: number | null }
+  bestOf: (gameId: GameId, variant?: string) => number | null
   clearGame: (gameId: GameId) => void
   clearAll: () => void
 }
@@ -22,18 +22,19 @@ export const useHighScores = create<HighScoresState>()(
   persist(
     (set, get) => ({
       table: EMPTY_HIGH_SCORES,
-      record: (gameId, candidate) => {
-        const res = recordScore(get().table, gameId, candidate, Date.now())
+      record: (gameId, candidate, variant) => {
+        const res = recordScore(get().table, gameId, candidate, Date.now(), variant)
         if (res.isNewBest) {
           set({ table: res.table })
         }
         return { isNewBest: res.isNewBest, best: res.best }
       },
-      bestOf: (gameId) => bestFor(get().table, gameId),
+      bestOf: (gameId, variant) => bestFor(get().table, gameId, variant),
       clearGame: (gameId) =>
         set((s) => {
+          // Every size of this game.
           const next = { ...s.table }
-          delete next[gameId]
+          for (const key of Object.keys(next)) if (key === gameId || key.startsWith(`${gameId}:`)) delete next[key]
           return { table: next }
         }),
       clearAll: () => set({ table: EMPTY_HIGH_SCORES }),

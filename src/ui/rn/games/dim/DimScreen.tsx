@@ -39,11 +39,13 @@ function isValidSave(value: unknown): value is DimSave {
   const s = v.state
   if (s.size !== 4 && s.size !== 5) return false
   const n = s.size * s.size
+  const isLights = (a: unknown) => Array.isArray(a) && a.length === n && a.every((v) => v === 0 || v === 1)
+  // Undo entries are light arrays of the same board; anything else isn't loaded.
+  const undoOk = v.undoStack === undefined || (Array.isArray(v.undoStack) && v.undoStack.every(isLights))
   return (
-    Array.isArray(s.lights) &&
-    s.lights.length === n &&
-    Array.isArray(s.initialLights) &&
-    s.initialLights.length === n &&
+    undoOk &&
+    isLights(s.lights) &&
+    isLights(s.initialLights) &&
     typeof s.par === 'number' &&
     typeof s.moves === 'number' &&
     typeof s.puzzleNumber === 'number' &&
@@ -103,7 +105,8 @@ function DimStone({
   }, [pressedAt, squeeze, reduceMotion])
 
   useEffect(() => {
-    if (!hinted) {
+    // Rests behind Pause too, not only when the hint is gone (ISS-17).
+    if (!hinted || disabled) {
       cancelAnimation(ring)
       ring.set(withTiming(0, { duration: 160 }))
       return
@@ -114,7 +117,7 @@ function DimStone({
     }
     ring.set(withRepeat(withTiming(1, { duration: 1100, easing: Easing.inOut(Easing.sin) }), -1, true))
     return () => cancelAnimation(ring)
-  }, [hinted, ring, reduceMotion])
+  }, [hinted, disabled, ring, reduceMotion])
 
   const lightStyle = useAnimatedStyle(() => ({ opacity: glow.get() }))
   const bodyStyle = useAnimatedStyle(() => ({ transform: [{ scale: squeeze.get() }] }))

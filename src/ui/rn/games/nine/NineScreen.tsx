@@ -126,12 +126,12 @@ export function NineScreen({ onExit }: GameScreenProps) {
   const calm = useCalm()
   const { cue, haptic } = useFeedback()
 
-  const [fallback] = useState<NineSave>(() => ({
-    version: 1,
-    state: createNine({ seed: Date.now() >>> 0, calm, difficulty: 'medium' }),
-    completed: 0,
-  }))
-  const [save, setSave] = useGameSave('nine', fallback, isValidSave)
+  // A fresh puzzle is only generated when there's no save to continue (ISS-17).
+  const [save, setSave] = useGameSave(
+    'nine',
+    (): NineSave => ({ version: 1, state: createNine({ seed: Date.now() >>> 0, calm, difficulty: 'medium' }), completed: 0 }),
+    isValidSave,
+  )
   const state = save.state
 
   const [started, setStarted] = useState(false)
@@ -205,14 +205,21 @@ export function NineScreen({ onExit }: GameScreenProps) {
       const next = selectCell(curr, idx)
       if (next === curr) return
       stateRef.current = next
-      setSave((prev) => ({
-        version: 1,
-        state: next,
-        completed: isValidSave(prev) ? prev.completed : 0,
-      }))
-      if (idx !== null) cue('tap', 0.35)
+      // Selecting a cell changes nothing worth a disk write on its own; it goes with the next one.
+      setSave(
+        (prev) => ({
+          version: 1,
+          state: next,
+          completed: isValidSave(prev) ? prev.completed : 0,
+        }),
+        { defer: true },
+      )
+      if (idx !== null) {
+        cue('tap', 0.35)
+        haptic('tick')
+      }
     },
-    [paused, setSave, cue],
+    [paused, setSave, cue, haptic],
   )
 
   const handleDigit = useCallback(

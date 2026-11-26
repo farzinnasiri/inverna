@@ -293,11 +293,13 @@ describe('Thread path editing state machine', () => {
 })
 
 describe('Calm progression & serialisation', () => {
-  it('progresses from 7×7/6×6 at low calm to 6×6 at mid calm and 5×5 at high calm', () => {
+  // Hard (calm 0) and Medium (0.3) used to land on the same 7×7/6×6 pool.
+  it('progresses from 7×7/6×6 for Hard to 6×6 for Medium and 5×5 for Easy', () => {
     expect(sizeForCalm(0, 1)).toBe(7)
-    expect(sizeForCalm(0.2, 2)).toBe(6)
-    expect(sizeForCalm(0.34, 3)).toBe(7)
+    expect(sizeForCalm(0.1, 2)).toBe(6)
+    expect(sizeForCalm(0.14, 3)).toBe(7)
 
+    expect(sizeForCalm(0.3, 1)).toBe(6)
     expect(sizeForCalm(0.35, 1)).toBe(6)
     expect(sizeForCalm(0.5, 2)).toBe(6)
     expect(sizeForCalm(0.64, 3)).toBe(6)

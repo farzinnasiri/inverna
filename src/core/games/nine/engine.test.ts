@@ -289,3 +289,22 @@ describe('nine difficulty with calm', () => {
     expect(count(1)).toBeLessThan(46)
   })
 })
+
+describe('nine undo', () => {
+  // ISS-17: undo put the digits back but left the move and hint counts as they were.
+  it('takes back the move and hint counts with the step', async () => {
+    const { createNine, selectCell, inputDigit, hintNine, undoNine } = await import('./engine')
+    let s = createNine({ seed: 9, calm: 0.3, difficulty: 'easy' })
+    const empty = s.givens.findIndex((g) => !g)
+    s = selectCell(s, empty)
+    const before = { moves: s.moves, hintsUsed: s.hintsUsed }
+    s = inputDigit(s, s.solution[empty]! === 9 ? 8 : 9)
+    expect(s.moves).toBe(before.moves + 1)
+    s = undoNine(s)
+    expect(s.moves).toBe(before.moves)
+    s = hintNine(s)
+    expect(s.hintsUsed).toBe(before.hintsUsed + 1)
+    s = undoNine(s)
+    expect(s.hintsUsed).toBe(before.hintsUsed)
+  })
+})

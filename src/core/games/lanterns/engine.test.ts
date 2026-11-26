@@ -42,7 +42,7 @@ describe('Lanterns engine — initialisation & pair distribution', () => {
     expect(a).toEqual(b)
 
     for (let seed = 1; seed <= 20; seed++) {
-      const s = createLanterns({ seed: seed * 3571, calm: 0 })
+      const s = createLanterns({ seed: seed * 3571, calm: 0.3 })
       expect(s.cols).toBe(4)
       expect(s.rows).toBe(4)
       expect(s.totalPairs).toBe(8)
@@ -67,16 +67,18 @@ describe('Lanterns engine — initialisation & pair distribution', () => {
   })
 })
 
-describe('Lanterns engine — calm sizing (4×4 → 4×3)', () => {
-  it('selects 4×4 (8 pairs) when calm < 0.5 and 4×3 (6 pairs) when calm >= 0.5', () => {
-    expect(layoutForCalm(0)).toEqual({ cols: 4, rows: 4, totalPairs: 8 })
+describe('Lanterns engine — calm sizing (4×5 → 4×4 → 4×3)', () => {
+  it('gives Hard, Medium and Easy each their own board', () => {
+    // Hard is calm 0, Medium 0.3, Easy 0.7 (useCalm).
+    expect(layoutForCalm(0)).toEqual({ cols: 4, rows: 5, totalPairs: 10 })
+    expect(layoutForCalm(0.3)).toEqual({ cols: 4, rows: 4, totalPairs: 8 })
     expect(layoutForCalm(0.49)).toEqual({ cols: 4, rows: 4, totalPairs: 8 })
     expect(layoutForCalm(0.5)).toEqual({ cols: 4, rows: 3, totalPairs: 6 })
     expect(layoutForCalm(1)).toEqual({ cols: 4, rows: 3, totalPairs: 6 })
   })
 
   it('produces 12 cards (6 exact pairs) on calm nextPuzzle', () => {
-    const first = createLanterns({ seed: 88, calm: 0.1 })
+    const first = createLanterns({ seed: 88, calm: 0.3 })
     expect(first.cards).toHaveLength(16)
 
     const second = nextPuzzle(first, 0.75)

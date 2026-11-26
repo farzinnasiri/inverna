@@ -374,7 +374,8 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
           hapticRef.current('complete')
           scheduleCompletionRef.current()
         } else if (pair && !isPairConnected(pair, prev.paths[active]) && isPairConnected(pair, next.paths[active])) {
-          cueRef.current('place', 0.85)
+          // A pair joined is a small clear, like the other games (ISS-17).
+          cueRef.current('clear', 0.85)
           hapticRef.current('reward')
         } else {
           cueRef.current('tap', 0.42)

@@ -110,10 +110,14 @@ export function ContinuePreview({ id, demo, size = 48 }: { id: GameId; demo?: bo
   }
 
   if (id === 'cascade') {
+    // The board is rows of standing tiles (or gaps); there was never a `tiles` list (ISS-17).
     const save = readJSON<{
-      state?: { cols?: number; rows?: number; tiles?: { row: number; col: number; color: string }[] }
+      state?: { cols?: number; rows?: number; board?: ({ row: number; col: number; color: string } | null)[][] }
     }>('game:cascade', {})
-    const tiles = save.state?.tiles
+    const board = save.state?.board
+    const tiles = Array.isArray(board)
+      ? board.flatMap((r) => (Array.isArray(r) ? r : [])).filter((t): t is { row: number; col: number; color: string } => Boolean(t))
+      : null
     const cols = save.state?.cols ?? 9
     const rows = save.state?.rows ?? 11
     if (!tiles || tiles.length === 0) return null

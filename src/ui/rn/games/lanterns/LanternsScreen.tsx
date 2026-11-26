@@ -53,13 +53,13 @@ function isValidSave(v: unknown): v is LanternsSave {
   const st = s.state
   return (
     st.cols === 4 &&
-    (st.rows === 3 || st.rows === 4) &&
+    (st.rows === 3 || st.rows === 4 || st.rows === 5) &&
     Array.isArray(st.cards) &&
     st.cards.length === st.cols * st.rows &&
     st.cards.every(isValidCard) &&
     typeof st.moves === 'number' &&
     typeof st.matchedPairs === 'number' &&
-    (st.totalPairs === 6 || st.totalPairs === 8) &&
+    (st.totalPairs === 6 || st.totalPairs === 8 || st.totalPairs === 10) &&
     typeof st.puzzleNumber === 'number' &&
     typeof st.solved === 'boolean' &&
     typeof st.rngState === 'number' &&
@@ -485,7 +485,6 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const handleNext = useCallback(() => {
@@ -504,7 +503,6 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const moveFocus = useCallback((dCol: number, dRow: number) => {
@@ -584,6 +582,7 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
     <GameShell
       gameId="lanterns"
       score={state.moves}
+      scoreVariant={`${state.totalPairs}-pairs`}
       commitScore={state.solved}
       stats={[
         { label: 'Pairs', value: `${state.matchedPairs}/${state.totalPairs}` },
