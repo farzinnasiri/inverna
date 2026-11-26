@@ -19,3 +19,34 @@ index d2a5b9f15eff9f8c361f1bb5460717f8d69513f7..04ca29edce7648e68dc8c522e1f12367
      'OTHER_CFLAGS' => "$(inherited) #{fabric_flags} #{version_flag} #{ffmpeg_flag} #{static_external_libs_flag}",
      # CocoaPods links a pod's own vendored dynamic frameworks into the targets that depend on it,
      # not into the pod's own target. A dynamic RNAudioAPI framework
+diff --git a/common/cpp/audioapi/core/BaseAudioContext.cpp b/common/cpp/audioapi/core/BaseAudioContext.cpp
+index 3be3f454e309492b94b01697489a477f0d0481ff..968b4824d0999d33c6740721ed3d95ea93acecb6 100644
+--- a/common/cpp/audioapi/core/BaseAudioContext.cpp
++++ b/common/cpp/audioapi/core/BaseAudioContext.cpp
+@@ -5,7 +5,7 @@
+ #include <audioapi/events/IAudioEventHandlerRegistry.h>
+ #include <audioapi/utils/AudioArray.hpp>
+ #include <audioapi/utils/CircularArray.hpp>
+-#ifdef DEBUG
++#ifdef RN_AUDIO_API_THREAD_GUARD // Inverna: was DEBUG; see RNAudioAPI.podspec
+ #include <audioapi/utils/AudioThreadGuard.h>
+ #endif
+ #include <memory>
+@@ -129,7 +129,7 @@ std::shared_ptr<ConvolverThreadPool> BaseAudioContext::getConvolverThreadPool()
+ }
+ 
+ void BaseAudioContext::processGraph(DSPAudioBuffer *buffer, int numFrames) {
+-#ifdef DEBUG
++#ifdef RN_AUDIO_API_THREAD_GUARD // Inverna: was DEBUG; see RNAudioAPI.podspec
+   test::AudioThreadGuard::Scope guard;
+ #endif
+   // ongoing modifications of node's properties in graph (f.e. setting param's automation event)
+@@ -151,7 +151,7 @@ void BaseAudioContext::processGraph(DSPAudioBuffer *buffer, int numFrames) {
+   }
+ 
+   currentSampleFrame_.fetch_add(numFrames, std::memory_order_release);
+-#ifdef DEBUG
++#ifdef RN_AUDIO_API_THREAD_GUARD // Inverna: was DEBUG; see RNAudioAPI.podspec
+   if (!guard.clean()) {
+     // printf("Allocations on audio thread detected!\n");
+   }
