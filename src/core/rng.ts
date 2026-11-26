@@ -14,7 +14,8 @@ export interface Rng {
   state(): number
 }
 
-export function createRng(seed: number = Date.now() >>> 0): Rng {
+/** The seed is required: the core never reads the clock, so the same seed always gives the same game. */
+export function createRng(seed: number): Rng {
   let s = seed >>> 0
   const next = () => {
     s = (s + 0x6d2b79f5) >>> 0

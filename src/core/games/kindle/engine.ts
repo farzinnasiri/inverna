@@ -55,7 +55,8 @@ export interface KindleState {
 }
 
 export interface CreateKindleOptions {
-  seed?: number
+  /** Required: the core never reads the clock (pass `Date.now() >>> 0` from the screen). */
+  seed: number
   calm?: number
 }
 
@@ -63,7 +64,7 @@ export type KindleAction =
   | { type: 'move'; dir: Direction; calm: number }
   | { type: 'undo' }
   | { type: 'makeRoom' }
-  | { type: 'restart'; seed?: number; calm?: number }
+  | { type: 'restart'; seed: number; calm?: number }
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0
@@ -165,8 +166,8 @@ export function isStuck(tiles: readonly Tile[]): boolean {
 }
 
 /** Create a fresh 4×4 Kindle board with two opening ember tiles. */
-export function createKindle(opts: CreateKindleOptions = {}): KindleState {
-  const seed = opts.seed ?? (Date.now() >>> 0)
+export function createKindle(opts: CreateKindleOptions): KindleState {
+  const seed = opts.seed
   const calm = clamp01(opts.calm ?? 0)
   const rng = createRng(seed)
   const fourProb = fourSpawnProbability(calm)

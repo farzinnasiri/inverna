@@ -3,7 +3,7 @@ SHELL := /bin/bash
 
 PORT ?= 8081
 
-.PHONY: help install dev dev-portless expo-dev dev-client web start expo ios android check typecheck test build-web deploy doctor \
+.PHONY: lint help install dev dev-portless expo-dev dev-client web start expo ios android check typecheck test build-web deploy doctor \
 	build-ios-dev build-ios-sim build-ios-preview build-ios-beta submit-beta build-ios-release submit-release \
 	build-ios-testflight submit-testflight submit-latest builds credentials
 
@@ -84,7 +84,10 @@ credentials: ## Verify GitHub Actions signing secrets for iOS
 
 # --- Quality --------------------------------------------------------------
 
-check: typecheck test ## Run typechecks (app + zero-DOM core) and all Vitest suites
+check: typecheck lint test ## Typechecks, lint, and all tests
+
+lint: ## Lint for real bugs (hooks, purity of src/core, unawaited promises)
+	pnpm run lint
 
 typecheck: ## Type check the app, the pure src/core, and our .web files
 	pnpm run typecheck

@@ -14,6 +14,7 @@
     "android": "expo start --android",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.core.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
+    "lint": "eslint .",
     "build": "node scripts/export-web.mjs",
     "deploy": "pnpm build && npx wrangler deploy",
     "doctor": "pnpm dlx expo-doctor",
@@ -51,7 +52,10 @@
   "devDependencies": {
     "@types/node": "^24.19.2",
     "@types/react": "~19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "typescript": "~6.0.3",
+    "typescript-eslint": "^8.74.0",
     "vitest": "^4.1.11"
   }
 }
