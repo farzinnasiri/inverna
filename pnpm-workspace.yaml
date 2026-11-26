@@ -1,0 +1,2 @@
+patchedDependencies:
+  react-native-audio-api: patches/react-native-audio-api.patch

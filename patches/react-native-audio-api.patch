@@ -1,0 +1,21 @@
+diff --git a/RNAudioAPI.podspec b/RNAudioAPI.podspec
+index d2a5b9f15eff9f8c361f1bb5460717f8d69513f7..04ca29edce7648e68dc8c522e1f123670e987178 100644
+--- a/RNAudioAPI.podspec
++++ b/RNAudioAPI.podspec
+@@ -131,8 +131,14 @@ Pod::Spec.new do |s|
+     .join(' '),
+     "CLANG_CXX_LANGUAGE_STANDARD" => "c++20",
+     "GCC_PREPROCESSOR_DEFINITIONS" => '$(inherited) HAVE_ACCELERATE=1',
+-    "GCC_PREPROCESSOR_DEFINITIONS[config=Debug]" => '$(inherited) HAVE_ACCELERATE=1 DEBUG=1',
+-    "EXCLUDED_SOURCE_FILE_NAMES[config=Release]" => 'AudioThreadGuard.cpp',
++    # Inverna: development builds compile the audio engine like release. The
++    # Debug setup (no optimisation, DEBUG=1, and AudioThreadGuard, which
++    # replaces global operator new and calls getrusage on every 128-frame
++    # slice) can't keep up on a hot, charging iPhone and crackles; release
++    # plays cleanly. Drop this patch on a library upgrade if Debug is cheap.
++    "GCC_PREPROCESSOR_DEFINITIONS[config=Debug]" => '$(inherited) HAVE_ACCELERATE=1 NDEBUG=1',
++    "GCC_OPTIMIZATION_LEVEL[config=Debug]" => 's',
++    "EXCLUDED_SOURCE_FILE_NAMES" => 'AudioThreadGuard.cpp',
+     'OTHER_CFLAGS' => "$(inherited) #{fabric_flags} #{version_flag} #{ffmpeg_flag} #{static_external_libs_flag}",
+     # CocoaPods links a pod's own vendored dynamic frameworks into the targets that depend on it,
+     # not into the pod's own target. A dynamic RNAudioAPI framework
