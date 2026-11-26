@@ -26,6 +26,8 @@ export interface NeuroEngineHooks {
   onPrepareSession?: () => Promise<void> | void
   /** Called when ambient sound plays, pauses, or fully stops (Lock Screen / Dynamic Island). */
   onNowPlayingUpdate?: (meta: NowPlayingMeta | null, state: NowPlayingState) => void
+  /** The sleep timer ran out and everything stopped: let the OS put audio to sleep. */
+  onIdle?: () => void
   /** Wire OS remote pause/play events back into the engine. */
   bindRemoteControls?: (handlers: {
     onPause: () => void
@@ -141,6 +143,11 @@ export function createNeuroSoundEngine({
   const externalPauseListeners = new Set<() => void>()
   const externalPlayListeners = new Set<(mix: Mix) => void>()
   const interruptionListeners = new Set<(event: InterruptionEvent) => void>()
+  const expiredListeners = new Set<() => void>()
+  /** A silent source that ends at the deadline; its `ended` event stops everything. */
+  let expiry: { source: OscillatorNodeLike; mute: GainNodeLike } | null = null
+  /** Bumped on every arm or cancel, so a stale `ended` does nothing. */
+  let expiryGeneration = 0
   let stopTimer: ReturnType<typeof setTimeout> | null = null
   let remoteBound = false
 
@@ -490,11 +497,55 @@ export function createNeuroSoundEngine({
     } catch {
       /* fallback handled by JS SessionCurtain */
     }
+    armExpiry(g, fadeEnd)
+  }
+
+  const clearExpiry = () => {
+    expiryGeneration++
+    if (!expiry) return
+    expiry.source.onended = null
+    safeStop(expiry.source)
+    safeDisconnect(expiry.source)
+    safeDisconnect(expiry.mute)
+    expiry = null
+  }
+
+  const expire = (g: AudioGraph) => {
+    stopAmbient(0, true)
+    // Suspend now rather than on a timer: timers may be asleep.
+    if (g.ctx.state === 'running' && typeof g.ctx.suspend === 'function') void g.ctx.suspend().catch(() => {})
+    hooks?.onIdle?.()
+    for (const fn of expiredListeners) fn()
+  }
+
+  const armExpiry = (g: AudioGraph, endAt: number) => {
+    clearExpiry()
+    const generation = expiryGeneration
+    try {
+      const source = g.ctx.createOscillator()
+      const mute = g.ctx.createGain()
+      setParam(mute.gain, 0)
+      source.connect(mute)
+      mute.connect(g.ctx.destination)
+      source.onended = () => {
+        if (generation !== expiryGeneration) return
+        safeDisconnect(source)
+        safeDisconnect(mute)
+        expiry = null
+        expire(g)
+      }
+      source.start(g.ctx.currentTime)
+      source.stop(endAt)
+      expiry = { source, mute }
+    } catch {
+      /* JS still stops it when it next runs */
+    }
   }
 
   const stopAmbient = (fadeSeconds = 1.5, hideNotification = false) => {
     running = false
     clearStopTimer()
+    clearExpiry()
     hooks?.onNowPlayingUpdate?.(nowPlayingMeta, hideNotification ? 'stopped' : 'paused')
     if (!graph) return
 
@@ -691,6 +742,7 @@ export function createNeuroSoundEngine({
       const g = ensureGraph()
       if (!g) return
       if (!Number.isFinite(delaySeconds) || delaySeconds <= 0) {
+        clearExpiry()
         clearSleepFadeOnGraph(g, 0.2)
         return
       }
@@ -698,8 +750,16 @@ export function createNeuroSoundEngine({
     },
 
     cancelSleepFade() {
+      clearExpiry()
       if (!graph) return
       clearSleepFadeOnGraph(graph, 0.2)
+    },
+
+    onExpired(listener) {
+      expiredListeners.add(listener)
+      return () => {
+        expiredListeners.delete(listener)
+      }
     },
 
     stop(fadeSeconds = 1.5, opts?: { hideNotification?: boolean }) {

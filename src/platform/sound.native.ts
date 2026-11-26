@@ -143,6 +143,12 @@ export function createPlatformSoundEngine(): SoundEngine {
     hooks: {
       onPrepareSession: prepareSession,
       onNowPlayingUpdate: updateNowPlaying,
+      // The sleep timer ran out: hand the audio session back so iOS can let the app sleep.
+      onIdle: () => {
+        if (!sessionActive) return
+        sessionActive = false
+        void AudioManager.setAudioSessionActivity(false).catch(() => {})
+      },
       bindRemoteControls: ({ onPause, onPlay, onInterruption }) => {
         const subs: ({ remove?: () => void } | undefined)[] = []
         try {

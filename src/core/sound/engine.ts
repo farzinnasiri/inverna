@@ -32,6 +32,12 @@ export interface SoundEngine {
   scheduleSleepFade?(delaySeconds: number, fadeSeconds?: number): void
   /** Cancel any pending native sleep-timer fade-out and restore unity gain. */
   cancelSleepFade?(): void
+  /**
+   * The sleep fade reached its end and the engine stopped itself: sources
+   * gone, context suspended, Now Playing hidden. Comes from the audio thread,
+   * so it arrives even when JS timers are asleep on a locked phone.
+   */
+  onExpired?(listener: () => void): () => void
   stop(fadeSeconds?: number, opts?: { hideNotification?: boolean }): void
   cue(name: CueName, volume?: number): void
   setCuesEnabled(enabled: boolean): void

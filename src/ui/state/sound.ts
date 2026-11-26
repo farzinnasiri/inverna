@@ -151,6 +151,8 @@ export const useSound = create<SoundState>()((set, get) => {
     const current = get().mix
     set({ playing: true, stopAt, interrupted: false, ...(current && isSilent(current) ? { mix } : null) })
   })
+  // The deadline came while JS may have been asleep: the engine has already stopped.
+  sound.onExpired?.(() => set({ playing: false, stopAt: null, interrupted: false }))
   // A call or Siri: the deadline stays. Playing again afterwards only if
   // nothing stopped the sound meanwhile and the deadline hasn't passed.
   sound.onInterruption?.((event) => {

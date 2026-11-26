@@ -163,6 +163,9 @@ class MockOscillatorNode extends MockAudioNode {
   stopped = false
   periodicWave: unknown = null
   onended: (() => void) | null = null
+  /** When a stop in the future will end it (fired by `endDue`). */
+  endsAt: number | null = null
+  clock: () => number = () => 0
 
   setPeriodicWave(wave: unknown) {
     this.periodicWave = wave
@@ -172,9 +175,21 @@ class MockOscillatorNode extends MockAudioNode {
     this.started = true
   }
 
-  stop() {
+  stop(when?: number) {
     this.stopped = true
+    if (when !== undefined && when > this.clock()) {
+      this.endsAt = when
+      return
+    }
     this.onended?.()
+  }
+
+  /** The audio clock reached this node's stop time. */
+  endDue() {
+    if (this.endsAt !== null && this.endsAt <= this.clock()) {
+      this.endsAt = null
+      this.onended?.()
+    }
   }
 }
 
@@ -276,6 +291,7 @@ class MockAudioContext implements AudioContextLike {
 
   createOscillator() {
     const node = new MockOscillatorNode()
+    node.clock = () => this.currentTime
     this.oscillators.push(node)
     return node
   }
@@ -434,6 +450,52 @@ describe('createNeuroSoundEngine — the sleep fade', () => {
     engine.scheduleSleepFade!(60, 12)
     const ctx = contexts[0]!
     expect(sleepFadeGain(ctx, ctx.currentTime + 60)).toBeDefined()
+  })
+
+  // ISS-03.3: the deadline stops everything from the audio thread, even if JS timers sleep.
+  it('stops, suspends and says so when the fade reaches its end', () => {
+    const idle = vi.fn()
+    const expired = vi.fn()
+    const ctxs: MockAudioContext[] = []
+    const engine = createNeuroSoundEngine({
+      createContext: () => {
+        const c = new MockAudioContext({ initialState: 'running' })
+        ctxs.push(c)
+        return c
+      },
+      hooks: { onIdle: idle },
+    })
+    engine.onExpired?.(expired)
+    engine.setMix(PRESETS[0]!.mix, 0.2)
+    engine.scheduleSleepFade!(60, 12)
+    const ctx = ctxs[0]!
+    ctx.currentTime += 60
+    for (const o of ctx.oscillators) o.endDue()
+    expect(engine.isRunning).toBe(false)
+    expect(ctx.suspendCalls).toBe(1)
+    expect(idle).toHaveBeenCalledTimes(1)
+    expect(expired).toHaveBeenCalledTimes(1)
+  })
+
+  it('a cancelled or moved deadline never stops the sound', () => {
+    const expired = vi.fn()
+    const { engine, contexts } = makeTestEngine({ initialState: 'running' })
+    engine.onExpired?.(expired)
+    engine.setMix(PRESETS[0]!.mix, 0.2)
+    engine.scheduleSleepFade!(60, 12)
+    const ctx = contexts[0]!
+    const first = ctx.oscillators.find((o) => o.endsAt !== null && Math.abs(o.endsAt - (ctx.currentTime + 60)) < 1e-6)!
+    const fire = first.onended
+    engine.scheduleSleepFade!(600, 12)
+    ctx.currentTime += 60
+    fire?.()
+    first.endDue()
+    expect(engine.isRunning).toBe(true)
+    engine.cancelSleepFade!()
+    ctx.currentTime += 600
+    for (const o of ctx.oscillators) o.endDue()
+    expect(engine.isRunning).toBe(true)
+    expect(expired).not.toHaveBeenCalled()
   })
 
   // ISS-03.1: an edit during the last 12 s used to swell the sound back to full.
@@ -660,6 +722,9 @@ describe('createNeuroSoundEngine — scale-quantized harmonic game cues', () => 
     const fLydianSet = new Set(HARMONIC_KEYS['f-lydian'].scaleHz)
     const names: CueName[] = ['tap', 'place', 'clear', 'chime', 'undo']
     for (const name of names) {
+      // Let the previous cue's voices finish first.
+      contexts[0]!.currentTime += 5
+      for (const o of contexts[0]!.oscillators) o.endDue()
       const before = contexts[0]!.oscillators.length
       engine.cue(name, 0.9)
       const ctx = contexts[0]!
