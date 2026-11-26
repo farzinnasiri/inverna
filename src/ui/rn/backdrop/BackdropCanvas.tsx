@@ -4,8 +4,8 @@
  * the UI thread.
  *
  * Cost control:
- * - The simulation and redraw run at 30 fps while playing and ~20 fps idle,
- *   not the display rate.
+ * - The simulation and redraw step on the shared ambient clock (ambientClock.ts):
+ *   30 fps while playing and 15 fps idle, never the display rate.
  * - The field shader renders at ~1 pixel per 1.5pt and is scaled up by the
  *   compositor; everything in it is soft, so the upscale is invisible.
  * - Particles are one drawAtlas call; paints and transforms are reused.
@@ -35,15 +35,18 @@ import {
   StrokeJoin,
   createPicture,
 } from '@shopify/react-native-skia'
-import { makeMutable, useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated'
+import { makeMutable, useAnimatedReaction, useDerivedValue, useSharedValue } from 'react-native-reanimated'
 import { sceneIndex, type BackdropId } from '@/core/backdrop/scenes'
 import { createSim, frontEdge, prewarm, simSnap, simStep, type MotifCue, type Sim, type SimEnv } from '@/core/backdrop/sim'
 import { onMotifPhrase } from '@/platform/audio/motifEvents'
+import { useAmbientTime } from '../ambientClock'
 import { drawFrame, fieldUniforms, makeGfx, type Gfx, type GfxEnums } from './draw'
 import { FIELD_SKSL } from './fieldShader'
 
 export interface BackdropCanvasProps {
   backdrop: BackdropId
+  /** Other scenes woven in for a hand-made mix: flat [scene index, weight] pairs (`resolveBlend`). */
+  blend?: readonly number[]
   playing: boolean
   /** Breath swell rate from the descent arc. */
   breathHz: number
@@ -97,12 +100,18 @@ function subscribeMotifCues() {
   })
 }
 
-export default function BackdropCanvas({ backdrop, playing, breathHz, descent, reduced, active }: BackdropCanvasProps) {
+export default function BackdropCanvas({ backdrop, blend, playing, breathHz, descent, reduced, active }: BackdropCanvasProps) {
   const { width: W, height: H } = useWindowDimensions()
   const scene = sceneIndex(backdrop)
   const seed = useMemo(() => Date.now() >>> 0, [])
 
   const target = useSharedValue(scene)
+  const blendSV = useSharedValue<number[]>(blend ? [...blend] : [])
+  const blendKey = blend ? blend.map((v) => v.toFixed(2)).join(',') : ''
+  useEffect(() => {
+    blendSV.set(blend ? [...blend] : [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on content, not identity
+  }, [blendKey, blendSV])
   const dims = useSharedValue({ W, H })
   const reducedSV = useSharedValue(reduced)
   const env = useSharedValue<SimEnv>({ timeScale: 1, intensity: 1, breathHz })
@@ -130,8 +139,12 @@ export default function BackdropCanvas({ backdrop, playing, breathHz, descent, r
   }, [playing, descent, breathHz, env, frameInterval])
   useEffect(subscribeMotifCues, [])
 
-  const clock = useFrameCallback((frame) => {
+  const time = useAmbientTime(active)
+  useAnimatedReaction(
+    () => time.get(),
+    (now, prev) => {
     'worklet'
+    if (prev === null) return
     const d = dims.get()
     let rs = state.get()
     if (!rs || rs.sim.W !== d.W || rs.sim.H !== d.H) {
@@ -151,20 +164,20 @@ export default function BackdropCanvas({ backdrop, playing, breathHz, descent, r
       }
       return
     }
-    rs.acc += Math.min(0.25, (frame.timeSincePreviousFrame ?? 16) / 1000)
-    // 0.9: tick on every 2nd vsync at 60 Hz (4th at 120 Hz) instead of jittering to the 3rd.
+    rs.acc += Math.min(0.25, Math.max(0, now - prev))
+    // 0.9: playing steps every clock tick (30 fps), idle every second one (15 fps).
     if (rs.acc < frameInterval.get() * 0.9) return
     const dt = Math.min(rs.acc, 0.1)
     rs.acc = 0
-    simStep(s, dt, env.get(), target.get(), cue.get())
+    simStep(s, dt, env.get(), target.get(), cue.get(), blendSV.get())
     tick.set(tick.get() + 1)
-  }, false)
+    },
+  )
 
   useEffect(() => {
-    clock.setActive(active)
     // Coming back into view: draw the shared scene where it is now.
     if (active) tick.set(tick.get() + 1)
-  }, [active, clock, tick])
+  }, [active, tick])
 
   const pictureBounds = useMemo(() => Skia.XYWHRect(0, 0, W, H), [W, H])
   const picture = useDerivedValue(() => {

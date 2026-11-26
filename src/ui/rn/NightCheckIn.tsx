@@ -19,9 +19,9 @@ import {
 } from 'lucide-react-native'
 import Animated from 'react-native-reanimated'
 import { nightKey } from '@/core/night'
+import { feel } from '@/ui/feel'
 import { presetById } from '@/core/sound/catalog'
 import { DAY_ANSWERS, NOW_ANSWERS, planTonight, type DayAnswer, type NowAnswer } from '@/core/tonight'
-import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { checkIn as copy, soundsHelp } from '@/ui/copy'
 import { useNav } from '@/ui/state/nav'
@@ -60,7 +60,7 @@ const NOW_ICON: Record<NowAnswer, LucideIcon> = {
 
 /**
  * Two plain questions near bedtime: how was your day, how do you feel now.
- * Lull decides the rest (which games lead, which sound) and shows two sounds
+ * Inverna decides the rest (which games lead, which sound) and shows two sounds
  * to try. Opened automatically on Play near bedtime, from a reminder, or from
  * "Help me pick a sound" on Sounds. One complete question per step, nothing
  * around it; six answers each, so the grid is even.
@@ -70,7 +70,6 @@ export function NightCheckIn() {
   const reduced = useReducedMotion()
   const mode = useNav((s) => s.checkIn)
   const setMode = useNav((s) => s.setCheckIn)
-  const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const playing = useSound((s) => s.playing)
   const presetId = useSound((s) => s.presetId)
@@ -90,9 +89,7 @@ export function NightCheckIn() {
     setSuggested([])
   }, [mode])
 
-  const tap = (kind: 'selection' | 'light' = 'selection') => {
-    if (hapticsOn) haptics.play(kind)
-  }
+  const tap = () => feel('tick')
 
   const close = () => {
     // Asked once a night, answered or not.
@@ -123,7 +120,7 @@ export function NightCheckIn() {
   }
 
   const toggleSound = (id: string) => {
-    tap('light')
+    tap()
     if (playing && presetId === id) {
       stopSound(0.6)
       return

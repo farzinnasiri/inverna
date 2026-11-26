@@ -38,10 +38,26 @@ export const SLEEP_FACTORS: readonly SleepFactor[] = [
   'waking',
 ]
 
-/** How someone likes to switch off with a game. Any number, first picked counts most. */
-export type GameStyle = 'soothing' | 'puzzle' | 'quick'
-export const GAME_STYLES: readonly GameStyle[] = ['soothing', 'puzzle', 'quick']
-const STYLE_INTENT: Record<GameStyle, NightIntent> = { soothing: 'melt', puzzle: 'focus', quick: 'light' }
+/**
+ * What they usually do on their phone in bed. Asked instead of "which kind of
+ * game helps you switch off", which everyone answers "slow and soothing" in a
+ * sleep app. Real habits say more, and Inverna's games stand in for them:
+ * - short video (Instagram, TikTok, YouTube): quick rounds with small rewards;
+ * - X or the news, or reading: something to think about, a puzzle;
+ * - music or podcasts: something slow, and they like sound;
+ * - games: they already play; quick rounds or puzzles.
+ * Any number; none is fine.
+ */
+export type PhoneHabit = 'short_video' | 'x_news' | 'reading' | 'audio' | 'games' | 'other'
+export const PHONE_HABITS: readonly PhoneHabit[] = ['short_video', 'x_news', 'reading', 'audio', 'games', 'other']
+const HABIT_INTENT: Record<PhoneHabit, Partial<Record<NightIntent, number>>> = {
+  short_video: { light: 1 },
+  x_news: { focus: 1 },
+  reading: { focus: 1 },
+  audio: { melt: 1 },
+  games: { light: 0.5, focus: 0.5 },
+  other: {},
+}
 /** Mind-holding factors: a puzzle or steady sound gives the mind one quiet thing. */
 const BUSY_FACTORS: readonly SleepFactor[] = ['mind_on', 'tired_wired', 'lose_time', 'stress']
 
@@ -73,28 +89,37 @@ export interface SleepProfile {
   factors: SleepFactor[]
   /** 0 = quiet mind at bedtime, 1 = very busy. */
   mind: number
-  /** How they like to switch off with a game, in the order they picked. */
-  styles: GameStyle[]
+  /** What they usually do on their phone in bed. */
+  habits: PhoneHabit[]
   /** Thumbs on the listening page: 1 liked, -1 not for me. */
   liked: Partial<Record<SoundFamily, 1 | -1>>
   /** Volume they left it at while listening, 0..1. */
   volume: number
 }
 
-export const EMPTY_PROFILE: SleepProfile = { factors: [], mind: 0.4, styles: [], liked: {}, volume: 0.8 }
+export const EMPTY_PROFILE: SleepProfile = { factors: [], mind: 0.4, habits: [], liked: {}, volume: 0.8 }
 
 const busyMind = (p: SleepProfile) => p.mind >= 0.6 || p.factors.some((f) => BUSY_FACTORS.includes(f))
 
-/** Their first-picked game style leads; without one, a busy mind gets puzzles and a quiet one slow games. */
+/**
+ * The kind of games that lead: whatever their habits point to most. With no
+ * habits, or a tie, a busy mind gets puzzles and a quiet one slow games.
+ */
 export function profileIntent(p: SleepProfile): NightIntent {
-  const first = p.styles[0]
-  if (first) return STYLE_INTENT[first]
-  return busyMind(p) ? 'focus' : 'melt'
+  const score: Record<NightIntent, number> = { melt: 0, focus: 0, light: 0 }
+  for (const h of p.habits) for (const [intent, w] of Object.entries(HABIT_INTENT[h])) score[intent as NightIntent] += w
+  const lean: NightIntent[] = busyMind(p) ? ['focus', 'light', 'melt'] : ['melt', 'light', 'focus']
+  const best = Math.max(score.melt, score.focus, score.light)
+  if (best === 0) return lean[0]!
+  return lean.find((intent) => score[intent] === best)!
 }
 
-/** Never asked outright (nobody picks "challenging" at night): slow and soothing starts easy. */
+/**
+ * Never asked outright (nobody picks "challenging" at night): someone whose
+ * nights lean slow (music or podcasts, not games) starts on easy.
+ */
 export function profileDifficulty(p: SleepProfile): Difficulty {
-  return p.styles.length === 1 && p.styles[0] === 'soothing' ? 'easy' : 'medium'
+  return profileIntent(p) === 'melt' && p.habits.includes('audio') && !p.habits.includes('games') ? 'easy' : 'medium'
 }
 
 /** Busier minds get a longer wind down. */
@@ -108,6 +133,7 @@ function familyScore(p: SleepProfile, f: SoundFamily): number {
   if (f === 'steady' && p.factors.includes('noise')) score += 0.6
   if (f === 'steady' && busyMind(p)) score += 0.3
   if (f === 'nature' && p.factors.includes('restless')) score += 0.2
+  if (f === 'music' && p.habits.includes('audio')) score += 0.4
   return score
 }
 

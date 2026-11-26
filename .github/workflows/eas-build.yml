@@ -402,7 +402,7 @@ jobs:
           JS
 
       - name: Provision App Store profile
-        # One App Store profile per app (Lull Beta and Lull each have their
+        # One App Store profile per app (Inverna Beta and Inverna each have their
         # own bundle id), fetched or created from App Store Connect at build
         # time like the ad-hoc one above. Without an API key, the
         # EAS_IOS_PROFILE secret is used as is, which fits only one bundle id.

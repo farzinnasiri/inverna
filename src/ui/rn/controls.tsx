@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Animated,
   Easing,
+  KeyboardAvoidingView,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,18 +17,23 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Reanimated, {
   Easing as REasing,
+  interpolateColor,
   LinearTransition,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Check, Moon, Sun } from 'lucide-react-native'
+import { Check } from 'lucide-react-native'
 import { haptics } from '@/platform'
+import { feel } from '@/ui/feel'
+import { useCoverScreen } from './ambientClock'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSettings } from '@/ui/state/settings'
+import { GLASS_TINT, GlassSurface } from './Glass'
 import { Layer } from './Layer'
 
 export const FRAME_MAX_WIDTH = 440
@@ -56,18 +63,21 @@ export function Button({
 }) {
   const { color } = useTokenColors()
   const isSm = size === 'sm'
-  // Primary is brass ink on a brass wash with a full brass edge, never a solid
-  // brass slab: it is the obvious next step without shouting at night. (A
-  // 10% wash and half-strength edge disappeared under the night light.)
-  const bg =
-    variant === 'primary'
-      ? 'rgba(194, 161, 95, 0.20)'
-      : variant === 'quiet'
-        ? 'rgba(22, 24, 31, 0.72)'
-        : 'transparent'
   const fg = variant === 'primary' ? color.accent : color.ink
-  const borderColor = variant === 'primary' ? color.accent : variant === 'quiet' ? 'rgba(255, 255, 255, 0.14)' : 'transparent'
+  const height = isSm ? 40 : 50
+  const radius = isSm ? 20 : 16
+  const label =
+    typeof children === 'string' ? (
+      <Text style={[styles.btnText, { color: fg, fontSize: isSm ? 15 : 16 }, variant === 'primary' ? styles.btnTextPrimary : null]}>
+        {children}
+      </Text>
+    ) : (
+      children
+    )
 
+  // Primary and quiet buttons are glass: primary is the glass tinted warm (the
+  // app's one treatment for "this is the one"), quiet is plain glass. Ghost
+  // buttons are just text.
   return (
     <Pressable
       disabled={disabled}
@@ -75,38 +85,32 @@ export function Button({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => [
-        styles.btn,
         {
-          height: isSm ? 40 : 50,
-          paddingHorizontal: isSm ? 16 : 22,
-          borderRadius: isSm ? 20 : 16,
-          borderCurve: 'continuous',
-          backgroundColor: bg,
-          borderWidth: variant === 'ghost' ? 0 : 1,
-          borderColor,
           width: block ? '100%' : undefined,
           opacity: disabled ? 0.35 : pressed ? 0.86 : 1,
           transform: [{ scale: pressed && !disabled ? 0.97 : 1 }],
         },
-        style,
+        variant === 'ghost' ? [styles.btn, { height, paddingHorizontal: isSm ? 16 : 22 }, style] : null,
       ]}
     >
-      {typeof children === 'string' ? (
-        <Text
-          style={[
-            styles.btnText,
-            { color: fg, fontSize: isSm ? 15 : 16 },
-            variant === 'primary' ? styles.btnTextPrimary : null,
-          ]}
-        >
-          {children}
-        </Text>
+      {variant === 'ghost' ? (
+        label
       ) : (
-        children
+        <GlassSurface
+          variant="pill"
+          radius={radius}
+          tint={variant === 'primary' ? GLASS_TINT.primary : undefined}
+          interactive
+          style={[styles.btn, { height, paddingHorizontal: isSm ? 16 : 22 }, style]}
+        >
+          {label}
+        </GlassSurface>
       )}
     </Pressable>
   )
 }
+
+/* --- HoldButton (1.6s deliberate destructive confirm) ------------------- */
 
 export function IconButton({
   label,
@@ -204,43 +208,10 @@ export function HoldButton({ label, onConfirm }: { label: string; onConfirm: () 
   )
 }
 
-/* --- Continuous 120fps Reanimated LightSlider ---------------------------- */
-
-function lightMoodLabel(light: number): string {
-  if (light < 0.2) return 'Clear'
-  if (light < 0.5) return 'Soft warm'
-  if (light < 0.78) return 'Candlelight'
-  return 'Deep ember'
-}
+/* --- Pill slider ----------------------------------------------------------- */
 
 const LIGHT_THUMB_W = 24
 const LIGHT_PAD = 6
-
-/** The night light, on the shared pill slider: left is dim and warm, right is bright. */
-export function LightSlider({
-  value,
-  onChange,
-  label = 'Night light',
-  title = 'Night light',
-}: {
-  value: number
-  onChange: (nextLight: number) => void
-  label?: string
-  title?: string
-}) {
-  const { color } = useTokenColors()
-  return (
-    <PillSlider
-      value={1 - value}
-      onChange={(b) => onChange(Math.round((1 - b) * 100) / 100)}
-      title={title}
-      label={label}
-      valueLabel={(b) => lightMoodLabel(1 - b)}
-      left={<Moon size={16} strokeWidth={1.65} color={color.ink3} />}
-      right={<Sun size={17} strokeWidth={1.65} color={color.accent} />}
-    />
-  )
-}
 
 /**
  * The app's big pill slider (night light, onboarding scales): a title on the
@@ -255,6 +226,8 @@ export function PillSlider({
   left,
   right,
   label,
+  disabled = false,
+  fillColors,
 }: {
   value: number
   onChange: (position: number) => void
@@ -263,6 +236,10 @@ export function PillSlider({
   left?: ReactNode
   right?: ReactNode
   label?: string
+  /** Shows the value but can't be moved (something else sets it); outside changes glide in. */
+  disabled?: boolean
+  /** The fill's colour at the left and right ends; it blends between them as the thumb moves. */
+  fillColors?: readonly [string, string]
 }) {
   const { color } = useTokenColors()
   const hapticsOn = useSettings((s) => s.haptics)
@@ -286,9 +263,9 @@ export function PillSlider({
   useEffect(() => {
     if (draggingSV.get() !== 0 || Date.now() - lastTouchMsRef.current < 700) return
     const nextB = Math.min(1, Math.max(0, value))
-    brightnessSV.set(nextB)
+    brightnessSV.set(disabled ? withTiming(nextB, { duration: 600, reduceMotion: ReduceMotion.System }) : nextB)
     setLiveBrightness(nextB)
-  }, [value, brightnessSV, draggingSV])
+  }, [value, brightnessSV, draggingSV, disabled])
 
   const emitChange = (nextB: number, force: boolean) => {
     const now = Date.now()
@@ -297,7 +274,7 @@ export function PillSlider({
     const tick10 = Math.round(clampedB * 10)
     if (tick10 !== lastHapticTickRef.current) {
       lastHapticTickRef.current = tick10
-      if (hapticsRef.current) haptics.play('light')
+      if (hapticsRef.current) haptics.play('tick')
     }
     // Each change re-tints the whole app, so ~11 Hz while dragging; the thumb
     // itself follows the finger on the UI thread at full frame rate.
@@ -310,6 +287,7 @@ export function PillSlider({
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
+        .enabled(!disabled)
         .minDistance(0)
         .onBegin((e) => {
           'worklet'
@@ -332,14 +310,17 @@ export function PillSlider({
           draggingSV.set(0)
           scheduleOnRN(emitChange, finalB, true)
         }),
-    [brightnessSV, draggingSV, trackWidthSV],
+    [brightnessSV, draggingSV, trackWidthSV, disabled],
   )
 
+  const fillFrom = fillColors?.[0] ?? 'rgba(255, 255, 255, 0.12)'
+  const fillTo = fillColors?.[1] ?? 'rgba(255, 255, 255, 0.12)'
   const fillStyle = useAnimatedStyle(() => {
     const usable = Math.max(1, trackWidthSV.get() - LIGHT_PAD * 2 - LIGHT_THUMB_W)
     const x = LIGHT_PAD + brightnessSV.get() * usable
     return {
       width: Math.max(LIGHT_THUMB_W + LIGHT_PAD * 2, x + LIGHT_THUMB_W + LIGHT_PAD),
+      backgroundColor: interpolateColor(brightnessSV.get(), [0, 1], [fillFrom, fillTo]),
     }
   })
 
@@ -363,7 +344,7 @@ export function PillSlider({
 
 
   return (
-    <View style={styles.lightOuter}>
+    <View style={[styles.lightOuter, disabled ? styles.lightLocked : null]}>
       {/* One row above the slider: what it is, and where it's set now. */}
       <View style={styles.lightMetaRow}>
         <Text style={[styles.lightMetaTitle, { color: color.ink3 }]}>{title}</Text>
@@ -375,6 +356,7 @@ export function PillSlider({
             trackWidthSV.set(Math.max(1, e.nativeEvent.layout.width))
           }}
           accessibilityRole="adjustable"
+          accessibilityState={{ disabled }}
           accessibilityLabel={`${label ?? title}, ${valueLabel(liveBrightness)}`}
           style={[
             styles.lightSlider,
@@ -390,10 +372,7 @@ export function PillSlider({
             pointerEvents="none"
             style={[
               styles.lightSliderFill,
-              {
-                backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                borderCurve: 'continuous',
-              },
+              { borderCurve: 'continuous' },
               fillStyle,
             ]}
           />
@@ -584,7 +563,11 @@ export function Segmented<T extends string | number>({
         return (
           <Pressable
             key={String(o.value)}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              if (o.value === value) return
+              feel('tick')
+              onChange(o.value)
+            }}
             accessibilityRole="radio"
             accessibilityState={{ checked: active }}
             style={[
@@ -621,7 +604,10 @@ export function Toggle({
   const { color } = useTokenColors()
   return (
     <Pressable
-      onPress={() => onChange(!checked)}
+      onPress={() => {
+        feel('tick')
+        onChange(!checked)
+      }}
       accessibilityRole="switch"
       accessibilityLabel={label}
       accessibilityState={{ checked }}
@@ -695,58 +681,55 @@ export function PopoverMenu<T extends string | number | null>({
 
 const SHEET_RESIZE = LinearTransition.duration(260).easing(REasing.bezier(0.32, 0.72, 0, 1)).reduceMotion(ReduceMotion.System)
 
+/**
+ * Lets a control inside a sheet stop the sheet scrolling while a finger is on
+ * it (a vertical fader would otherwise move the sheet too).
+ */
+const SheetScrollLock = createContext<(locked: boolean) => void>(() => {})
+export const useSheetScrollLock = () => useContext(SheetScrollLock)
+
 export function Sheet({
   open,
   onClose,
   children,
   label,
+  footer,
 }: {
   open: boolean
   onClose: () => void
   children: ReactNode
   label: string
+  /** Pinned under the content (a "Got it" button): always in reach, the content scrolls behind it. */
+  footer?: ReactNode
 }) {
   const insets = useSafeAreaInsets()
-  const translateY = useRef(new Animated.Value(360)).current
-  const backdropOpacity = useRef(new Animated.Value(0)).current
+  // While open, the moving scene behind it rests (it's dimmed under the sheet anyway).
+  useCoverScreen(open)
+  const [scrollLocked, setScrollLocked] = useState(false)
+  // Reanimated, like the rest of the app (RN's Animated warned "onAnimatedValueUpdate with no listeners").
+  const translateY = useSharedValue(360)
+  const backdropOpacity = useSharedValue(0)
   // Stays mounted through the exit so closing slides down instead of vanishing.
   const [mounted, setMounted] = useState(open)
   const sheetHeight = useRef(360)
 
   useEffect(() => {
+    const ease = REasing.bezier(0.32, 0.72, 0, 1)
     if (!open) {
       if (!mounted) return
-      Animated.parallel([
-        Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-        Animated.timing(translateY, {
-          toValue: sheetHeight.current + 24,
-          duration: 220,
-          easing: Easing.bezier(0.32, 0.72, 0, 1),
-          useNativeDriver: true,
+      backdropOpacity.set(withTiming(0, { duration: 200 }))
+      translateY.set(
+        withTiming(sheetHeight.current + 24, { duration: 220, easing: ease }, (finished) => {
+          if (finished) scheduleOnRN(setMounted, false)
         }),
-      ]).start(({ finished }) => {
-        if (finished) setMounted(false)
-      })
+      )
       return
     }
     setMounted(true)
-    {
-      translateY.setValue(360)
-      backdropOpacity.setValue(0)
-      Animated.parallel([
-        Animated.timing(backdropOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.bezier(0.32, 0.72, 0, 1),
-          useNativeDriver: true,
-        }),
-      ]).start()
-    }
+    translateY.set(360)
+    backdropOpacity.set(0)
+    backdropOpacity.set(withTiming(1, { duration: 200 }))
+    translateY.set(withTiming(0, { duration: 300, easing: ease }))
   }, [open, translateY, backdropOpacity])
 
   const dismissResponder = useRef(
@@ -754,56 +737,65 @@ export function Sheet({
       onStartShouldSetPanResponder: () => false,
       onMoveShouldSetPanResponder: (_, g) => g.dy > 14 && Math.abs(g.dy) > Math.abs(g.dx) * 1.3,
       onPanResponderMove: (_, g) => {
-        if (g.dy > 0) translateY.setValue(g.dy)
+        if (g.dy > 0) translateY.set(g.dy)
       },
       onPanResponderRelease: (_, g) => {
         if (g.dy > 80 || g.vy > 0.6) {
           onClose()
         } else {
-          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start()
+          translateY.set(withSpring(0, { duration: 260, dampingRatio: 1 }))
         }
       },
     }),
   ).current
 
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: backdropOpacity.get() }))
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.get() }] }))
+
   return (
     <Layer visible={mounted} onRequestClose={onClose} label={label}>
-      <View style={styles.sheetRoot} pointerEvents={open ? 'auto' : 'none'}>
-        <Animated.View style={[styles.sheetBackdrop, { opacity: backdropOpacity }]}>
+      {/* Rises with the keyboard, so a field in the sheet is never hidden under it. */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.sheetRoot}
+        pointerEvents={open ? 'auto' : 'none'}
+      >
+        <Reanimated.View style={[styles.sheetBackdrop, backdropStyle]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close sheet" />
-        </Animated.View>
+        </Reanimated.View>
 
-        <Animated.View
-          style={[
-            styles.sheetWrap,
-            {
-              transform: [{ translateY }],
-            },
-          ]}
-        >
+        <Reanimated.View style={[styles.sheetWrap, sheetStyle]}>
           {/* Height changes (a check-in step, a longer page) animate instead of jumping. */}
           <Reanimated.View
             layout={SHEET_RESIZE}
             onLayout={(e: LayoutChangeEvent) => {
               sheetHeight.current = e.nativeEvent.layout.height
             }}
-            style={[
-              styles.sheetCard,
-              {
-                paddingBottom: Math.max(insets.bottom, 16) + 12,
-              },
-            ]}
+            style={styles.sheetCard}
           >
             {/* Swipe-to-dismiss lives ONLY on the top grab area so vertical faders/sliders never drag the sheet */}
             <View {...dismissResponder.panHandlers} style={styles.sheetGrabArea}>
               <View style={[styles.sheetGrab, { backgroundColor: 'rgba(255, 255, 255, 0.28)' }]} />
             </View>
-            <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-              {children}
+            {/* The home-indicator space is inside the scroll, so long sheets run to the bottom edge. */}
+            {/* The bottom inset is counted once, here: "never" stops iOS adding the
+                home-indicator inset to the scroll a second time (an empty band under every sheet). */}
+            <ScrollView
+              bounces={false}
+              contentInsetAdjustmentBehavior="never"
+              automaticallyAdjustsScrollIndicatorInsets={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              scrollEnabled={!scrollLocked}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: footer ? 16 : Math.max(insets.bottom, 12) + 4 }}
+            >
+              <SheetScrollLock.Provider value={setScrollLocked}>{children}</SheetScrollLock.Provider>
             </ScrollView>
+            {footer ? <View style={[styles.sheetFooter, { paddingBottom: Math.max(insets.bottom, 12) + 4 }]}>{footer}</View> : null}
           </Reanimated.View>
-        </Animated.View>
-      </View>
+        </Reanimated.View>
+      </KeyboardAvoidingView>
     </Layer>
   )
 }
@@ -847,6 +839,9 @@ const styles = StyleSheet.create({
   lightOuter: {
     width: '100%',
     gap: 8,
+  },
+  lightLocked: {
+    opacity: 0.62,
   },
   lightSlider: {
     height: 52,
@@ -1008,6 +1003,10 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingHorizontal: 20,
     overflow: 'hidden',
+  },
+  sheetFooter: {
+    paddingTop: 10,
+    backgroundColor: '#0E1016',
   },
   sheetGrabArea: {
     width: '100%',

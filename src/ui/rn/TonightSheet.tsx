@@ -13,7 +13,7 @@ import {
   ribbonOffset,
   type Schedule,
 } from '@/core/night'
-import { haptics } from '@/platform'
+import { feel } from '@/ui/feel'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSettings } from '@/ui/state/settings'
 import { Button, Segmented, Sheet } from './controls'
@@ -40,7 +40,6 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
   const { color } = useTokenColors()
   const schedule = useSettings((s) => s.schedule)
   const tonight = useSettings((s) => s.tonightBedtime)
-  const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const setSchedule = useSettings((s) => s.setSchedule)
 
@@ -77,12 +76,11 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
   const nudge = (mins: number) => {
     const next = Math.max(earliest, Math.min(maxOffset, offset + mins))
     if (next === offset) return
-    if (hapticsOn) haptics.play('selection')
+    feel('tick')
     setOffset(next)
   }
 
   const commit = () => {
-    if (hapticsOn) haptics.play('light')
     if (scope === 'always') {
       setSchedule({ bedtime, enabled: true })
       set({ tonightBedtime: null })
@@ -93,7 +91,6 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
   }
 
   const backToUsual = () => {
-    if (hapticsOn) haptics.play('light')
     set({ tonightBedtime: null })
     onClose()
   }
@@ -121,7 +118,7 @@ export function TonightSheet({ open, onClose }: { open: boolean; onClose: () => 
         nowAt={nowOnRibbon ? nowOffset : null}
         spanFrom={nowOnRibbon ? nowOffset : 0}
         onChange={(next) => {
-          if (hapticsOn) haptics.play('selection')
+          feel('tick')
           setOffset(next)
         }}
       />

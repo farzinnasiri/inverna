@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
-import { ChevronDown, ChevronRight, ChevronUp, Trash2 } from 'lucide-react-native'
-import { formatRange } from '@/core/night'
+import { ChevronDown, ChevronRight, ChevronUp, Flame, Moon, Snowflake, Sun, Trash2 } from 'lucide-react-native'
+import { brightnessForDim, formatRange } from '@/core/night'
+import { feel } from '@/ui/feel'
 import { clearAll } from '@/core/storage'
-import { haptics, notifications } from '@/platform'
+import { notifications } from '@/platform'
 import { about, settingsCopy } from '@/ui/copy'
 import { planRemindersNow } from '@/ui/rn/reminders'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { BedtimeWheel } from '@/ui/rn/BedtimeWheel'
-import { Button, FRAME_MAX_WIDTH, HoldButton, LightSlider, Sheet, Toggle } from '@/ui/rn/controls'
+import { Button, FRAME_MAX_WIDTH, HoldButton, PillSlider, Sheet, Toggle } from '@/ui/rn/controls'
 import { GlassSurface } from '@/ui/rn/Glass'
 import { scrollEndClearance, useResponsiveLayout } from '@/ui/rn/hooks'
+import { SleepAround } from '@/ui/rn/SleepAround'
+import { useNightFilterMetrics } from '@/ui/rn/NightFilterOverlay'
 import { ScienceSheet } from '@/ui/rn/ScienceSheet'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
@@ -25,16 +27,16 @@ export default function SettingsScreen() {
   const userName = useSettings((s) => s.userName)
   const reminders = useSettings((s) => s.reminders)
 
-  const light = useSettings((s) => s.light)
-  const followBedtime = useSettings((s) => s.followBedtime)
   const schedule = useSettings((s) => s.schedule)
   const sfx = useSettings((s) => s.sfx)
+  const autoDescent = useSettings((s) => s.autoDescent)
   const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const setSchedule = useSettings((s) => s.setSchedule)
   const learnedNights = useSettings((s) => s.rangeLearnedNights)
 
   const [editingBedtime, setEditingBedtime] = useState(false)
+  const [lightOpen, setLightOpen] = useState(false)
   const [reminderStatus, setReminderStatus] = useState<string | null>(null)
   const [confirmWipe, setConfirmWipe] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -50,7 +52,7 @@ export default function SettingsScreen() {
 
   // Erase everything and start again from the first onboarding page.
   const eraseAll = () => {
-    if (hapticsOn) haptics.play('medium')
+    feel('commit')
     useSound.getState().stop(0.2)
     useSession.getState().dismiss()
     useHighScores.getState().clearAll()
@@ -81,16 +83,10 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.frame}>
-          <View style={styles.head}>
-            <Text style={[styles.title, { color: color.ink }]}>Settings</Text>
-            <Text style={[styles.subtitle, { color: color.ink3 }]}>
-              Bedtime, screen warmth, and sound
-            </Text>
-          </View>
+          <Text style={[styles.title, { color: color.ink }]}>Settings</Text>
 
-          <View style={styles.block}>
-            <Text style={[styles.label, { color: color.ink3 }]}>{settingsCopy.nameLabel}</Text>
-            <GlassSurface variant="card" radius={18} style={styles.nameCard}>
+          {/* No title: the placeholder says what it is, and a name filled in speaks for itself. */}
+          <GlassSurface variant="card" radius={18} style={styles.nameCard}>
               <TextInput
                 value={userName}
                 onChangeText={(v) => set({ userName: v.slice(0, 24) })}
@@ -104,30 +100,29 @@ export default function SettingsScreen() {
                 style={[styles.nameInput, { color: color.ink }]}
                 accessibilityLabel={settingsCopy.nameLabel}
               />
-            </GlassSurface>
-          </View>
+          </GlassSurface>
 
-          <View style={styles.block}>
-            <LightSlider value={light} onChange={(v) => set({ light: v })} />
-          </View>
+          <LightAndColour open={lightOpen} onToggle={() => setLightOpen((o) => !o)} />
 
           <GlassSurface variant="card" radius={22} style={styles.card}>
             <Pressable
               onPress={() => setEditingBedtime((e) => !e)}
-              style={styles.row}
+              style={[styles.row, styles.rowTall]}
               accessibilityRole="button"
+              accessibilityState={{ expanded: editingBedtime }}
               accessibilityLabel={`${settingsCopy.rangeLabel}, ${formatRange(schedule)}`}
             >
-              <View style={{ flex: 1 }}>
+              <View style={styles.rowText}>
                 <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.rangeLabel}</Text>
-                <Text style={[styles.rowNote, { color: color.ink3 }]}>
-                  {learnedNights ? settingsCopy.rangeLearned(learnedNights) : settingsCopy.rangeNote}
-                </Text>
-              </View>
-              <View style={styles.bedRight}>
                 <Text style={[styles.bedValue, { color: color.accent }]} numberOfLines={1}>
                   {formatRange(schedule)}
                 </Text>
+                {/* Only once it has learned: the range alone says enough until then. */}
+                {learnedNights ? (
+                  <Text style={[styles.rowNote, { color: color.ink3 }]}>{settingsCopy.rangeLearned(learnedNights)}</Text>
+                ) : null}
+              </View>
+              <View style={styles.bedRight}>
                 {editingBedtime ? (
                   <ChevronUp size={16} strokeWidth={1.65} color={color.ink3} />
                 ) : (
@@ -138,26 +133,18 @@ export default function SettingsScreen() {
 
             {editingBedtime && (
               <View style={[styles.wheelWrap, { borderTopColor: color.line }]}>
-                <BedtimeWheel
+                <SleepAround
                   compact
-                  value={schedule.bedtime}
-                  onChange={(bedtime) => setSchedule({ bedtime })}
+                  showSummary={false}
+                  schedule={schedule}
+                  onChange={(patch) => setSchedule({ ...patch, enabled: true })}
                 />
               </View>
             )}
 
-            <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
-              <Text style={[styles.rowLabel, { color: color.ink }]}>Warm screen before bed</Text>
-              <Toggle
-                label="Warm 60 minutes before bed"
-                checked={followBedtime}
-                onChange={(v) => set({ followBedtime: v })}
-              />
-            </View>
-
             {Platform.OS !== 'web' ? (
-              <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
-                <View style={{ flex: 1 }}>
+              <View style={[styles.row, styles.rowTall, styles.rowDiv, { borderTopColor: color.line }]}>
+                <View style={styles.rowText}>
                   <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.reminderLabel}</Text>
                   <Text style={[styles.rowNote, { color: color.ink3 }]}>
                     {reminderStatus ?? settingsCopy.reminderNote}
@@ -166,6 +153,21 @@ export default function SettingsScreen() {
                 <Toggle label={settingsCopy.reminderLabel} checked={reminders} onChange={(v) => void setReminders(v)} />
               </View>
             ) : null}
+
+            <View style={[styles.row, styles.rowTall, styles.rowDiv, { borderTopColor: color.line }]}>
+              <View style={styles.rowText}>
+                <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.slowDownLabel}</Text>
+                <Text style={[styles.rowNote, { color: color.ink3 }]}>{settingsCopy.slowDownNote}</Text>
+              </View>
+              <Toggle
+                label={settingsCopy.slowDownLabel}
+                checked={autoDescent}
+                onChange={(v) => {
+                  set({ autoDescent: v })
+                  setTimeout(() => useSound.getState().syncDescent(new Date(), 0.8), 0)
+                }}
+              />
+            </View>
 
             <View style={[styles.row, styles.rowDiv, { borderTopColor: color.line }]}>
               <Text style={[styles.rowLabel, { color: color.ink }]}>Game sounds</Text>
@@ -181,7 +183,6 @@ export default function SettingsScreen() {
           <GlassSurface variant="card" radius={22} style={styles.card}>
             <Pressable
               onPress={() => {
-                if (hapticsOn) haptics.play('light')
                 setScienceOpen(true)
               }}
               accessibilityRole="button"
@@ -209,7 +210,6 @@ export default function SettingsScreen() {
           ) : (
             <Pressable
               onPress={() => {
-                if (hapticsOn) haptics.play('light')
                 setConfirmWipe(true)
               }}
               accessibilityRole="button"
@@ -231,7 +231,6 @@ export default function SettingsScreen() {
           {/* A small note from the person who made it. */}
           <Pressable
             onPress={() => {
-              if (hapticsOn) haptics.play('light')
               setAboutOpen(true)
             }}
             accessibilityRole="button"
@@ -316,16 +315,10 @@ const styles = StyleSheet.create({
     maxWidth: FRAME_MAX_WIDTH,
     gap: 18,
   },
-  head: {
-    gap: 3,
-  },
   title: {
     fontSize: 30,
     fontWeight: '300',
     letterSpacing: -0.7,
-  },
-  subtitle: {
-    fontSize: 13.5,
   },
   block: {
     gap: 8,
@@ -347,6 +340,24 @@ const styles = StyleSheet.create({
   rowDiv: {
     borderTopWidth: 1,
   },
+  /** Rows with a note under the label grow with it instead of overflowing. */
+  rowTall: {
+    height: undefined,
+    minHeight: 54,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  rowText: {
+    flex: 1,
+    flexShrink: 1,
+  },
+  lightBody: {
+    gap: 18,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+    borderTopWidth: 1,
+  },
   rowLabel: {
     fontSize: 15,
     fontWeight: '500',
@@ -360,9 +371,16 @@ const styles = StyleSheet.create({
     fontSize: 15.5,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  lightSummary: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   wheelWrap: {
-    padding: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 12,
     borderTopWidth: 1,
   },
   utilityRow: {
@@ -392,3 +410,82 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 })
+
+/**
+ * Light & colour, folded by default. Two sliders (brightness, warmth) whose
+ * fill shows what they do, and Adaptive light & colour above them. While
+ * adaptive is on the sliders are locked and follow what it's doing now; turning
+ * it off leaves them where adaptive had them, so nothing jumps.
+ */
+function LightAndColour({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const { color } = useTokenColors()
+  const adaptive = useSettings((s) => s.adaptiveLight)
+  const warmth = useSettings((s) => s.warmth)
+  const brightness = useSettings((s) => s.brightness)
+  const set = useSettings((s) => s.set)
+  const { base } = useNightFilterMetrics()
+
+  const shownWarmth = adaptive ? base.warmth : warmth
+  const shownBrightness = adaptive ? brightnessForDim(base.dim) : brightness
+
+  const setAdaptive = (on: boolean) => {
+    set(on ? { adaptiveLight: true } : { adaptiveLight: false, warmth: base.warmth, brightness: brightnessForDim(base.dim) })
+  }
+
+  return (
+    <GlassSurface variant="card" radius={22} style={styles.card}>
+      <Pressable
+        onPress={() => {
+          onToggle()
+        }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.row}
+      >
+        <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.lightLabel}</Text>
+        <View style={styles.bedRight}>
+          <Text style={[styles.lightSummary, { color: adaptive ? color.accent : color.ink2 }]}>
+            {adaptive ? settingsCopy.lightAdaptiveSummary : settingsCopy.lightManualSummary}
+          </Text>
+          {open ? (
+            <ChevronUp size={16} strokeWidth={1.65} color={color.ink3} />
+          ) : (
+            <ChevronDown size={16} strokeWidth={1.65} color={color.ink3} />
+          )}
+        </View>
+      </Pressable>
+
+      {open ? (
+        <View style={[styles.lightBody, { borderTopColor: color.line }]}>
+          <View style={[styles.row, styles.rowTall, { paddingHorizontal: 0, paddingVertical: 0 }]}>
+            <View style={styles.rowText}>
+              <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.adaptiveLabel}</Text>
+              <Text style={[styles.rowNote, { color: color.ink3 }]}>{settingsCopy.adaptiveNote}</Text>
+            </View>
+            <Toggle label={settingsCopy.adaptiveLabel} checked={adaptive} onChange={setAdaptive} />
+          </View>
+          <PillSlider
+            title={settingsCopy.brightness}
+            value={shownBrightness}
+            onChange={(b) => set({ brightness: b })}
+            valueLabel={settingsCopy.brightnessStage}
+            disabled={adaptive}
+            fillColors={['rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0.30)']}
+            left={<Moon size={16} strokeWidth={1.65} color={color.ink3} />}
+            right={<Sun size={17} strokeWidth={1.65} color={color.ink} />}
+          />
+          <PillSlider
+            title={settingsCopy.warmth}
+            value={shownWarmth}
+            onChange={(w) => set({ warmth: w })}
+            valueLabel={settingsCopy.warmthStage}
+            disabled={adaptive}
+            fillColors={['rgba(150, 185, 255, 0.16)', 'rgba(255, 140, 50, 0.48)']}
+            left={<Snowflake size={16} strokeWidth={1.65} color={color.ink3} />}
+            right={<Flame size={17} strokeWidth={1.65} color={color.accent} />}
+          />
+        </View>
+      ) : null}
+    </GlassSurface>
+  )
+}

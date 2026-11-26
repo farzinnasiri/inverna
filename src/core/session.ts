@@ -1,5 +1,5 @@
 /**
- * The wind-down session: the heart of Lull.
+ * The wind-down session: the heart of Inverna.
  *
  * Over N minutes the screen warms and darkens, sound softens, and games get
  * easier (`calm` 0 → 1). At the end there is no victory screen and no

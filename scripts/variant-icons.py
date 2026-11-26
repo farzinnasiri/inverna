@@ -1,7 +1,8 @@
 """Make the Dev and Beta app icons from assets/images/icon.png.
 
-Each variant gets a band across the bottom with its name, so the three Lull
-apps (Lull Dev, Lull Beta, Lull) can be told apart on the home screen.
+Each variant gets a band across the bottom with its name, so the three
+Inverna apps (Inverna Dev, Inverna Beta, Inverna) can be told apart on the
+home screen (Android and the web; iOS uses the .icon bundles).
 
     uv run --with pillow python scripts/variant-icons.py
 """
@@ -34,7 +35,8 @@ def main() -> None:
     for name, (label, band, ink) in VARIANTS.items():
         img = base.copy()
         d = ImageDraw.Draw(img)
-        top, bottom = int(h * 0.76), int(h * 0.90)
+        # Below the round mark (it ends at ~80%), so the band never cuts it.
+        top, bottom = int(h * 0.845), int(h * 0.965)
         d.rectangle([0, top, w, bottom], fill=band)
         f = font(int((bottom - top) * 0.62))
         try:

@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import { scheduleOnRN } from 'react-native-worklets'
 import Animated, {
   Easing,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withSpring,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated'
@@ -265,3 +268,64 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
 })
+
+/** How far in from the left edge a back swipe can start, as on iOS. */
+const EDGE_WIDTH = 28
+
+/**
+ * The iOS back swipe for screens that don't get one from the navigator
+ * (onboarding pages, games): drag in from the left edge and the screen
+ * follows the finger; let go past a third of the way, or flick, and `onBack`
+ * runs. It only starts at the edge, so sliders and boards keep their drags.
+ */
+export function EdgeSwipeBack({
+  onBack,
+  enabled = true,
+  style,
+  children,
+}: {
+  onBack: () => void
+  enabled?: boolean
+  style?: StyleProp<ViewStyle>
+  children: ReactNode
+}) {
+  const { width } = useWindowDimensions()
+  const x = useSharedValue(0)
+  const onBackRef = useRef(onBack)
+  onBackRef.current = onBack
+  const goBack = () => onBackRef.current()
+
+  const gesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(enabled)
+        .hitSlop({ left: 0, width: EDGE_WIDTH })
+        .activeOffsetX(10)
+        .failOffsetY([-16, 16])
+        .onUpdate((e) => {
+          'worklet'
+          x.set(Math.max(0, e.translationX))
+        })
+        .onEnd((e) => {
+          'worklet'
+          const go = e.translationX > width * 0.33 || (e.velocityX > 650 && e.translationX > 24)
+          // Either way the screen settles back: the back step brings its own motion.
+          x.set(withSpring(0, { duration: 320, dampingRatio: 0.9 }))
+          if (go) scheduleOnRN(goBack)
+        }),
+    // goBack reads the latest onBack through the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [enabled, width, x],
+  )
+
+  const follow = useAnimatedStyle(() => {
+    const p = Math.min(1, x.get() / width)
+    return { transform: [{ translateX: x.get() * 0.45 }], opacity: 1 - p * 0.5 }
+  })
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={[{ flex: 1 }, style, follow]}>{children}</Animated.View>
+    </GestureDetector>
+  )
+}

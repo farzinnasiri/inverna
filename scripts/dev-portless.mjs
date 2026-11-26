@@ -2,12 +2,12 @@ import { spawn, spawnSync } from 'node:child_process'
 import net from 'node:net'
 import { fileURLToPath } from 'node:url'
 
-// Runs Lull's Expo Metro server behind a named Portless route (`lull`) while
+// Runs Inverna's Expo Metro server behind a named Portless route (`inverna`) while
 // keeping Metro bound to --lan so phones (Expo Go / dev builds) can connect
 // over Wi-Fi at the same time. Leaves the shared Portless proxy and other apps
 // untouched.
 const cwd = fileURLToPath(new URL('..', import.meta.url))
-const ROUTE_NAME = process.env.PORTLESS_NAME || 'lull'
+const ROUTE_NAME = process.env.PORTLESS_NAME || 'inverna'
 const BASE_PORT = Number(process.env.PORT || 8081)
 
 let stopping = false

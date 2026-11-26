@@ -306,19 +306,18 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
 
         if (next.clearEventId > prev.clearEventId) {
           cue('chime', 0.85)
-          haptic('success')
+          haptic('complete')
           syncUiMeta(next)
         } else if (next.breakEventId > prev.breakEventId) {
+          // Bricks break on their own: heard, not felt (only your paddle and a cleared wall are).
           cue('clear', 0.65)
-          haptic('light')
           syncUiMeta(next)
         } else if (next.crackEventId > prev.crackEventId) {
           cue('tap', 0.55)
-          haptic('light')
           syncUiMeta(next)
         } else if (next.paddleEventId > prev.paddleEventId) {
           cue('place', 0.6)
-          haptic('light')
+          haptic('settle')
         } else if (next.wallEventId > prev.wallEventId) {
           cue('tap', 0.35)
         }
@@ -342,7 +341,7 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
     if (next !== prev) {
       stateRef.current = next
       cue('place', 0.45)
-      haptic('light')
+      haptic('settle')
       updateMotion()
     }
   }, [cue, haptic, updateMotion])
@@ -356,7 +355,6 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
     syncUiMeta(next)
     updateMotion()
     cue('tap', 0.5)
-    haptic('light')
     persist(next, true)
   }, [cue, haptic, persist, updateMotion, syncUiMeta])
 
@@ -378,7 +376,6 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
     syncUiMeta(next)
     updateMotion()
     cue('undo', 0.5)
-    haptic('light')
     persist(next, true)
   }, [cue, haptic, persist, updateMotion, syncUiMeta])
 

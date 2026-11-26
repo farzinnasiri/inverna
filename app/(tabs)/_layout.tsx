@@ -25,7 +25,7 @@ const CLEAR_CONTENT = { backgroundColor: 'transparent' } as const
 export default function TabsLayout() {
   const { color } = useTokenColors()
   const onboarded = useSettings((s) => s.onboarded)
-  // First run (or after "Clear data"): meet Lull first.
+  // First run (or after "Clear data"): meet Inverna first.
   if (!onboarded) return <Redirect href="/onboarding" />
 
   return (

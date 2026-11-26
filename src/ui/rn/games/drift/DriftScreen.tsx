@@ -242,17 +242,17 @@ export function DriftScreen({ onExit }: GameScreenProps) {
 
       if (next.solved) {
         cue('chime', 0.95)
-        haptic('success')
+        haptic('complete')
         if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
         completionTimerRef.current = setTimeout(() => {
           setShowCompletion(true)
         }, COMPLETION_DELAY_MS)
       } else if (nextPlaced > prevPlaced) {
         cue('place', 0.72)
-        haptic('light')
+        haptic('settle')
       } else {
         cue('tap', 0.55)
-        haptic('light')
+        haptic('tick')
       }
     },
     [cue, haptic, setSave, fallback],
@@ -301,7 +301,6 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('undo', 0.65)
-    haptic('light')
   }, [cue, haptic, setSave, fallback])
 
   const doRestartCurrent = useCallback(() => {
@@ -320,7 +319,6 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('undo', 0.65)
-    haptic('light')
   }, [cue, haptic, setSave, fallback])
 
   const doShuffle = useCallback(() => {
@@ -343,7 +341,7 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('light')
+    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const doNextPuzzle = useCallback(() => {
@@ -362,7 +360,7 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('light')
+    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const handleStageLayout = useCallback((e: LayoutChangeEvent) => {
@@ -464,6 +462,7 @@ export function DriftScreen({ onExit }: GameScreenProps) {
       paused={paused}
       onPauseChange={setPaused}
       onRestart={doRestartCurrent}
+      onNewGame={doShuffle}
       onExit={onExit}
       controls={
         <GameControlBar>

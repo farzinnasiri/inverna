@@ -1,20 +1,20 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
 import { useIsFocused } from 'expo-router'
 import Animated, {
-  cancelAnimation,
   Easing,
   ReduceMotion,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
-  withRepeat,
   withTiming,
 } from 'react-native-reanimated'
 import Svg, { Circle, Defs, Ellipse, Path, RadialGradient, Rect, Stop } from 'react-native-svg'
-import { SCENE_PALETTES, paletteFamily, resolveBackdrop } from '@/core/backdrop/scenes'
+import { SCENE_PALETTES, paletteFamily, resolveBackdrop, resolveBlend } from '@/core/backdrop/scenes'
 import { DEFAULT_PRESET_ID, presetById, type SoundSceneId } from '@/core/sound/catalog'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
+import { useAmbientTime, useCovered } from './ambientClock'
 import { SkiaBackdrop } from './backdrop/SkiaBackdrop'
 import { useAppActive, useReducedMotion } from './hooks'
 
@@ -219,6 +219,11 @@ export function AmbientBackdrop({
   const activePresetId = presetId ?? soundPreset ?? savedPreset ?? DEFAULT_PRESET_ID
   const activeMix = presetId ? (presetById(presetId)?.mix ?? null) : (soundMix ?? presetById(activePresetId)?.mix ?? null)
   const backdrop = resolveBackdrop(presetId ?? (playing ? soundPreset : activePresetId), activeMix)
+  // A hand-made mix weaves its other loud layers in (rain and fire: drops and embers).
+  const blend = useMemo(
+    () => resolveBlend(presetId ?? (playing ? soundPreset : activePresetId), activeMix),
+    [presetId, playing, soundPreset, activePresetId, activeMix],
+  )
   const family = paletteFamily(backdrop)
 
   // Slow crossfade between the outgoing and incoming colour family.
@@ -252,10 +257,6 @@ export function AmbientBackdrop({
     return () => clearTimeout(t)
   }, [family, reduced, fadeProgress])
 
-  const driftA = useSharedValue(0)
-  const driftB = useSharedValue(0)
-  const breath = useSharedValue(0)
-  const causticSpin = useSharedValue(0)
   const intensitySV = useSharedValue(playing ? 1 : 0.72)
 
   useEffect(() => {
@@ -268,42 +269,20 @@ export function AmbientBackdrop({
     )
   }, [playing, intensitySV])
 
-  useEffect(() => {
-    const all = [driftA, driftB, breath, causticSpin]
-    if (reduced || still || !isFocused) {
-      all.forEach((v) => cancelAnimation(v))
-      return
-    }
-    driftA.set(
-      withRepeat(
-        withTiming(1, { duration: 15000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-        -1,
-        true,
-      ),
-    )
-    driftB.set(
-      withRepeat(
-        withTiming(1, { duration: 19000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-        -1,
-        true,
-      ),
-    )
-    breath.set(
-      withRepeat(
-        withTiming(1, { duration: 10000, easing: Easing.inOut(Easing.sin), reduceMotion: ReduceMotion.System }),
-        -1,
-        true,
-      ),
-    )
-    causticSpin.set(
-      withRepeat(
-        withTiming(1, { duration: 48000, easing: Easing.linear, reduceMotion: ReduceMotion.System }),
-        -1,
-        false,
-      ),
-    )
-    return () => all.forEach((v) => cancelAnimation(v))
-  }, [reduced, still, isFocused, driftA, driftB, breath, causticSpin])
+  // The atmosphere drifts on the shared ambient clock (30 steps a second), not
+  // on repeating animations, which would step it, and every glass surface over
+  // it, at the display's full 120 Hz. Sleeping a sheet over it stops it too.
+  const covered = useCovered()
+  const time = useAmbientTime(!reduced && !still && isFocused && appActive && !covered)
+  // Eased back-and-forth like the old repeating timings: 0..1..0 over `period` seconds.
+  const swing = (t: number, period: number) => {
+    'worklet'
+    return 0.5 - 0.5 * Math.cos((Math.PI * 2 * t) / period)
+  }
+  const driftA = useDerivedValue(() => swing(time.get(), 30))
+  const driftB = useDerivedValue(() => swing(time.get(), 38))
+  const breath = useDerivedValue(() => swing(time.get(), 20))
+  const causticSpin = useDerivedValue(() => (time.get() / 48) % 1)
 
   const orbW = Math.max(width, 390) * 1.32
   const orbH = Math.max(height * 0.62, 480)
@@ -365,7 +344,7 @@ export function AmbientBackdrop({
         <Animated.View style={[StyleSheet.absoluteFill, prevCrossfadeStyle]}>
           <SceneAtmosphere
             scene={familyPair.prev}
-            idPrefix="lullPrev"
+            idPrefix="invernaPrev"
             width={width}
             height={height}
             orbW={orbW}
@@ -381,7 +360,7 @@ export function AmbientBackdrop({
       <Animated.View style={[StyleSheet.absoluteFill, currCrossfadeStyle]}>
         <SceneAtmosphere
           scene={familyPair.curr}
-          idPrefix="lullCurr"
+          idPrefix="invernaCurr"
           width={width}
           height={height}
           orbW={orbW}
@@ -396,11 +375,12 @@ export function AmbientBackdrop({
       {still ? null : (
         <SkiaBackdrop
           backdrop={backdrop}
+          blend={blend}
           playing={playing}
           breathHz={breathHz}
           descent={descent}
           reduced={reduced}
-          active={isFocused && appActive}
+          active={isFocused && appActive && !covered}
         />
       )}
       </View>

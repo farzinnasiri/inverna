@@ -369,7 +369,7 @@ export function makeRoom(state: KindleState): KindleState {
   }
 }
 
-/** Convenience reducer matching the Lull engine contract. */
+/** Convenience reducer matching the Inverna engine contract. */
 export function kindleReducer(state: KindleState, action: KindleAction): KindleState {
   switch (action.type) {
     case 'move':

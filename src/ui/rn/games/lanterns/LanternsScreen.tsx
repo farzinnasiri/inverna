@@ -447,20 +447,20 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
 
       if (next.solved) {
         cue('chime', 0.95)
-        haptic('success')
+        haptic('complete')
         if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
         completionTimerRef.current = setTimeout(() => {
           setShowCompletion(true)
         }, COMPLETION_DELAY_MS)
       } else if (next.matchedPairs > prev.matchedPairs) {
         cue('clear', 0.85)
-        haptic('medium')
+        haptic('reward')
       } else if (next.mismatchPair !== null) {
         cue('place', 0.5)
-        haptic('light')
+        haptic('settle')
       } else {
         cue('tap', 0.55)
-        haptic('light')
+        haptic('tick')
       }
     },
     [cue, haptic, setSave, fallback],
@@ -486,7 +486,7 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('light')
+    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const handleNext = useCallback(() => {
@@ -505,7 +505,7 @@ export function LanternsScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('tap', 0.55)
-    haptic('light')
+    haptic('tick')
   }, [cue, haptic, setSave, fallback])
 
   const moveFocus = useCallback((dCol: number, dRow: number) => {

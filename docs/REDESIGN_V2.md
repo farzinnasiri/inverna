@@ -1,11 +1,11 @@
-# Lull v2: "Low Light" redesign
+# Inverna v2: "Low Light" redesign
 
 Status: proposal for the next engineering wave. Supersedes the visual rules in
 `docs/DESIGN.md` ("Ember") once accepted. Game mechanics, engines, `calm`,
 persistence and the sound synthesis stay exactly as they are. This is a design,
 IA and copy change.
 
-**The direction in one line:** Lull should look like a phone that's already
+**The direction in one line:** Inverna should look like a phone that's already
 half asleep: true black, quiet warm greys, one muted sand accent, flat surfaces,
 one typeface, and every screen fits in one viewport.
 
@@ -175,7 +175,7 @@ Black × anything = black, so the right approach never adds colour on top.
 **Remove** `.night-filter__warm` and every `mix-blend-mode`. Replace with two
 mechanisms:
 
-1. **Warmth is a token transform, not an overlay.** Everything Lull draws
+1. **Warmth is a token transform, not an overlay.** Everything Inverna draws
    comes from tokens, including Pond's canvas colours. So warmth becomes an
    argument to `applyTokens({ warmth })`. It lerps each light token (`ink*`,
    `accent*`, `pieces.*`) in OKLab toward its warm twin. At `warmth = 1`:
@@ -465,7 +465,7 @@ becomes `End` (ink2, same pill) and the hero shows the countdown. Delete
 
 ### 3.3 Sounds: a soundscape instrument
 
-The synthesis is the best part of Lull, and the screen should look like it.
+The synthesis is the best part of Inverna, and the screen should look like it.
 
 ```
 ┌──────────────────────────────────────┐
@@ -573,7 +573,7 @@ The ☾ button opens it. It fits in one sheet with no scroll:
   input (iOS shows a wheel). No pill, no clock icon.
 - **Dim before bed:** one toggle. Lead time is fixed at 45 minutes.
 - **More ›** pushes, inside the same sheet, to: Game sounds (toggle), Haptics
-  (toggle), Add to calendar (row → `.ics`), Re-tune Lull (re-runs
+  (toggle), Add to calendar (row → `.ics`), Re-tune Inverna (re-runs
   onboarding), and Forget everything (the existing `HoldButton`, restyled with
   an `accentWash` fill). Each is one line with no hint text. The on-device
   privacy note becomes the confirm text of the hold button ("Hold to erase
@@ -609,7 +609,7 @@ lives in the behaviour, not in a paragraph.
 
 ---
 
-## 4. Onboarding: "Tune Lull to your night"
+## 4. Onboarding: "Tune Inverna to your night"
 
 Three full-screen steps on black, about 15 seconds total, shown on first
 launch when `settings.onboarded !== true`. **No welcome screen, no feature
@@ -692,7 +692,7 @@ The first tile tap is the audio-unlock gesture. Selected tile: `surface3` +
 preset. On Done, the preview keeps playing and fades out over 3s (or keeps
 playing if they want it; it's their room). Then land on Home.
 
-**Re-run:** Night sheet › More › Re-tune Lull. It opens the same flow
+**Re-run:** Night sheet › More › Re-tune Inverna. It opens the same flow
 pre-filled with current values.
 
 **State:** `settings.onboarded: boolean` (persist v2). Component:
@@ -811,7 +811,7 @@ Wind-down sheet show no scrollbar (`scrollHeight <= clientHeight`).
 
 1. `src/ui/onboarding/Onboarding.tsx` + `StepBedtime.tsx`, `StepLight.tsx`,
    `StepSound.tsx`, and a `TimeWheel` control.
-2. Wire "Re-tune Lull" in Night › More.
+2. Wire "Re-tune Inverna" in Night › More.
 3. P3: live mini-board on the Continue tile (read the `useGameSave` blob and
    render a static miniature per game).
 4. `docs/DESIGN.md`: rewrite as "Low Light" from this doc (§2 rules, tokens,

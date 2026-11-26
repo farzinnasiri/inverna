@@ -1,4 +1,4 @@
-const CACHE = "__LULL_CACHE__";
+const CACHE = "__INVERNA_CACHE__";
 const ASSETS = /* precache */ [];
 
 self.addEventListener("install", (event) => {

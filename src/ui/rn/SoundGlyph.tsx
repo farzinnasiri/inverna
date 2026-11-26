@@ -1,13 +1,21 @@
 import {
+  BedDouble,
   BookOpen,
+  CloudMoon,
   CloudRain,
   Compass,
   Disc3,
   Feather,
   Flame,
+  Heart,
+  Leaf,
   Moon,
+  Mountain,
   Music2,
   Orbit,
+  Shell,
+  Snowflake,
+  Star,
   Trees,
   Waves,
   Wind,
@@ -15,7 +23,7 @@ import {
 import { presetById, type SoundIconId } from '@/core/sound/catalog'
 
 /**
- * Shared bespoke icon set for all 12 Lull soundscape signatures.
+ * Icons for every sound: the presets' and the extra ones for sounds people make.
  * Strictly zero generic AI sparkle icons anywhere.
  */
 export function SoundGlyph({
@@ -57,5 +65,21 @@ export function SoundGlyph({
       return <Trees size={size} strokeWidth={sw} color={color} />
     case 'compass':
       return <Compass size={size} strokeWidth={sw} color={color} />
+    case 'leaf':
+      return <Leaf size={size} strokeWidth={sw} color={color} />
+    case 'mountain':
+      return <Mountain size={size} strokeWidth={sw} color={color} />
+    case 'snow':
+      return <Snowflake size={size} strokeWidth={sw} color={color} />
+    case 'cloud-moon':
+      return <CloudMoon size={size} strokeWidth={sw} color={color} />
+    case 'star':
+      return <Star size={size} strokeWidth={sw} color={color} />
+    case 'heart':
+      return <Heart size={size} strokeWidth={sw} color={color} />
+    case 'shell':
+      return <Shell size={size} strokeWidth={sw} color={color} />
+    case 'bed':
+      return <BedDouble size={size} strokeWidth={sw} color={color} />
   }
 }

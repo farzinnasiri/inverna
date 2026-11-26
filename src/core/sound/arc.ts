@@ -15,7 +15,7 @@ import type { Preset } from './catalog'
 export type DescentPhaseId = 'unwind' | 'drift' | 'still'
 export type ModulationDepth = 'off' | 'subtle' | 'deep'
 
-/** Window before bedtime across which Lull performs its full acoustic descent. */
+/** Window before bedtime across which Inverna performs its full acoustic descent. */
 export const DESCENT_WINDOW_MINUTES = 60
 
 export interface DescentSnapshot {

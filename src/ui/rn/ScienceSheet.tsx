@@ -291,7 +291,7 @@ function BrainwaveVisualizer({ active }: { active: boolean }) {
 
   const selectBand = (key: WaveBandKey) => {
     if (key === selected) return
-    haptic('selection')
+    haptic('tick')
     setSelected(key)
   }
 
@@ -309,8 +309,8 @@ function BrainwaveVisualizer({ active }: { active: boolean }) {
               style={[
                 styles.bandTab,
                 {
-                  backgroundColor: isSelected ? color.accentWash : 'transparent',
-                  borderColor: isSelected ? color.accent : color.line,
+                  backgroundColor: isSelected ? 'rgba(194, 161, 95, 0.2)' : 'transparent',
+                  borderColor: isSelected ? 'rgba(255, 236, 200, 0.2)' : color.line,
                 },
               ]}
             >
@@ -455,10 +455,8 @@ function SpectrumVisual({ active }: { active: boolean }) {
 /** Compact tappable source links (Wikipedia / references). */
 function SourceChips({ sources }: { sources: readonly ScienceSource[] }) {
   const { color } = useTokenColors()
-  const { haptic } = useFeedback()
 
   const openSource = (url: string) => {
-    haptic('light')
     void Linking.openURL(url).catch(() => {})
   }
 

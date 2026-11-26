@@ -3,8 +3,8 @@ import * as Notifications from 'expo-notifications'
 import { upcomingWindDowns, type Schedule } from '@/core/night'
 import { downloadBedtimeIcs } from './web/calendar'
 
-const OLD_DAILY_ID = 'lull-bedtime-reminder'
-const ID_PREFIX = 'lull-winddown-'
+const OLD_DAILY_ID = 'inverna-bedtime-reminder'
+const ID_PREFIX = 'inverna-winddown-'
 /** Nights scheduled ahead; topped up every time the app opens. */
 const NIGHTS_AHEAD = 7
 

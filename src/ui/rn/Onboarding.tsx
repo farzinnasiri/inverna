@@ -1,72 +1,109 @@
 import { useEffect, useState } from 'react'
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import Animated, { ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated'
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg'
 import { router } from 'expo-router'
-import { Check, ChevronLeft, Lock, Moon, Pause, Play, ThumbsDown, ThumbsUp, Volume2, Waves } from 'lucide-react-native'
+import {
+  BookOpen,
+  Check,
+  ChevronLeft,
+  Ellipsis,
+  Film,
+  Gamepad2,
+  Headphones,
+  Lock,
+  Moon,
+  Newspaper,
+  Pause,
+  Play,
+  ThumbsDown,
+  ThumbsUp,
+  Volume2,
+  VolumeX,
+  Waves,
+} from 'lucide-react-native'
 import { eveningState } from '@/core/evening'
-import type { GameId } from '@/core/games/catalog'
-import { formatRange, rangeMinutesOf, RIBBON_SPAN_MIN, ribbonBedtime, ribbonOffset } from '@/core/night'
+import { feel } from '@/ui/feel'
+import type { SciencePillarKey } from '@/ui/copy'
 import {
   EMPTY_PROFILE,
-  GAME_STYLES,
   LISTEN_SAMPLES,
+  PHONE_HABITS,
   profileDifficulty,
   profileSound,
   profileWindDownMinutes,
   SLEEP_FACTORS,
-  type GameStyle,
+  type PhoneHabit,
   type SleepFactor,
   type SleepProfile,
   type SoundFamily,
 } from '@/core/profile'
 import { presetById } from '@/core/sound/catalog'
-import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { onboarding as copy } from '@/ui/copy'
 import { currentSchedule, useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
 import { AmbientBackdrop } from './AmbientBackdrop'
 import { Button, FRAME_MAX_WIDTH, PillSlider, Slider, Toggle } from './controls'
-import { GameGlyph } from './GameGlyph'
-import { GlassSurface } from './Glass'
+import { GlassLens, GlassSurface } from './Glass'
 import { useReducedMotion, useResponsiveLayout } from './hooks'
-import { LullMark } from './LullMark'
-import { AnswerLayer, EASE_OUT, HandoffTitle, itemDelay, Rise } from './motion'
-import { NightRibbon } from './NightRibbon'
+import { InvernaMark } from './InvernaMark'
+import { AnswerLayer, EASE_OUT, EdgeSwipeBack, HandoffTitle, itemDelay, Rise } from './motion'
+import { MindTangle } from './MindTangle'
+import { SleepAround } from './SleepAround'
 import { planRemindersNow } from './reminders'
 import { DescentCurve, PillarIcon, ScienceLink, ScienceSheet } from './ScienceSheet'
 import { SoundGlyph } from './SoundGlyph'
 
-type Page = 'intro' | 'science' | 'bedtime' | 'keeps' | 'mind' | 'games' | 'listen' | 'name'
-const PAGES: readonly Page[] = ['intro', 'science', 'bedtime', 'keeps', 'mind', 'games', 'listen', 'name']
+type Page = 'intro' | 'science' | 'bedtime' | 'keeps' | 'mind' | 'habits' | 'listen' | 'name'
+const PAGES: readonly Page[] = ['intro', 'science', 'bedtime', 'keeps', 'mind', 'habits', 'listen', 'name']
 /** Setup questions begin on page 3 (bedtime). Intro and science are the welcome. */
 const SETUP_START = 2
 const SETUP_PAGES: readonly Page[] = PAGES.slice(SETUP_START)
 
-/** Each page shows a different scene; the listening page shows the sound playing. */
+/**
+ * Each page shows a different scene and plays it softly behind the question,
+ * a short tour of Inverna's sounds: fire, rain, the tide, wind, and so on. The
+ * listening page is the exception: it's quiet until they try a sample.
+ */
 const PAGE_SCENE: Record<Page, string> = {
-  intro: 'starfield',
-  science: 'nocturne',
-  bedtime: 'lunar-tide',
+  intro: 'hearth',
+  science: 'theta-rain',
+  bedtime: 'low-tide',
   keeps: 'still-horizon',
   mind: 'deep-drift',
-  games: 'ink-reverie',
+  habits: 'mist-pine',
   listen: 'theta-rain',
-  name: 'hearth',
+  name: 'starfield',
 }
 
 const FAMILIES: readonly SoundFamily[] = ['steady', 'music', 'nature']
-const STYLE_GAMES: Record<GameStyle, readonly GameId[]> = {
-  soothing: ['pond', 'hue', 'lanterns'],
-  puzzle: ['nine', 'weave', 'thread'],
-  quick: ['settle', 'chime', 'cascade'],
+const HABIT_ICON: Record<PhoneHabit, typeof Film> = {
+  short_video: Film,
+  x_news: Newspaper,
+  reading: BookOpen,
+  audio: Headphones,
+  games: Gamepad2,
+  other: Ellipsis,
 }
+
+/** The busy-mind slider's fill runs from the calm thread colour to the busy one. */
+const MIND_CALM_FILL = 'rgba(143, 176, 255, 0.20)'
+const MIND_BUSY_FILL = 'rgba(242, 148, 74, 0.46)'
 
 /** Title box: two lines of the title style, so one- and two-line questions sit alike. */
 const TITLE_BOX = 76
 
 /**
- * First run. Lull introduces itself, then learns enough to set itself up:
+ * First run. Inverna introduces itself, then learns enough to set itself up:
  * bedtime (and a reminder), what makes falling asleep hard, how busy their mind
  * is, how they like to switch off with a game, which sounds they like and how
  * loud, and a first name. The answers set the starting point
@@ -86,7 +123,6 @@ export function Onboarding() {
   const reminders = useSettings((s) => s.reminders)
   const savedName = useSettings((s) => s.userName)
   const savedProfile = useSettings((s) => s.profile)
-  const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const setSchedule = useSettings((s) => s.setSchedule)
 
@@ -105,23 +141,44 @@ export function Onboarding() {
   const [profile, setProfile] = useState<SleepProfile>(savedProfile ?? { ...EMPTY_PROFILE, volume })
   const [answered, setAnswered] = useState(Boolean(savedProfile))
   const [scienceOpen, setScienceOpen] = useState(false)
+  /** Onboarding's own mute: only the tour sounds; samples on the listening page still play. */
+  const [muted, setMuted] = useState(false)
   const page = PAGES[index]!
   const inSetup = index >= SETUP_START
+
+  // The page's sound fades in as the page arrives and crossfades to the next.
+  useEffect(() => {
+    const st = useSound.getState()
+    if (page === 'listen') {
+      // Quiet, so the samples they try are heard on their own.
+      if (st.playing && !(Object.values(LISTEN_SAMPLES) as string[]).includes(st.presetId ?? '')) st.stop(1.2)
+      return
+    }
+    if (muted) return
+    const id = PAGE_SCENE[page]
+    if (!st.playing || st.presetId !== id) st.playPreset(id, 0)
+  }, [page, muted])
+
+  const toggleMuted = () => {
+    tap()
+    // Unmuting plays the page's sound again through the effect above.
+    if (!muted && page !== 'listen') stopSound(0.8)
+    setMuted(!muted)
+  }
 
   // Leaving: the page fades out over the scene before Play takes over.
   const frameOpacity = useSharedValue(1)
   const frameStyle = useAnimatedStyle(() => ({ opacity: frameOpacity.get() }))
 
-  const tap = (kind: 'light' | 'selection' | 'medium' = 'light') => {
-    if (hapticsOn) haptics.play(kind)
-  }
+  /** Answers and page turns tick; finishing onboarding is the one commit. */
+  const tap = (kind: 'tick' | 'commit' = 'tick') => feel(kind)
   const update = (patch: Partial<SleepProfile>) => {
     setAnswered(true)
     setProfile((p) => ({ ...p, ...patch }))
   }
 
   const finish = () => {
-    tap('medium')
+    tap('commit')
     // A sound picked here keeps playing only if it's time for bed anyway.
     const kind = eveningState(currentSchedule(), new Date()).kind
     if (useSound.getState().playing && kind !== 'winding' && kind !== 'asleepRange' && kind !== 'past') stopSound(1.2)
@@ -159,32 +216,24 @@ export function Onboarding() {
   const next = () => (index === PAGES.length - 1 ? finish() : go(index + 1))
   const skip = () => (inSetup ? finish() : go(SETUP_START))
 
-  // Bedtime ribbon covers 8 PM to 3 AM; Settings has the full wheel. The
-  // one-hour range slides along it; `offset` is its early edge.
-  const range = rangeMinutesOf(schedule)
-  const offset = Math.max(0, Math.min(RIBBON_SPAN_MIN - range, ribbonOffset(schedule.bedtime)))
-  const setBedtime = (o: number) => {
-    tap('selection')
-    setSchedule({ bedtime: ribbonBedtime(o), enabled: true })
-  }
 
   const toggleFactor = (f: SleepFactor) => {
-    tap('selection')
+    tap()
     update({ factors: profile.factors.includes(f) ? profile.factors.filter((x) => x !== f) : [...profile.factors, f] })
   }
-  const toggleStyle = (st: GameStyle) => {
-    tap('selection')
-    update({ styles: profile.styles.includes(st) ? profile.styles.filter((x) => x !== st) : [...profile.styles, st] })
+  const toggleHabit = (h: PhoneHabit) => {
+    tap()
+    update({ habits: profile.habits.includes(h) ? profile.habits.filter((x) => x !== h) : [...profile.habits, h] })
   }
 
   const sampleLive = (f: SoundFamily) => playing && presetId === LISTEN_SAMPLES[f]
   const toggleSample = (f: SoundFamily) => {
-    tap('selection')
+    tap()
     if (sampleLive(f)) stopSound(0.6)
     else playPreset(LISTEN_SAMPLES[f], 0)
   }
   const rate = (f: SoundFamily, v: 1 | -1) => {
-    tap('selection')
+    tap()
     const liked = { ...profile.liked }
     if (liked[f] === v) delete liked[f]
     else liked[f] = v
@@ -202,8 +251,9 @@ export function Onboarding() {
         : page === 'name'
           ? copy.name.button
           : copy.continue
-  // The question sits at eye level, the same height on every page.
-  const titleTop = Math.round(height * 0.09)
+  // The question sits at the same height on every page, a little below the
+  // dots; the answers follow right under it (the intro is the one centred page).
+  const titleTop = Math.round(height * 0.045)
 
   /** One page's answers. Rendered for the page arriving, and for the one fading out under it. */
   const renderAnswers = (pg: Page) => (
@@ -211,10 +261,13 @@ export function Onboarding() {
               {pg === 'intro' ? (
                 <View style={styles.introWrap}>
                   <Rise delay={itemDelay(0)} reduced={reduced} style={styles.center}>
-                    <LullMark size={136} draw={!reduced} delay={280} duration={1500} />
+                    <FloatingLens reduced={reduced} />
                   </Rise>
-                  <Rise delay={itemDelay(1)} reduced={reduced} style={styles.introCopy}>
-                    <Text style={[styles.brandName, { color: color.accent }]}>{copy.intro.name}</Text>
+                  <Rise delay={itemDelay(2)} reduced={reduced} style={styles.introCopy}>
+                    <Text style={[styles.brandName, { color: color.ink }]} accessibilityRole="header">
+                      {copy.intro.name}
+                    </Text>
+                    <Text style={[styles.tagline, { color: color.ink }]}>{copy.intro.tagline}</Text>
                     <Text style={[styles.subline, { color: color.ink2 }]}>{copy.intro.subline}</Text>
                   </Rise>
                 </View>
@@ -225,24 +278,29 @@ export function Onboarding() {
                   <Rise delay={itemDelay(0)} reduced={reduced}>
                     <DescentCurve draw={!reduced} />
                   </Rise>
-                  {copy.science.pillars.map((pillar, i) => (
-                    <Rise key={pillar.key} delay={itemDelay(i + 1)} reduced={reduced}>
-                      <GlassSurface variant="card" radius={18} style={styles.pillarCard}>
-                        <View style={[styles.pillarBadge, { backgroundColor: color.accentWash }]}>
-                          <PillarIcon pillar={pillar.key} size={16} color={color.accent} />
+                  {copy.science.pillars.map((pillar, i) => {
+                    const tint = PILLAR_TINT[pillar.key]
+                    return (
+                      <Rise key={pillar.key} delay={itemDelay(i + 1)} reduced={reduced}>
+                        <View>
+                          <PillarGlow id={pillar.key} tint={tint.glow} delay={i * 900} reduced={reduced} />
+                          <GlassSurface variant="card" radius={18} style={styles.pillarCard}>
+                            <View style={[styles.pillarBadge, { backgroundColor: tint.wash, borderColor: tint.edge }]}>
+                              <PillarIcon pillar={pillar.key} size={17} color={tint.ink} />
+                            </View>
+                            <View style={styles.fill}>
+                              <Text style={[styles.pillarTitle, { color: tint.ink }]}>{pillar.title}</Text>
+                              <Text style={[styles.pillarBody, { color: color.ink }]}>{pillar.body}</Text>
+                            </View>
+                          </GlassSurface>
                         </View>
-                        <View style={styles.fill}>
-                          <Text style={[styles.pillarTitle, { color: color.ink }]}>{pillar.title}</Text>
-                          <Text style={[styles.pillarBody, { color: color.ink2 }]}>{pillar.body}</Text>
-                        </View>
-                      </GlassSurface>
-                    </Rise>
-                  ))}
+                      </Rise>
+                    )
+                  })}
                   <Rise delay={itemDelay(copy.science.pillars.length + 1)} reduced={reduced}>
                     <ScienceLink
                       label={`${copy.science.more} ›`}
                       onPress={() => {
-                        tap('light')
                         setScienceOpen(true)
                       }}
                     />
@@ -253,24 +311,12 @@ export function Onboarding() {
               {pg === 'bedtime' ? (
                 <View style={styles.stack}>
                   <Rise delay={itemDelay(0)} reduced={reduced}>
-                  <Text
-                    style={[styles.time, { color: color.ink }]}
-                    accessibilityLiveRegion="polite"
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {formatRange(schedule)}
-                  </Text>
-                  </Rise>
-                  <Rise delay={itemDelay(1)} reduced={reduced}>
-                    <NightRibbon
-                      offset={offset}
-                      rangeMinutes={range}
-                      spanFrom={offset - schedule.leadMinutes}
-                      onChange={setBedtime}
+                    <SleepAround
+                      schedule={schedule}
+                      onChange={(patch) => setSchedule({ ...patch, enabled: true })}
                     />
                   </Rise>
-                  <Rise delay={itemDelay(2)} reduced={reduced}>
+                  <Rise delay={itemDelay(1)} reduced={reduced} style={styles.reminder}>
                     <GlassSurface variant="card" radius={18} style={styles.row}>
                       <Text style={[styles.rowText, { color: color.ink }]}>{copy.bedtime.reminder}</Text>
                       <Toggle label={copy.bedtime.reminder} checked={reminders} onChange={(v) => set({ reminders: v })} />
@@ -311,7 +357,9 @@ export function Onboarding() {
 
               {pg === 'mind' ? (
                 <Rise delay={itemDelay(0)} reduced={reduced} style={styles.stack}>
+                  <MindTangle busy={profile.mind} reduced={reduced} height={Math.round(Math.min(190, Math.max(120, height * 0.19)))} />
                   <PillSlider
+                    fillColors={[MIND_CALM_FILL, MIND_BUSY_FILL]}
                     value={profile.mind}
                     onChange={(v) => update({ mind: v })}
                     title={copy.mind.label}
@@ -322,28 +370,24 @@ export function Onboarding() {
                 </Rise>
               ) : null}
 
-              {pg === 'games' ? (
-                <View style={styles.stack}>
-                  {GAME_STYLES.map((st, i) => {
-                    const on = profile.styles.includes(st)
+              {pg === 'habits' ? (
+                <View style={styles.habitList}>
+                  {PHONE_HABITS.map((h, i) => {
+                    const on = profile.habits.includes(h)
+                    const Icon = HABIT_ICON[h]
                     return (
-                      <Rise key={st} delay={itemDelay(i)} reduced={reduced}>
+                      <Rise key={h} delay={itemDelay(i)} reduced={reduced}>
                         <Pressable
-                          onPress={() => toggleStyle(st)}
+                          onPress={() => toggleHabit(h)}
                           accessibilityRole="checkbox"
                           accessibilityState={{ checked: on }}
                           style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.98 : 1 }] }]}
                         >
-                          <GlassSurface variant="card" radius={20} accent={on} interactive style={styles.styleCard}>
-                            <View style={styles.glyphs}>
-                              {STYLE_GAMES[st].map((id) => (
-                                <GameGlyph key={id} id={id} size={24} />
-                              ))}
-                            </View>
-                            <View style={styles.fill}>
-                              <Text style={[styles.styleTitle, { color: color.ink }]}>{copy.games.styles[st].title}</Text>
-                              <Text style={[styles.styleGames, { color: color.ink3 }]}>{copy.games.styles[st].games}</Text>
-                            </View>
+                          <GlassSurface variant="card" radius={16} accent={on} interactive style={styles.habitRow}>
+                            <Icon size={18} strokeWidth={1.7} color={on ? color.accent : color.ink2} />
+                            <Text style={[styles.habitText, { color: on ? color.ink : color.ink2 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                              {copy.habits.habits[h]}
+                            </Text>
                             <View style={[styles.check, { borderColor: on ? color.accent : color.line, backgroundColor: on ? color.accent : 'transparent' }]}>
                               {on ? <Check size={13} strokeWidth={2.6} color={color.accentInk} /> : null}
                             </View>
@@ -352,6 +396,10 @@ export function Onboarding() {
                       </Rise>
                     )
                   })}
+                  <Rise delay={itemDelay(PHONE_HABITS.length)} reduced={reduced} style={styles.privacy}>
+                    <Lock size={13} strokeWidth={1.8} color={color.ink3} />
+                    <Text style={[styles.privacyText, { color: color.ink3 }]}>{copy.habits.note}</Text>
+                  </Rise>
                 </View>
               ) : null}
 
@@ -423,6 +471,7 @@ export function Onboarding() {
   return (
     <View style={styles.root}>
       <AmbientBackdrop presetId={scene} />
+      <EdgeSwipeBack onBack={() => go(index - 1)} enabled={index > 0}>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Animated.View
           style={[
@@ -451,7 +500,19 @@ export function Onboarding() {
             ) : (
               <View style={styles.dots} />
             )}
-            <View style={styles.backBtn} />
+            <Pressable
+              onPress={toggleMuted}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={muted ? copy.unmute : copy.mute}
+              style={[styles.backBtn, styles.muteBtn]}
+            >
+              {muted ? (
+                <VolumeX size={20} strokeWidth={1.7} color={color.ink3} />
+              ) : (
+                <Volume2 size={20} strokeWidth={1.7} color={color.ink2} />
+              )}
+            </Pressable>
           </View>
 
           <HandoffTitle
@@ -470,7 +531,7 @@ export function Onboarding() {
                 key={pg}
                 leaving={pg !== page}
                 onGone={() => setLeaving((l) => (l === pg ? null : l))}
-                style={styles.answerLayer}
+                style={[styles.answerLayer, pg === 'intro' ? styles.answerCentred : null]}
               >
                 {renderAnswers(pg)}
               </AnswerLayer>
@@ -489,8 +550,65 @@ export function Onboarding() {
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
+      </EdgeSwipeBack>
       <ScienceSheet open={scienceOpen} onClose={() => setScienceOpen(false)} />
     </View>
+  )
+}
+
+/** The intro's mark in a glass lens over the fire, drifting a few points up and down. */
+function FloatingLens({ reduced }: { reduced: boolean }) {
+  const drift = useSharedValue(0)
+  useEffect(() => {
+    if (reduced) return
+    drift.set(withRepeat(withTiming(1, { duration: 4200, easing: Easing.inOut(Easing.sin) }), -1, true))
+  }, [drift, reduced])
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: -4 + 8 * drift.get() }] }))
+  return (
+    <Animated.View style={style}>
+      <GlassLens size={164} bounce="#FF9A4A" light="#FFE3C2">
+        <InvernaMark size={104} draw={!reduced} delay={280} duration={1500} />
+      </GlassLens>
+    </Animated.View>
+  )
+}
+
+/**
+ * Each pillar has its own colour, glowing behind its glass card: violet for
+ * attention, sea blue for sound, ember for light. The glows breathe slowly,
+ * out of step with each other, so the page feels alive without moving much.
+ */
+const PILLAR_TINT: Record<SciencePillarKey, { glow: string; wash: string; edge: string; ink: string }> = {
+  attention: { glow: '#8E7CFF', wash: 'rgba(142, 124, 255, 0.20)', edge: 'rgba(142, 124, 255, 0.45)', ink: '#C7BDFF' },
+  sound: { glow: '#3FB8C9', wash: 'rgba(63, 184, 201, 0.18)', edge: 'rgba(63, 184, 201, 0.45)', ink: '#9EE3EC' },
+  light: { glow: '#F09A45', wash: 'rgba(240, 154, 69, 0.20)', edge: 'rgba(240, 154, 69, 0.45)', ink: '#FFC98F' },
+}
+
+function PillarGlow({ id, tint, delay, reduced }: { id: string; tint: string; delay: number; reduced: boolean }) {
+  const breath = useSharedValue(reduced ? 0.6 : 0)
+  useEffect(() => {
+    if (reduced) return
+    breath.set(
+      withDelay(delay, withRepeat(withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }), -1, true)),
+    )
+  }, [breath, delay, reduced])
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.5 + 0.5 * breath.get(),
+    transform: [{ scaleX: 0.97 + 0.05 * breath.get() }],
+  }))
+  return (
+    <Animated.View pointerEvents="none" style={[styles.pillarGlow, style]}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <RadialGradient id={`glow-${id}`} cx="18%" cy="50%" rx="62%" ry="85%">
+            <Stop offset="0" stopColor={tint} stopOpacity="0.62" />
+            <Stop offset="0.55" stopColor={tint} stopOpacity="0.16" />
+            <Stop offset="1" stopColor={tint} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill={`url(#glow-${id})`} />
+      </Svg>
+    </Animated.View>
   )
 }
 
@@ -550,6 +668,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
+  muteBtn: {
+    alignItems: 'flex-end',
+  },
   dots: {
     flexDirection: 'row',
     gap: 6,
@@ -577,6 +698,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
+    paddingTop: 28,
+    justifyContent: 'flex-start',
+  },
+  answerCentred: {
+    paddingTop: 0,
     justifyContent: 'center',
   },
   center: {
@@ -584,18 +710,23 @@ const styles = StyleSheet.create({
   },
   introWrap: {
     alignItems: 'center',
-    gap: 20,
+    gap: 30,
     paddingHorizontal: 8,
   },
   introCopy: {
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   brandName: {
-    fontSize: 14,
+    fontSize: 40,
     fontWeight: '600',
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: -1,
+  },
+  tagline: {
+    fontSize: 20,
+    fontWeight: '500',
+    letterSpacing: -0.3,
+    textAlign: 'center',
   },
   subline: {
     fontSize: 16.5,
@@ -613,16 +744,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
+  pillarGlow: {
+    position: 'absolute',
+    top: -16,
+    bottom: -16,
+    left: -18,
+    right: -6,
+  },
   pillarBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pillarTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   pillarBody: {
     fontSize: 13,
@@ -632,11 +772,8 @@ const styles = StyleSheet.create({
   stack: {
     gap: 14,
   },
-  time: {
-    fontSize: 36,
-    fontWeight: '200',
-    letterSpacing: -1.4,
-    fontVariant: ['tabular-nums'],
+  reminder: {
+    marginTop: 10,
   },
   row: {
     flexDirection: 'row',
@@ -674,24 +811,20 @@ const styles = StyleSheet.create({
   privacyText: {
     fontSize: 13,
   },
-  styleCard: {
+  habitList: {
+    gap: 8,
+  },
+  habitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    height: 50,
   },
-  glyphs: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  styleTitle: {
-    fontSize: 15.5,
-    fontWeight: '600',
-  },
-  styleGames: {
-    fontSize: 12.5,
-    marginTop: 2,
+  habitText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
   },
   check: {
     width: 22,

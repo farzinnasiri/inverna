@@ -2,7 +2,7 @@
  * Tonight's plan from the evening check-in.
  *
  * The user answers two plain questions (how the day went, how they feel right
- * now) and Lull decides the rest: which kind of games go first and which two
+ * now) and Inverna decides the rest: which kind of games go first and which two
  * sounds to suggest. The user never picks "how the night should end"; that's
  * the app's job. Mapping from design/copy/copy.json (checkIn.mapping).
  *

@@ -437,17 +437,17 @@ export function KindleScreen({ onExit }: GameScreenProps) {
 
       if (next.justReached2048) {
         cue('chime', 0.95)
-        haptic('success')
+        haptic('complete')
         showMilestone()
       } else if (next.lastMergeMax >= 128) {
         cue('clear', 0.85)
-        haptic('medium')
+        haptic('reward')
       } else if (next.lastMergeMax > 0) {
         cue('place', 0.8)
-        haptic('light')
+        haptic('settle')
       } else {
         cue('tap', 0.55)
-        haptic('light')
+        haptic('tick')
       }
     },
     [cue, haptic, setSave, fallback, showMilestone],
@@ -473,7 +473,6 @@ export function KindleScreen({ onExit }: GameScreenProps) {
     if (milestoneTimerRef.current) clearTimeout(milestoneTimerRef.current)
     setMilestoneNotice(false)
     cue('undo', 0.7)
-    haptic('light')
   }, [cue, haptic, setSave, fallback])
 
   const doMakeRoom = useCallback(() => {
@@ -493,7 +492,6 @@ export function KindleScreen({ onExit }: GameScreenProps) {
       }
     })
     cue('undo', 0.55)
-    haptic('light')
   }, [cue, haptic, setSave, fallback])
 
   const doRestart = useCallback(() => {

@@ -4,15 +4,21 @@ import {
   combineFilters,
   DEFAULT_SCHEDULE,
   effectiveSchedule,
-  lightToFilter,
+  adaptiveFilter,
+  ADAPTIVE_NIGHT,
+  giveOrTakeOf,
+  minutesUntilRangeEnd,
+  rangeAround,
+  rangeCentre,
+  shiftHHMM,
+  brightnessForDim,
+  manualFilter,
   minutesUntilBedtime,
   nightKey,
   nightPhase,
   ribbonBedtime,
   ribbonEarliest,
   ribbonOffset,
-  scheduledLight,
-  scheduleFilter,
   type Schedule,
 } from './night'
 
@@ -29,23 +35,31 @@ describe('night schedule & filter', () => {
     expect(nightPhase(sched, new Date(2026, 10, 24, 1, 0)).phase).toBe('bedtime')
   })
 
-  it('returns zero filter during day or when disabled', () => {
-    const sched = { ...DEFAULT_SCHEDULE, enabled: false }
-    expect(scheduleFilter(sched, new Date(2026, 10, 23, 23, 15))).toEqual({ warmth: 0, dim: 0 })
-    expect(minutesUntilBedtime(sched, new Date(2026, 10, 23, 21, 0))).toBeNull()
+  it('adaptive light leaves the day alone and is off with no bedtime', () => {
+    const sched = { ...DEFAULT_SCHEDULE, bedtime: '23:00', leadMinutes: 60 }
+    expect(adaptiveFilter(sched, new Date(2026, 10, 23, 14, 0))).toEqual({ warmth: 0, dim: 0 })
+    expect(adaptiveFilter(sched, new Date(2026, 10, 24, 9, 0))).toEqual({ warmth: 0, dim: 0 })
+    const off = { ...sched, enabled: false }
+    expect(adaptiveFilter(off, new Date(2026, 10, 23, 23, 15))).toEqual({ warmth: 0, dim: 0 })
+    expect(minutesUntilBedtime(off, new Date(2026, 10, 23, 21, 0))).toBeNull()
   })
 
-  it('manual light is visible inside the lead window (never overridden by schedule)', () => {
-    const sched = { ...DEFAULT_SCHEDULE, bedtime: '23:00', leadMinutes: 45 }
-    const evening = new Date(2026, 10, 23, 22, 30)
-    const low = scheduledLight(0.1, true, sched, evening)
-    const mid = scheduledLight(0.4, true, sched, evening)
-    const high = scheduledLight(0.8, true, sched, evening)
+  it('adaptive light warms and dims steadily into the night, then holds', () => {
+    const sched = { ...DEFAULT_SCHEDULE, bedtime: '23:00', leadMinutes: 60 }
+    const at = (h: number, m = 0) => adaptiveFilter(sched, new Date(2026, 10, 23, h, m))
+    const times = [at(19, 30), at(21, 0), at(22, 0), at(22, 30), at(22, 59)]
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i]!.warmth).toBeGreaterThan(times[i - 1]!.warmth)
+      expect(times[i]!.dim).toBeGreaterThan(times[i - 1]!.dim)
+    }
+    expect(at(23, 30)).toEqual(ADAPTIVE_NIGHT)
+    expect(adaptiveFilter(sched, new Date(2026, 10, 24, 2, 0))).toEqual(ADAPTIVE_NIGHT)
+    // Never as far as the sliders go.
+    expect(ADAPTIVE_NIGHT.dim).toBeLessThan(manualFilter(0, 0).dim)
+  })
 
-    expect(low).toBeGreaterThan(0.1)
-    expect(mid).toBeGreaterThan(low)
-    expect(high).toBeGreaterThan(mid)
-    expect(lightToFilter(high).dim).toBeGreaterThan(lightToFilter(low).dim)
+  it('the brightness slider round-trips through dim', () => {
+    for (const b of [0, 0.25, 0.6, 1]) expect(brightnessForDim(manualFilter(0, b).dim)).toBeCloseTo(b, 6)
   })
 
   it('combines filters by taking max per channel clamped to 0..1', () => {
@@ -53,6 +67,33 @@ describe('night schedule & filter', () => {
       warmth: 1,
       dim: 0.5,
     })
+  })
+})
+
+describe('around, give or take', () => {
+  it('reads a range back as its middle and half its width', () => {
+    const sched = { ...DEFAULT_SCHEDULE, bedtime: '23:15', rangeMinutes: 60 }
+    expect(rangeCentre(sched)).toBe('23:45')
+    expect(giveOrTakeOf(sched)).toBe(30)
+  })
+
+  it('makes the same range from "around" and "give or take", across midnight', () => {
+    expect(rangeAround('00:15', 30)).toEqual({ bedtime: '23:45', rangeMinutes: 60 })
+    expect(rangeAround('23:45', 15)).toEqual({ bedtime: '23:30', rangeMinutes: 30 })
+    expect(shiftHHMM('23:50', 20)).toBe('00:10')
+    expect(shiftHHMM('00:10', -20)).toBe('23:50')
+  })
+
+  it('counts down to the late edge, also from inside the range', () => {
+    const sched = { ...DEFAULT_SCHEDULE, bedtime: '23:00', rangeMinutes: 60 }
+    expect(minutesUntilRangeEnd(sched, new Date(2026, 10, 23, 22, 0))).toBe(120)
+    expect(minutesUntilRangeEnd(sched, new Date(2026, 10, 23, 23, 30))).toBe(30)
+    expect(minutesUntilRangeEnd({ ...sched, enabled: false }, new Date(2026, 10, 23, 22, 0))).toBeNull()
+  })
+
+  it('snaps an odd width to the closest choice', () => {
+    expect(giveOrTakeOf({ ...DEFAULT_SCHEDULE, rangeMinutes: 100 })).toBe(45)
+    expect(giveOrTakeOf({ ...DEFAULT_SCHEDULE, rangeMinutes: 0 })).toBe(15)
   })
 })
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PRESETS } from '../sound/catalog'
-import { BACKDROP_IDS, SCENE, SCENE_RGB, isBackdropId, resolveBackdrop } from './scenes'
+import { BACKDROP_IDS, SCENE, SCENE_RGB, isBackdropId, resolveBackdrop, resolveBlend } from './scenes'
 import {
   LOOK_STRIDE,
   MAX_PARTICLES,
@@ -61,6 +61,53 @@ describe('backdrop scenes', () => {
     expect(resolveBackdrop(null, { ...base, layers: { waves: 0.7 } })).toBe('low-tide')
     expect(resolveBackdrop(null, { ...base, layers: { fire: 0.4, rain: 0.1 } })).toBe('hearth')
     expect(resolveBackdrop(null, { ...base, classicalMotif: 'adagio' })).toBe('adagio-dusk')
+  })
+})
+
+describe('woven scenes', () => {
+  const base = PRESETS[0]!.mix
+  const count = (s: Sim, scene: number) => s.owner.filter((o, i) => s.alive[i] && o === scene).length
+
+  it('weaves the other loud layers of a hand-made mix, never a preset', () => {
+    expect(resolveBlend('theta-rain', base)).toEqual([])
+    const both = { ...base, band: null, layers: { rain: 1, fire: 1 } }
+    expect(resolveBackdrop(null, both)).toBe('theta-rain')
+    expect(resolveBlend(null, both)).toEqual([SCENE.hearth, 1])
+    // A trace of a layer isn't enough to show.
+    expect(resolveBlend(null, { ...base, band: null, layers: { rain: 1, fire: 0.1 } })).toEqual([])
+  })
+
+  it('shares one particle budget: rain and fire together cost no more than one scene', () => {
+    const s = createSim(W, H, SCENE.rain, 7)
+    prewarm(s, 3)
+    for (let k = 0; k < 30 * 20; k++) simStep(s, 1 / 30, ENV, SCENE.rain, null, [SCENE.hearth, 1])
+    assertHealthy(s)
+    const rain = count(s, SCENE.rain)
+    const fire = count(s, SCENE.hearth)
+    expect(rain).toBeGreaterThan(SCENE_PARTICLES[SCENE.rain]! * 0.3)
+    expect(fire).toBeGreaterThan(SCENE_PARTICLES[SCENE.hearth]! * 0.3)
+    expect(aliveCount(s)).toBeLessThanOrEqual(Math.max(SCENE_PARTICLES[SCENE.rain]!, SCENE_PARTICLES[SCENE.hearth]!))
+  })
+
+  it('everything up is a little of everything, within the busiest scene\'s budget', () => {
+    const all = { ...base, band: null, layers: { rain: 1, waves: 1, fire: 1, wind: 1, brown: 1 } }
+    const main = BACKDROP_IDS.indexOf(resolveBackdrop(null, all))
+    const blend = resolveBlend(null, all)
+    const s = createSim(W, H, main, 3)
+    for (let k = 0; k < 30 * 25; k++) simStep(s, 1 / 30, ENV, main, null, blend)
+    assertHealthy(s)
+    const scenes = [main, ...blend.filter((_, i) => i % 2 === 0)]
+    expect(scenes).toHaveLength(4)
+    for (const sc of scenes) expect(count(s, sc)).toBeGreaterThan(0)
+    expect(aliveCount(s)).toBeLessThanOrEqual(Math.max(...scenes.map((sc) => SCENE_PARTICLES[sc]!)))
+  })
+
+  it('goes back to one scene when the other layer is turned down', () => {
+    const s = createSim(W, H, SCENE.rain, 11)
+    for (let k = 0; k < 30 * 10; k++) simStep(s, 1 / 30, ENV, SCENE.rain, null, [SCENE.hearth, 1])
+    for (let k = 0; k < 30 * 30; k++) simStep(s, 1 / 30, ENV, SCENE.rain, null, [])
+    expect(count(s, SCENE.hearth)).toBe(0)
+    expect(aliveCount(s)).toBeLessThanOrEqual(SCENE_PARTICLES[SCENE.rain]!)
   })
 })
 

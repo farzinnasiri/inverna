@@ -159,17 +159,16 @@ export function RallyScreen({ onExit }: GameScreenProps) {
 
           if (next.event === 'wall') {
             cue('tap', 0.42)
-            haptic('light')
           } else if (next.event === 'paddle') {
             cue('place', 0.72)
-            haptic('light')
+            // Felt only off your own paddle (the ball heads away, up the table); the far paddle is just heard.
+            if (next.ball.vy < 0) haptic('settle')
           } else if (next.event === 'scorePlayer') {
             cue('clear', 0.85)
-            haptic('success')
+            haptic('reward')
             persist(next)
           } else if (next.event === 'scoreAi') {
             cue('undo', 0.52)
-            haptic('medium')
             persist(next)
           }
         }
@@ -257,7 +256,6 @@ export function RallyScreen({ onExit }: GameScreenProps) {
       stateRef.current = updated
       setDifficultyState(nextDiff)
       cue('tap', 0.45)
-      haptic('light')
       persist(updated)
       updateMotion()
     },

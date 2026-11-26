@@ -1,15 +1,17 @@
-# Lull — agent guide
+# Inverna — agent guide
 
-Lull is an offline-first **Expo SDK 58 + React Native** app (iOS, Android, and Web PWA): 13 quiet classic games, procedural sleep sounds, and a low-blue night light built to replace late-night doomscrolling. Zero backend, no accounts, no ads, no streaks, no leaderboards.
+Inverna is an offline-first **Expo SDK 58 + React Native** app (iOS, Android, and Web PWA): 13 quiet classic games, procedural sleep sounds, and a low-blue night light built to replace late-night doomscrolling. Zero backend, no accounts, no ads, no streaks, no leaderboards.
 
 Read `docs/ARCHITECTURE.md`, `docs/DESIGN.md`, and `docs/REDESIGN_V2.md` before making major UI changes.
 
-Three iOS apps install side by side: Lull Dev, Lull Beta (TestFlight) and Lull (App Store), picked by `APP_VARIANT`. See `docs/RELEASES.md` before building, submitting or changing app IDs, icons or build numbers.
+Three iOS apps install side by side: Inverna Dev, Inverna Beta (TestFlight) and Inverna (App Store), picked by `APP_VARIANT`. See `docs/RELEASES.md` before building, submitting or changing app IDs, icons or build numbers.
+
+Haptics follow the Haptics section of `docs/DESIGN.md`: five named events (`tick`, `settle`, `reward`, `complete`, `commit`), silent buttons and navigation, nothing felt for events the person didn't cause. Read it before adding or changing any haptic.
 
 ## Commands
 
 ```bash
-make dev          # Run Lull through Portless (named local URL + LAN Metro)
+make dev          # Run Inverna through Portless (named local URL + LAN Metro)
 make start        # Expo Metro for Expo Go / phone over LAN
 make check        # pnpm typecheck (app + zero-DOM src/core) + pnpm test (vitest)
 make build-web    # export static Expo web PWA into dist/
@@ -24,4 +26,5 @@ make build-web    # export static Expo web PWA into dist/
 5. **Watchmaker Ink & Brass tokens only.** True `#000000` OLED ground, flat surfaces (`surface1`, `surface2`, `surface3`), 1px hairline borders, antique brass accent (`#C2A15F`), zero shadows (`shadow*`, `elevation`), zero UI gradients, zero `mix-blend-mode`.
 6. **Calm is a parameter.** Every engine accepts `calm` (0..1) from `useCalm()`: higher calm = slower, simpler, more forgiving.
 7. **Persistence:** `useGameSave(id, fallback)` stores one JSON blob per game via sync `kv()` (`expo-sqlite/localStorage/install` on native, `localStorage` on web) on meaningful moments, never per frame.
-8. **Don't touch files outside your assignment.** No git commands that write unless asked.
+8. **Ambient motion runs on the ambient clock.** Anything that moves on its own outside a game (backdrop, orb, ribbon, studio picture) steps on `useAmbientTime(active)` (`src/ui/rn/ambientClock.ts`, 30 fps, one shared timer), never on its own `useFrameCallback` or an endless `withRepeat`: those run at 120 Hz on ProMotion iPhones and make every glass surface above them redraw. Pass `active` false when hidden, the app is inactive, or a sheet covers it (`useCovered()`).
+9. **Don't touch files outside your assignment.** No git commands that write unless asked.

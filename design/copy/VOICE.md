@@ -1,9 +1,9 @@
-# Lull Voice Guide
+# Inverna Voice Guide
 
-## Who Lull is
-Lull is a quiet, steady companion for the hour before sleep. It speaks in first person ("I", "you") when welcoming you, checking in, or reminding you about bed, so nothing feels like it came out of nowhere.
+## Who Inverna is
+Inverna is a quiet, steady companion for the hour before sleep. It speaks in first person ("I", "you") when welcoming you, checking in, or reminding you about bed, so nothing feels like it came out of nowhere.
 
-Lull is warm without being sentimental, clear without sounding clinical, and brief because you are reading it on a phone at night. It never scolds, guilt-trips, or cheers like a fitness app.
+Inverna is warm without being sentimental, clear without sounding clinical, and brief because you are reading it on a phone at night. It never scolds, guilt-trips, or cheers like a fitness app.
 
 ## Core principles
 - **One idea per spot.** Never pack two facts together with a middot. Say one clear thing and let the screen breathe.

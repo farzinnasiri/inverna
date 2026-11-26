@@ -273,19 +273,18 @@ export function SettleScreen({ onExit }: GameScreenProps) {
     if (clearChanged) {
       if (state.lastClearCount >= 4) {
         cue('chime', 0.95)
-        haptic('success')
+        haptic('complete')
       } else {
         cue('clear', 0.85)
-        haptic('medium')
+        haptic('reward')
       }
     } else if (piecesChanged) {
       cue('place', 0.85)
-      haptic('light')
+      haptic('settle')
     }
 
     if (dissolveChanged) {
       cue('undo', 0.55)
-      haptic('light')
     }
 
     if (piecesChanged || linesChanged || dissolveChanged || state.gameOver) {
@@ -336,10 +335,9 @@ export function SettleScreen({ onExit }: GameScreenProps) {
       setState(next)
       if (feedback === 'tap') {
         cue('tap', 0.55)
-        haptic('light')
+        haptic('tick')
       } else if (feedback === 'undo') {
         cue('undo', 0.7)
-        haptic('light')
       }
     },
     [cue, haptic],

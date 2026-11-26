@@ -1,11 +1,15 @@
 /**
- * The order of the games on Play, and which two get the wide tiles.
+ * The order of the games on Play, which two get the wide tiles, and which
+ * ones Inverna suggests tonight.
  *
- * Three layers, shortest-lived wins:
- * 1. Tonight's check-in (one night) picks the lead game.
- * 2. Otherwise the person's own favourites, once they've played enough to
- *    tell, take the wide tiles.
- * 3. Underneath, the order for their intent: from onboarding, or tonight's.
+ * The layout is set once a night (Play keeps it until the next one) so tiles
+ * never move while someone is using the app:
+ * 1. The person's own favourites, once they've played enough to tell, take
+ *    the wide tiles.
+ * 2. Underneath, the order for their usual intent (from onboarding).
+ *
+ * Tonight's check-in doesn't move anything. It picks two or three games that
+ * Play marks in place (`tonightPicks`).
  *
  * Pure: no React, no time.
  */
@@ -29,12 +33,12 @@ export function favourites(plays: Partial<Record<GameId, number>>): GameId[] {
 }
 
 export function arrangeGames({
-  tonight,
+  tonight = null,
   usual,
   plays,
 }: {
-  /** From tonight's check-in; null when not answered tonight. */
-  tonight: NightIntent | null
+  /** From tonight's check-in; null when not answered tonight. Play leaves it out (see tonightPicks). */
+  tonight?: NightIntent | null
   /** From onboarding; null if skipped. */
   usual: NightIntent | null
   plays: Partial<Record<GameId, number>>
@@ -55,4 +59,30 @@ export function arrangeGames({
   })
   const wide = WIDE_SLOTS.map((slot) => result[slot]!).filter(Boolean)
   return { order: result, wide }
+}
+
+/** How many games Play marks for tonight. */
+export const PICKS = 2
+
+/**
+ * The games to suggest tonight: the first ones for tonight's check-in, or,
+ * before (or without) a check-in, for their usual intent, with their
+ * favourite first. Empty when Inverna knows nothing yet, so nothing is marked
+ * for no reason.
+ */
+export function tonightPicks({
+  tonight,
+  usual,
+  plays,
+}: {
+  tonight: NightIntent | null
+  usual: NightIntent | null
+  plays: Partial<Record<GameId, number>>
+}): GameId[] {
+  const intent = tonight ?? usual
+  if (!intent) return []
+  const forIntent = GAMES_BY_INTENT[intent]
+  // Tonight's answer decides alone; on a usual night their favourite leads if it suits the intent.
+  const fav = tonight ? [] : favourites(plays).filter((id) => forIntent.slice(0, 6).includes(id)).slice(0, 1)
+  return [...fav, ...forIntent.filter((id) => !fav.includes(id))].slice(0, PICKS)
 }

@@ -3,16 +3,16 @@ import { StyleSheet, View } from 'react-native'
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import * as SplashScreen from 'expo-splash-screen'
-import { LullMark } from './LullMark'
+import { InvernaMark } from './InvernaMark'
 
 // Hold the native splash until the first frame of the app is ready under it.
 void SplashScreen.preventAutoHideAsync().catch(() => {})
 
 /** Same size as the native splash image (app.config.ts, imageWidth). */
-const MARK = 160
+const MARK = 120
 
 /**
- * Cold-start handoff: the native splash (the Lull Line on black) is swapped for
+ * Cold-start handoff: the native splash (the Inverna mark on black) is swapped for
  * this identical view on the first frame, which then breathes out into the app
  * instead of cutting to it. Gone after ~1s; never shown on a warm resume.
  */
@@ -47,7 +47,7 @@ export function LaunchVeil() {
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.veil, veilStyle]}>
       <View style={styles.center}>
         <Animated.View style={markStyle}>
-          <LullMark size={MARK} />
+          <InvernaMark size={MARK} />
         </Animated.View>
       </View>
     </Animated.View>

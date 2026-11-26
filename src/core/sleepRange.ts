@@ -2,11 +2,11 @@
  * Learning someone's real sleep range from what the app sees at night.
  *
  * What people say in onboarding is their aim. For people who claw back "me
- * time" at night, the real range runs later. Lull already sees moments close
+ * time" at night, the real range runs later. Inverna already sees moments close
  * to falling asleep:
  * - `lightsOut`: they chose "Put my phone down", or a wind down ended with
  *   lights out. A strong signal.
- * - `leftApp`: the last time they left Lull at night. Weaker: they may keep
+ * - `leftApp`: the last time they left Inverna at night. Weaker: they may keep
  *   scrolling elsewhere, or leave early in the evening and come back later.
  *
  * One signal per night is kept (the latest). After LEARN_AFTER_NIGHTS nights
@@ -36,6 +36,7 @@ export const EARLY_LEAVE_MIN = 120
 const NARROWEST = 30
 const WIDEST = 120
 const STEP = 15
+const WIDTH_STEP = 30
 const EVENING_START = 18 * 60
 
 /** Minutes after 6 PM for a clock time, or null if it's daytime (6 AM to 6 PM). */
@@ -80,8 +81,9 @@ function quantile(sorted: number[], q: number): number {
 
 /**
  * The range their nights show, or null until there are enough of them. The
- * range is the middle half of the nights (25th to 75th percentile), snapped to
- * 15 minutes and kept between 30 minutes and 2 hours wide.
+ * range is the middle half of the nights (25th to 75th percentile), starting
+ * on a 15-minute mark, 30 minutes to 2 hours wide in 30-minute steps (so it
+ * reads back as "around X, give or take 15, 30, 45 or 60 minutes").
  */
 export function learnedRange(
   signals: readonly SleepSignal[],
@@ -106,6 +108,6 @@ export function learnedRange(
     late = mid + WIDEST / 2
   }
   const start = Math.max(0, Math.round(early / STEP) * STEP)
-  const width = Math.min(WIDEST, Math.max(NARROWEST, Math.round((late - early) / STEP) * STEP))
+  const width = Math.min(WIDEST, Math.max(NARROWEST, Math.round((late - early) / WIDTH_STEP) * WIDTH_STEP))
   return { bedtime: minuteToHHMM(start), rangeMinutes: width, nights: usable.length }
 }

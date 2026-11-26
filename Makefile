@@ -15,9 +15,9 @@ install: ## Install dependencies with pnpm
 
 # --- Develop --------------------------------------------------------------
 
-dev: dev-portless ## Run Lull through Portless (named local URL + LAN Metro)
+dev: dev-portless ## Run Inverna through Portless (named local URL + LAN Metro)
 
-dev-portless: ## Run Lull through Portless (auto-picks free port, works alongside other apps)
+dev-portless: ## Run Inverna through Portless (auto-picks free port, works alongside other apps)
 	node scripts/dev-portless.mjs
 
 expo-dev: ## Run Metro for your installed iPhone development build (--dev-client --lan + Portless)
@@ -41,40 +41,40 @@ android: ## Launch on Android Emulator
 
 # --- Cloud Builds via React Native Deploy (GitHub Actions) ----------------
 
-# Three apps, side by side (see docs/RELEASES.md): Lull Dev, Lull Beta, Lull.
+# Three apps, side by side (see docs/RELEASES.md): Inverna Dev, Inverna Beta, Inverna.
 
-build-ios-dev: ## Cloud-build Lull Dev, the dev client for your iPhone (com.oooflabs.lull.dev)
+build-ios-dev: ## Cloud-build Inverna Dev, the dev client for your iPhone (com.oooflabs.inverna.dev)
 	rnd build --platform ios --profile development-device
 
-build-ios-sim: ## Cloud-build Lull Dev for the iOS Simulator
+build-ios-sim: ## Cloud-build Inverna Dev for the iOS Simulator
 	rnd build --platform ios --profile development
 
-build-ios-preview: ## Cloud-build an ad-hoc Lull Beta to install without TestFlight
+build-ios-preview: ## Cloud-build an ad-hoc Inverna Beta to install without TestFlight
 	rnd build --platform ios --profile preview
 
-build-ios-beta: ## Cloud-build Lull Beta for TestFlight (com.oooflabs.lull.beta)
+build-ios-beta: ## Cloud-build Inverna Beta for TestFlight (com.oooflabs.inverna.beta)
 	rnd build --platform ios --profile beta
 
-submit-beta: ## Upload the latest finished Lull Beta build to TestFlight
+submit-beta: ## Upload the latest finished Inverna Beta build to TestFlight
 	@$(MAKE) --no-print-directory submit-latest PROFILE=beta
 
-build-ios-release: ## Cloud-build Lull for App Review and the App Store (com.oooflabs.lull)
+build-ios-release: ## Cloud-build Inverna for App Review and the App Store (com.oooflabs.inverna)
 	rnd build --platform ios --profile production
 
-submit-release: ## Upload the latest finished Lull build to App Store Connect
+submit-release: ## Upload the latest finished Inverna build to App Store Connect
 	@$(MAKE) --no-print-directory submit-latest PROFILE=production
 
-build-ios-testflight: build-ios-beta ## Alias: TestFlight builds are Lull Beta now
+build-ios-testflight: build-ios-beta ## Alias: TestFlight builds are Inverna Beta now
 
-submit-testflight: submit-beta ## Alias: TestFlight uploads are Lull Beta now
+submit-testflight: submit-beta ## Alias: TestFlight uploads are Inverna Beta now
 
 submit-latest:
 	@test -n "$(PROFILE)" || { echo "PROFILE is required"; exit 1; }
 	@BUILD_ID=$$(rnd build:list --platform ios --profile $(PROFILE) --status FINISHED --limit 1 --json | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')); const b = Array.isArray(d) ? d[0] : d?.builds?.[0]; console.log(b?.id ?? '');"); \
 	if [ -z "$$BUILD_ID" ]; then echo "No finished $(PROFILE) iOS build found"; exit 1; fi; \
 	rm -rf build && mkdir -p build && \
-	rnd build:download --build-id "$$BUILD_ID" --output build/lull-$(PROFILE).ipa && \
-	rnd submit --platform ios --profile $(PROFILE) --path build/lull-$(PROFILE).ipa
+	rnd build:download --build-id "$$BUILD_ID" --output build/inverna-$(PROFILE).ipa && \
+	rnd submit --platform ios --profile $(PROFILE) --path build/inverna-$(PROFILE).ipa
 
 builds: ## List recent React Native Deploy builds
 	rnd build:list

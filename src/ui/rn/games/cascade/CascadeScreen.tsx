@@ -305,7 +305,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
 
       if (next.lastCompleteEventId > prev.lastCompleteEventId) {
         cue('chime', 0.85)
-        haptic('success')
+        haptic('complete')
         persist(next)
         return
       }
@@ -314,13 +314,13 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
         const count = next.lastTapCount
         if (count >= 10) {
           cue('clear', 0.9)
-          haptic('medium')
+          haptic('reward')
         } else if (count >= 5) {
           cue('place', 0.8)
-          haptic('medium')
+          haptic('settle')
         } else {
           cue('tap', 0.65)
-          haptic('light')
+          haptic('tick')
         }
         persist(next)
         return
@@ -418,7 +418,6 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     syncUiMeta(next)
     redraw()
     cue('undo', 0.65)
-    haptic('light')
     persist(next)
   }, [cue, haptic, persist, redraw, syncUiMeta])
 
@@ -431,7 +430,6 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     syncUiMeta(next)
     redraw()
     cue('undo', 0.55)
-    haptic('light')
     persist(next, true)
   }, [cue, haptic, persist, redraw, syncUiMeta])
 
@@ -444,7 +442,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
     syncUiMeta(next)
     redraw()
     cue('tap', 0.55)
-    haptic('light')
+    haptic('tick')
     persist(next, true)
   }, [cue, haptic, persist, redraw, syncUiMeta])
 
@@ -531,6 +529,7 @@ export function CascadeScreen({ onExit }: GameScreenProps) {
       paused={paused}
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
+      onNewGame={handleNextBoard}
       onExit={handleExit}
       controls={
         <GameControlBar>

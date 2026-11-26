@@ -3,11 +3,11 @@ import type { ConfigContext, ExpoConfig } from 'expo/config'
 /**
  * Three apps that install side by side, each with its own data:
  *
- * - development: Lull Dev. The dev client that loads live code from Metro.
+ * - development: Inverna Dev. The dev client that loads live code from Metro.
  *   Installed straight from the build (ad hoc), never on App Store Connect.
- * - beta: Lull Beta. TestFlight, internal testers then external ones after
+ * - beta: Inverna Beta. TestFlight, internal testers then external ones after
  *   Apple's beta review. Its own App Store Connect app.
- * - production: Lull. What goes to App Review and the App Store.
+ * - production: Inverna. What goes to App Review and the App Store.
  *
  * Builds pick one with APP_VARIANT (set per profile in eas.json). Unset means
  * production, so the web export and anything unconfigured get the real app.
@@ -17,31 +17,34 @@ type Variant = 'development' | 'beta' | 'production'
 
 const VARIANTS: Record<
   Variant,
-  { name: string; id: string; scheme: string; icon: string; buildNumber: string; versionCode: number }
+  { name: string; id: string; scheme: string; icon: string; iosIcon: string; buildNumber: string; versionCode: number }
 > = {
   development: {
-    name: 'Lull Dev',
-    id: 'com.oooflabs.lull.dev',
-    scheme: 'lull-dev',
+    name: 'Inverna Dev',
+    id: 'com.oooflabs.inverna.dev',
+    scheme: 'inverna-dev',
     icon: './assets/images/icon-dev.png',
+    iosIcon: './assets/images/Inverna-Dev.icon',
     buildNumber: '1',
     versionCode: 1,
   },
   beta: {
-    name: 'Lull Beta',
-    id: 'com.oooflabs.lull.beta',
-    scheme: 'lull-beta',
+    name: 'Inverna Beta',
+    id: 'com.oooflabs.inverna.beta',
+    scheme: 'inverna-beta',
     icon: './assets/images/icon-beta.png',
+    iosIcon: './assets/images/Inverna-Beta.icon',
     // Each App Store Connect app counts its own builds: raise before every upload.
     buildNumber: '1',
     versionCode: 1,
   },
   production: {
-    name: 'Lull',
-    id: 'com.oooflabs.lull',
-    scheme: 'lull',
+    name: 'Inverna',
+    id: 'com.oooflabs.inverna',
+    scheme: 'inverna',
     icon: './assets/images/icon.png',
-    buildNumber: '2',
+    iosIcon: './assets/images/Inverna.icon',
+    buildNumber: '1',
     versionCode: 1,
   },
 }
@@ -53,7 +56,7 @@ const variant = VARIANTS[raw as Variant]
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: variant.name,
-  slug: 'lull',
+  slug: 'inverna',
   version: '1.0.0',
   platforms: ['ios', 'android', 'web'],
   scheme: variant.scheme,
@@ -62,6 +65,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   backgroundColor: '#000000',
   icon: variant.icon,
   ios: {
+    // Icon Composer bundle: iOS 26 renders default, dark, clear (Liquid Glass) and tinted from it.
+    icon: variant.iosIcon,
     bundleIdentifier: variant.id,
     buildNumber: variant.buildNumber,
     supportsTablet: true,
@@ -78,15 +83,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     adaptiveIcon: {
       // Android crops adaptive icons to a circle or squircle, which would cut
       // the variant band off; the app's name tells them apart there.
-      foregroundImage: './assets/images/icon.png',
-      backgroundColor: '#000000',
+      foregroundImage: './assets/images/adaptive-icon.png',
+      monochromeImage: './assets/images/monochrome-icon.png',
+      backgroundColor: '#0A0C10',
     },
   },
   web: {
     bundler: 'metro',
     output: 'single',
-    name: 'Lull',
-    shortName: 'Lull',
+    name: 'Inverna',
+    shortName: 'Inverna',
     backgroundColor: '#000000',
     themeColor: '#000000',
     favicon: './assets/images/favicon.png',
@@ -98,7 +104,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         iosBackgroundMode: true,
         iosMicrophonePermission:
-          'Lull uses its audio engine strictly for offline sleep soundscape synthesis and never accesses your microphone.',
+          'Inverna uses its audio engine strictly for offline sleep soundscape synthesis and never accesses your microphone.',
         androidForegroundService: true,
         androidFSTypes: ['mediaPlayback'],
         androidFSStopWithTask: true,
@@ -108,9 +114,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     [
       'expo-splash-screen',
       {
-        // The Lull Line, centred; LaunchVeil picks up at the same size and spot.
+        // The Inverna mark, centred; LaunchVeil picks up at the same size and spot.
         image: './assets/images/splash-mark.png',
-        imageWidth: 160,
+        imageWidth: 120,
         backgroundColor: '#000000',
       },
     ],

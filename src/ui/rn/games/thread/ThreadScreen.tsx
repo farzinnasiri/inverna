@@ -372,14 +372,14 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
           strokeRef.current = null
           persistRef.current(next, true)
           cueRef.current('chime', 0.9)
-          hapticRef.current('success')
+          hapticRef.current('complete')
           scheduleCompletionRef.current()
         } else if (pair && !isPairConnected(pair, prev.paths[active]) && isPairConnected(pair, next.paths[active])) {
           cueRef.current('place', 0.85)
-          hapticRef.current('medium')
+          hapticRef.current('reward')
         } else {
           cueRef.current('tap', 0.42)
-          hapticRef.current('selection')
+          hapticRef.current('tick')
         }
       }
 
@@ -420,7 +420,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
         persistRef.current(next, justSolved)
         if (justSolved) {
           cueRef.current('chime', 0.9)
-          hapticRef.current('success')
+          hapticRef.current('complete')
           scheduleCompletionRef.current()
         }
       },
@@ -440,7 +440,6 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
     setState(next)
     persistState(next)
     cue('undo', 0.7)
-    haptic('light')
   }, [paused, persistState, cue, haptic])
 
   const handleClear = useCallback(() => {
@@ -457,7 +456,6 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
     setState(next)
     persistState(next)
     cue('undo', 0.7)
-    haptic('light')
   }, [persistState, cue, haptic])
 
   const handleCancelActive = useCallback(() => {
@@ -478,7 +476,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
     setState(next)
     persistState(next)
     cue('tap', 0.6)
-    haptic('light')
+    haptic('tick')
   }, [calm, persistState, cue, haptic])
 
   useKeys(
@@ -567,6 +565,7 @@ export function ThreadScreen({ onExit }: GameScreenProps) {
       paused={paused}
       onPauseChange={handlePauseChange}
       onRestart={handleClear}
+      onNewGame={handleNextPuzzle}
       onExit={onExit}
       controls={
         <GameControlBar>

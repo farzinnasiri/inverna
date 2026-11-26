@@ -1,7 +1,7 @@
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from './harmonics'
 
 /**
- * Sound catalogue: pure data. Every sound in Lull is synthesised in real time
+ * Sound catalogue: pure data. Every sound in Inverna is synthesised in real time
  * on-device (zero audio files, zero cloud), combining shaped 1/f noise beds,
  * multi-voice harmonic pads, generative nocturnal classical piano/strings,
  * phase-locked AM modulation, asymmetric 0.1 Hz breath swells, and scale-locked cues.
@@ -12,7 +12,8 @@ export type BandId = 'delta' | 'theta' | 'alpha' | 'gamma'
 export type SleepBandId = 'delta' | 'theta' | 'alpha'
 export type SoundSceneId = 'rain' | 'classical' | 'fire' | 'waves' | 'delta' | 'wind' | 'reverie'
 export type ClassicalMotifStyle = 'nocturne' | 'adagio' | 'reverie'
-export type SoundIconId =
+/** Icons with their own lock-screen artwork (assets/artwork). */
+export type ArtworkIconId =
   | 'rain'
   | 'piano'
   | 'fire'
@@ -25,6 +26,60 @@ export type SoundIconId =
   | 'book'
   | 'trees'
   | 'compass'
+
+/** Extra icons for sounds people make. The lock screen shows the nearest artwork. */
+export type ExtraIconId = 'leaf' | 'mountain' | 'snow' | 'cloud-moon' | 'star' | 'heart' | 'shell' | 'bed'
+
+export type SoundIconId = ArtworkIconId | ExtraIconId
+
+const NEAREST_ARTWORK: Record<ExtraIconId, ArtworkIconId> = {
+  leaf: 'trees',
+  mountain: 'wind',
+  snow: 'wind',
+  'cloud-moon': 'moon',
+  star: 'moon',
+  heart: 'moon',
+  shell: 'waves',
+  bed: 'moon',
+}
+
+export function artworkIcon(icon: SoundIconId): ArtworkIconId {
+  return (NEAREST_ARTWORK as Partial<Record<SoundIconId, ArtworkIconId>>)[icon] ?? (icon as ArtworkIconId)
+}
+
+/** The icons offered when saving a sound of your own. */
+export const CUSTOM_ICONS: readonly SoundIconId[] = [
+  'moon',
+  'cloud-moon',
+  'star',
+  'rain',
+  'waves',
+  'shell',
+  'wind',
+  'snow',
+  'fire',
+  'trees',
+  'leaf',
+  'mountain',
+  'feather',
+  'piano',
+  'heart',
+  'bed',
+]
+
+/** A sound someone made in the Mix studio and saved. Kept on the device. */
+export interface CustomSound {
+  id: string
+  name: string
+  /** Optional few words under the name. */
+  hint: string
+  icon: SoundIconId
+  mix: Mix
+  createdAt: number
+}
+
+/** Saved sounds have ids that can never clash with a preset's. */
+export const isCustomSoundId = (id: string | null | undefined): boolean => Boolean(id?.startsWith('mine-'))
 
 export interface LayerMeta {
   id: LayerId

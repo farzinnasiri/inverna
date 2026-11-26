@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
+import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { Award, Bell, BellOff, ChevronLeft, CircleHelp, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react-native'
 import { eveningState } from '@/core/evening'
+import { feel } from '@/ui/feel'
 import { gameMeta, type GameId } from '@/core/games/catalog'
 import { nightKey } from '@/core/night'
 import { readJSON } from '@/core/storage'
@@ -20,6 +21,7 @@ import { AmbientBackdrop } from './AmbientBackdrop'
 import { Button, FRAME_MAX_WIDTH, IconButton, Segmented, Sheet } from './controls'
 import { GlassSurface } from './Glass'
 import { useBackgroundPause, useHighScore, useReducedMotion, useResponsiveLayout } from './hooks'
+import { EdgeSwipeBack } from './motion'
 
 export interface GameScreenProps {
   onExit: () => void
@@ -30,10 +32,24 @@ export interface Stat {
   value: string | number
 }
 
-const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
+/**
+ * Opt-in full-bleed play (Pond): the game draws its own water under the whole
+ * screen, the top bar floats over it and can fade while you play, and there's
+ * no telemetry row. Other games leave this out and are unchanged.
+ */
+export interface Immersive {
+  /** Drawn behind the top bar, edge to edge. `chrome` is where the top bar ends and the home indicator begins (px from the top and bottom). */
+  backdrop: (chrome: { top: number; bottom: number }) => ReactNode
+  /** Top bar opacity, 0..1, driven by the game. */
+  chromeOpacity?: SharedValue<number>
+}
 
-/** Games whose difficulty is the shared Easy / Medium / Hard (through `useCalm(gameId)`). */
-const SHARED_DIFFICULTY = new Set<GameId>(['thread', 'drift', 'weave', 'dim', 'lanterns', 'settle', 'kindle', 'cascade', 'chime'])
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1)
+/** Height of the floating top bar (styles.top). */
+const TOP_BAR_HEIGHT = 46
+
+/** Games whose difficulty is the shared Easy / Medium / Hard (through `useCalm(gameId)`, or read directly, as Pond does). */
+const SHARED_DIFFICULTY = new Set<GameId>(['thread', 'drift', 'weave', 'dim', 'lanterns', 'settle', 'kindle', 'cascade', 'chime', 'pond'])
 const DIFFICULTIES: readonly { value: Difficulty; label: string }[] = [
   { value: 'easy', label: doorCopy.easy },
   { value: 'medium', label: doorCopy.medium },
@@ -62,8 +78,10 @@ export function GameShell({
   paused,
   onPauseChange,
   onRestart,
+  onNewGame,
   onExit,
   controls,
+  immersive,
   children,
 }: {
   gameId: GameId
@@ -80,9 +98,16 @@ export function GameShell({
   onReady?: () => void
   paused: boolean
   onPauseChange: (paused: boolean) => void
+  /** Start this same game again from the beginning (same puzzle, same board). */
   onRestart?: () => void
+  /**
+   * A fresh game at the difficulty or mode just chosen. Leave it out when
+   * `onRestart` already deals a new one.
+   */
+  onNewGame?: () => void
   onExit: () => void
   controls?: ReactNode
+  immersive?: Immersive
   children: ReactNode
 }) {
   const { color } = useTokenColors()
@@ -96,7 +121,7 @@ export function GameShell({
   // The door opens first: difficulty, Continue or New game. It counts as a
   // sheet so the Pause sheet stays out of the way while it's up.
   const [hadSave] = useState(() => readJSON<unknown>(`game:${gameId}`, null) !== null)
-  const [sheet, setSheet] = useState<{ kind: 'door' | 'help' | 'audio' | 'nudge'; fromPause: boolean } | null>(() => ({
+  const [sheet, setSheet] = useState<{ kind: 'door' | 'new' | 'help' | 'audio' | 'nudge'; fromPause: boolean } | null>(() => ({
     kind: 'door',
     fromPause: false,
   }))
@@ -104,7 +129,8 @@ export function GameShell({
   const nudgeOpen = sheet?.kind === 'nudge'
   const helpOpen = sheet?.kind === 'help'
   const audioOpen = sheet?.kind === 'audio'
-  const openSheet = (kind: 'help' | 'audio') => {
+  const newOpen = sheet?.kind === 'new'
+  const openSheet = (kind: 'help' | 'audio' | 'new') => {
     const fromPause = paused
     if (!paused && ready) onPauseChange(true)
     setSheet({ kind, fromPause: fromPause || !ready })
@@ -122,7 +148,16 @@ export function GameShell({
   }, [])
 
   const enter = (fresh: boolean) => {
-    if (fresh) onRestart?.()
+    if (fresh) (onNewGame ?? onRestart)?.()
+    setSheet(null)
+    if (ready) onPauseChange(false)
+    onReady?.()
+  }
+  const newGame = onNewGame ?? onRestart
+  /** From the New game sheet: deal a new one (or replay this one), then play. */
+  const startOver = (same: boolean) => {
+    if (same) onRestart?.()
+    else newGame?.()
     setSheet(null)
     if (ready) onPauseChange(false)
     onReady?.()
@@ -170,6 +205,7 @@ export function GameShell({
     }
     setSheet(null)
     if (choice === 'phone-down') {
+      feel('commit')
       // Tonight's sound plays on and fades out by itself; the screen can sleep.
       useSession.getState().dismiss()
       const st = useSettings.getState()
@@ -247,23 +283,38 @@ export function GameShell({
 
   const showBestPill = !hideBest && Boolean(formattedBest)
   const hasStats = Boolean(stats && stats.length > 0)
-  const showTelemetryRow = hasStats || showBestPill || Boolean(activeSoundName)
+  const showTelemetryRow = !immersive && (hasStats || showBestPill || Boolean(activeSoundName))
+  const fullOpacity = useSharedValue(1)
+  const chromeOpacity = immersive?.chromeOpacity ?? fullOpacity
+  const chromeStyle = useAnimatedStyle(() => ({ opacity: chromeOpacity.get() }))
+  const padTop = insets.top + (isCompact ? 2 : 6)
+  const padBottom = Math.max(insets.bottom, isCompact ? 6 : 10)
 
   return (
     <View
       style={[
         styles.root,
         {
-          paddingTop: insets.top + (isCompact ? 2 : 6),
-          paddingBottom: Math.max(insets.bottom, isCompact ? 6 : 10),
+          paddingTop: padTop,
+          paddingBottom: padBottom,
         },
       ]}
     >
       {/* The night you came from, carried in: colour only, dimmed, no motion. */}
       <AmbientBackdrop still dim={0.8} />
-      <Animated.View style={[styles.frame, frameAnimStyle]}>
+      {/* Swipe in from the left edge to step out, the same as the back button (it saves first). */}
+      <EdgeSwipeBack onBack={stepOut} style={styles.swipe}>
+      {immersive ? (
+        <View style={[styles.immersive, { top: -padTop, bottom: -padBottom }]}>
+          {immersive.backdrop({ top: padTop + TOP_BAR_HEIGHT, bottom: padBottom })}
+        </View>
+      ) : null}
+      <Animated.View pointerEvents={immersive ? 'box-none' : 'auto'} style={[styles.frame, frameAnimStyle]}>
         {/* Slim Liquid Glass Top Bar */}
-        <View style={[styles.top, { paddingHorizontal: sideMargin }]}>
+        <Animated.View
+          pointerEvents={immersive ? 'box-none' : 'auto'}
+          style={[styles.top, { paddingHorizontal: sideMargin }, chromeStyle]}
+        >
           <GlassSurface variant="chrome" radius={21} style={styles.capsule}>
             <IconButton label="Back" onPress={stepOut} style={styles.capBtn}>
               <ChevronLeft size={20} strokeWidth={1.65} color={color.ink} />
@@ -272,6 +323,14 @@ export function GameShell({
             <IconButton label="How to play" onPress={() => openSheet('help')} style={styles.capBtn}>
               <CircleHelp size={17} strokeWidth={1.65} color={color.ink2} />
             </IconButton>
+            {newGame ? (
+              <>
+                <View style={styles.capDiv} />
+                <IconButton label={doorCopy.newGame} onPress={() => openSheet('new')} style={styles.capBtn}>
+                  <RotateCcw size={16} strokeWidth={1.65} color={color.ink2} />
+                </IconButton>
+              </>
+            ) : null}
           </GlassSurface>
 
           <View style={styles.titleStack}>
@@ -311,7 +370,7 @@ export function GameShell({
               <Pause size={17} strokeWidth={1.65} color={color.ink2} />
             </IconButton>
           </GlassSurface>
-        </View>
+        </Animated.View>
 
         {/* Ultra-slim inline telemetry strip (never adds bulky card chrome; hides "No best") */}
         {showTelemetryRow && (
@@ -377,7 +436,7 @@ export function GameShell({
           </View>
         )}
 
-        <View style={[styles.stage, { paddingHorizontal: sideMargin }]}>
+        <View pointerEvents={immersive ? 'box-none' : 'auto'} style={[styles.stage, { paddingHorizontal: sideMargin }]}>
           {children}
 
         </View>
@@ -397,6 +456,7 @@ export function GameShell({
           </View>
         ) : null}
       </Animated.View>
+      </EdgeSwipeBack>
 
       {/* Identical Audio Sheet across all 13 games */}
       <GameAudioSheet open={audioOpen} onClose={closeSheet} />
@@ -476,6 +536,32 @@ export function GameShell({
         </View>
       </Sheet>
 
+      {/* New game, from the top bar or Pause: how hard, then a fresh one (or this one again). */}
+      <Sheet open={newOpen} onClose={closeSheet} label={`${doorCopy.newGame}, ${meta.name}`}>
+        <Text style={[styles.kicker, { color: color.ink3 }]}>{doorCopy.newGame}</Text>
+        <Text style={[styles.sheetTitle, { color: color.ink }]}>{meta.name}</Text>
+        {SHARED_DIFFICULTY.has(gameId) ? (
+          <View style={styles.doorPicker}>
+            <Segmented label={doorCopy.difficulty} options={DIFFICULTIES} value={difficulty} onChange={setDifficulty} />
+          </View>
+        ) : null}
+        {readyExtra ? <View style={styles.doorPicker}>{readyExtra}</View> : null}
+        <View style={styles.sheetActions}>
+          <Button variant="primary" block onPress={() => startOver(false)}>
+            <Play size={15} strokeWidth={2} color={color.accent} />
+            <Text style={[styles.readyBtnText, { color: color.accent }]}>{doorCopy.start}</Text>
+          </Button>
+          {onNewGame && onRestart ? (
+            <Button variant="quiet" block onPress={() => startOver(true)}>
+              {doorCopy.replay}
+            </Button>
+          ) : null}
+          <Button variant="ghost" size="sm" block onPress={closeSheet}>
+            {doorCopy.keepPlaying}
+          </Button>
+        </View>
+      </Sheet>
+
       {/* Bedtime arrived mid-game. */}
       <Sheet open={nudgeOpen} onClose={() => answerNudge('keep')} label={nudgeCopy.title(userName)}>
         <Text style={[styles.sheetTitle, { color: color.ink }]}>{nudgeCopy.title(userName)}</Text>
@@ -527,14 +613,11 @@ export function GameShell({
               icon={<CircleHelp size={18} strokeWidth={1.6} color={color.ink2} />}
               onPress={() => setSheet({ kind: 'help', fromPause: true })}
             />
-            {onRestart ? (
+            {newGame ? (
               <PauseDoor
-                label="Start over"
+                label={doorCopy.newGame}
                 icon={<RotateCcw size={18} strokeWidth={1.6} color={color.ink2} />}
-                onPress={() => {
-                  onRestart()
-                  onPauseChange(false)
-                }}
+                onPress={() => setSheet({ kind: 'new', fromPause: true })}
               />
             ) : null}
           </View>
@@ -666,6 +749,15 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     backgroundColor: '#000000',
+  },
+  swipe: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  immersive: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
   frame: {
     flex: 1,

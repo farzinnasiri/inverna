@@ -18,7 +18,7 @@ const headInject = `<style>html,body{background:#000000;margin:0;color-scheme:da
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Lull" />
+<meta name="apple-mobile-web-app-title" content="Inverna" />
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 <script>if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}</script>`
@@ -27,7 +27,7 @@ if (!html.includes('manifest.webmanifest')) {
   html = html.replace('</head>', `${headInject}\n</head>`)
 }
 html = html.replace('initial-scale=1, shrink-to-fit=no', 'initial-scale=1, viewport-fit=cover, user-scalable=no')
-html = html.replace(/<title>.*?<\/title>/, '<title>Lull</title>')
+html = html.replace(/<title>.*?<\/title>/, '<title>Inverna</title>')
 fs.writeFileSync(index, html)
 
 // Collect precache list for offline PWA service worker
@@ -46,12 +46,12 @@ files.sort()
 
 const hash = crypto.createHash('sha256')
 for (const f of files) hash.update(f).update(fs.readFileSync(path.join(dist, f)))
-const cacheName = `lull-${hash.digest('hex').slice(0, 14)}`
+const cacheName = `inverna-${hash.digest('hex').slice(0, 14)}`
 
 const sw = fs
   .readFileSync(path.resolve('public/sw.js'), 'utf8')
-  .replace('"__LULL_CACHE__"', JSON.stringify(cacheName))
+  .replace('"__INVERNA_CACHE__"', JSON.stringify(cacheName))
   .replace('/* precache */ []', JSON.stringify(files))
 fs.writeFileSync(path.join(dist, 'sw.js'), sw)
 
-console.log(`Lull Web PWA ready (${files.length} precached files, ${cacheName}).`)
+console.log(`Inverna Web PWA ready (${files.length} precached files, ${cacheName}).`)

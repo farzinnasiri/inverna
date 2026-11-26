@@ -71,7 +71,7 @@ describe('settle engine', () => {
       expect(new Set(slice)).toEqual(new Set(TETROMINO_TYPES))
     }
 
-    // All 7 tetrominoes map to 7 distinct Lull piece colors
+    // All 7 tetrominoes map to 7 distinct Inverna piece colors
     expect(new Set(Object.values(PIECE_COLORS)).size).toBe(7)
   })
 

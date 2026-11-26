@@ -10,7 +10,7 @@ export function deviceStorage(): KeyValueStore {
   try {
     const ls = globalThis.localStorage
     if (ls) {
-      const probe = '__lull_probe__'
+      const probe = '__inverna_probe__'
       ls.setItem(probe, '1')
       ls.removeItem(probe)
       return {

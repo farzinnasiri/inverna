@@ -239,7 +239,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
 
       if (next.solved) {
         cue('chime', 0.9)
-        haptic('success')
+        haptic('complete')
         const delayMs = reducedMotion ? 180 : 520
         if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
         completionTimerRef.current = setTimeout(() => {
@@ -247,7 +247,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
         }, delayMs)
       } else {
         cue('place', 0.85)
-        haptic('light')
+        haptic('settle')
       }
     },
     [clearHint, selectTile, setSave, cue, haptic, reducedMotion],
@@ -264,7 +264,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
       if (prevSel === null) {
         selectTile(index)
         cue('tap', 0.65)
-        haptic('light')
+        haptic('tick')
       } else if (prevSel === index) {
         selectTile(null)
         cue('tap', 0.4)
@@ -291,7 +291,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
     clearHint()
     setHintIndices(pair)
     cue('tap', 0.45)
-    haptic('light')
+    haptic('tick')
 
     if (reducedMotion) {
       hintPulse.setValue(0.9)
@@ -339,7 +339,6 @@ export function HueScreen({ onExit }: GameScreenProps) {
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('undo', 0.7)
-    haptic('light')
   }, [cancelDrag, clearHint, selectTile, setSave, cue, haptic])
 
   const handleNextPalette = useCallback(() => {
@@ -361,7 +360,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('tap', 0.6)
-    haptic('light')
+    haptic('tick')
   }, [cancelDrag, clearHint, selectTile, setSave, cue, haptic])
 
   const changeDifficulty = useCallback(
@@ -391,7 +390,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
         completed: isValidSave(prev) ? prev.completed : 0,
       }))
       cue('tap', 0.55)
-      haptic('light')
+      haptic('tick')
     },
     [cancelDrag, clearHint, selectTile, setSave, cue, haptic],
   )
@@ -456,7 +455,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
           session.dragging = true
           selectTile(null)
           cueRef.current('tap', 0.6)
-          hapticRef.current('light')
+          hapticRef.current('tick')
           setDragRender({ fromIdx: session.fromIdx, hoverIdx })
         } else if (session.hoverIdx !== hoverIdx) {
           setDragRender({ fromIdx: session.fromIdx, hoverIdx })
@@ -558,6 +557,7 @@ export function HueScreen({ onExit }: GameScreenProps) {
       paused={paused}
       onPauseChange={handlePauseChange}
       onRestart={handleRestart}
+      onNewGame={handleNextPalette}
       onExit={onExit}
       controls={
         <View style={styles.bar}>

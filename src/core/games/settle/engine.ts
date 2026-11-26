@@ -1,5 +1,5 @@
 /**
- * Settle — pure deterministic Tetris engine for Lull.
+ * Settle — pure deterministic Tetris engine for Inverna.
  *
  * Zero DOM, zero React, zero Math.random. Ports to React Native unchanged.
  *
@@ -34,7 +34,7 @@ export const DISSOLVE_DURATION_MS = 1600
 export type TetrominoType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L'
 export type Rotation = 0 | 1 | 2 | 3
 
-/** Matches Lull's 7 Ember piece colour tokens (`src/design/tokens.ts`). */
+/** Matches Inverna's 7 Ember piece colour tokens (`src/design/tokens.ts`). */
 export type PieceColor = 'ember' | 'saffron' | 'honey' | 'moss' | 'clay' | 'rose' | 'sand'
 
 export type Cell = PieceColor | null

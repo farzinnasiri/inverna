@@ -1,4 +1,4 @@
-# Lull
+# Inverna
 
 Quiet classic games, procedural sleep sounds, and a low-blue night light — built with **Expo + React Native** for **iOS, Android, and Web PWA** to replace late-night doomscrolling.
 
@@ -8,7 +8,7 @@ No backend, no accounts, no ads, no streaks, no leaderboards. Everything lives o
 
 ```bash
 make install      # pnpm install
-make dev          # Run Lull through Portless (named local URL + LAN Metro for Expo Go)
+make dev          # Run Inverna through Portless (named local URL + LAN Metro for Expo Go)
 make start        # Expo Metro directly for Expo Go / iPhone over LAN
 make ios          # Launch on iOS Simulator
 make android      # Launch on Android Emulator

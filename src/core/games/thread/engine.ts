@@ -1,5 +1,5 @@
 /**
- * Thread — classic Connect the Dots / Flow Free engine for Lull.
+ * Thread — classic Connect the Dots / Flow Free engine for Inverna.
  *
  * Pure TypeScript: zero DOM, zero React, zero Math.random. Plain serialisable
  * JSON state in, plain state out. Ports to React Native / Expo unchanged.
@@ -11,7 +11,7 @@
  */
 import { createRng } from '../../rng'
 
-/** Matches Lull's 7 Ember piece colour tokens (`src/design/tokens.ts`). */
+/** Matches Inverna's 7 Ember piece colour tokens (`src/design/tokens.ts`). */
 export type PieceColor = 'ember' | 'saffron' | 'honey' | 'moss' | 'clay' | 'rose' | 'sand'
 
 export const PIECE_COLORS: readonly PieceColor[] = [

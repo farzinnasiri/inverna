@@ -1,7 +1,7 @@
 import type { AudioBufferLike, AudioContextLike } from './types'
 
 /**
- * Physically modeled stereo acoustic texture buffers for Lull (Pass 2 — audited).
+ * Physically modeled stereo acoustic texture buffers for Inverna (Pass 2 — audited).
  *
  * Calibrated directly against real field recordings (spectral envelope,
  * spectral flatness, crest factor, stereo coherence, and slow envelope dynamics)
@@ -902,18 +902,27 @@ const KIND_MAX_SR: Partial<Record<NoiseKind, number>> = {
   'wind-gust': 8000,
 }
 
-export function createNoiseBuffer(
-  ctx: AudioContextLike,
-  kind: NoiseKind,
-  seconds = KIND_SECONDS[kind],
-): AudioBufferLike {
+interface NoiseData {
+  sampleRate: number
+  left: Float32Array
+  right: Float32Array
+}
+
+/** Samples worked out ahead of time (`precomputeNoise`), waiting for their first buffer. */
+const ready: Partial<Record<NoiseKind, NoiseData>> = {}
+
+/**
+ * A texture's samples. Every texture is capped at 24 kHz or less, below any
+ * device's audio rate, so the samples don't depend on the audio context and
+ * can be worked out before one exists.
+ */
+function noiseData(kind: NoiseKind, seconds = KIND_SECONDS[kind], contextRate = 48000): NoiseData {
   const maxSr = KIND_MAX_SR[kind] ?? NOISE_MAX_SAMPLE_RATE
-  const sampleRate = Math.max(8000, Math.min(maxSr, Math.round(ctx.sampleRate || 44100)))
+  const sampleRate = Math.max(8000, Math.min(maxSr, Math.round(contextRate || 44100)))
   const length = Math.max(1, Math.round(sampleRate * seconds))
   const xfade = Math.min(Math.floor(length / 4), Math.round(sampleRate * LOOP_XFADE_SECONDS))
-  const buffer = ctx.createBuffer(2, length, sampleRate)
-  const outL = buffer.getChannelData(0)
-  const outR = buffer.getChannelData(1)
+  const outL = new Float32Array(length)
+  const outR = new Float32Array(length)
   const seed = KIND_SEED[kind]
 
   switch (kind) {
@@ -948,8 +957,45 @@ export function createNoiseBuffer(
       fillWindStereo(outL, outR, xfade, sampleRate, makeRng(seed))
       break
   }
+  return { sampleRate, left: outL, right: outR }
+}
 
+export function createNoiseBuffer(
+  ctx: AudioContextLike,
+  kind: NoiseKind,
+  seconds = KIND_SECONDS[kind],
+): AudioBufferLike {
+  const contextRate = Math.round(ctx.sampleRate || 44100)
+  let data = seconds === KIND_SECONDS[kind] ? ready[kind] : undefined
+  if (data && data.sampleRate > contextRate) data = undefined
+  if (data) delete ready[kind]
+  else data = noiseData(kind, seconds, contextRate)
+  const buffer = ctx.createBuffer(2, data.left.length, data.sampleRate)
+  buffer.getChannelData(0).set(data.left)
+  buffer.getChannelData(1).set(data.right)
   return buffer
+}
+
+/**
+ * Work out the textures' samples in the background after launch, one per JS
+ * turn and well apart, so the first sound starts at once instead of waiting
+ * while its rain or surf is generated. Needs no audio context and doesn't
+ * touch the audio session, so other apps' music keeps playing.
+ */
+export function precomputeNoise(order: readonly NoiseKind[] = ALL_KINDS, gapMs = 350): void {
+  let i = 0
+  const next = () => {
+    while (i < order.length && ready[order[i]!]) i++
+    if (i >= order.length) return
+    const kind = order[i++]!
+    try {
+      ready[kind] = noiseData(kind)
+    } catch {
+      /* the buffer is made on demand instead */
+    }
+    if (i < order.length) setTimeout(next, gapMs)
+  }
+  setTimeout(next, gapMs)
 }
 
 const ALL_KINDS: readonly NoiseKind[] = [

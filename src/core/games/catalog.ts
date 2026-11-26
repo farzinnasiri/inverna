@@ -1,5 +1,5 @@
 /**
- * The thirteen Lull games. Pure data — shared by web and native.
+ * The thirteen Inverna games. Pure data — shared by web and native.
  * Each has a clear nocturnal mood tier so tonight's check-in can curate
  * and morph the Home bento cleanly without streaks or leaderboards.
  */
@@ -51,14 +51,14 @@ export const GAMES: readonly GameMeta[] = [
     id: 'pond',
     name: 'Pond',
     classic: 'Koi pond',
-    line: 'Guide a koi across quiet water to open glowing lotus buds.',
-    effect: 'Effortless flow',
+    line: 'Loop the lotus buds to reveal the picture hidden in the pond.',
+    effect: 'Quiet planning',
     mood: 'calm',
     status: 'ready',
     rules: {
-      goal: 'Guide the koi to each glowing bud until every lotus opens.',
-      play: 'Touch or drag anywhere on the water and the koi will swim toward your finger. Lift your finger to let it wander.',
-      tip: 'There is no timer or score. Tap Ripple anytime to stir the water.',
+      goal: 'Reveal the picture hidden in the lotus buds, one stroke at a time.',
+      play: 'Draw a loop around one whole family of matching buds and the koi swims it: that stroke of the picture draws itself. A stroke takes one clean loop.',
+      tip: 'A loop that holds two families, or a dim sleeping bud, opens nothing, so thread your loop between them. Nothing is timed. Endless brings new patterns and gets harder as you get better.',
     },
   },
   {

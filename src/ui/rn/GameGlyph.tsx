@@ -1,25 +1,29 @@
-import Svg, { Circle, Line, Path, Rect } from 'react-native-svg'
+import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg'
 import type { GameId } from '@/core/games/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 
 /**
- * Crisp 2-tone Watchmaker Ink & Brass geometric SVG marks for all 13 games
- * (powered by react-native-svg — renders identically on iOS, Android, and Web).
+ * A tiny picture of each game's own board (falling blocks, a sudoku grid,
+ * numbered tiles...), so people find "the falling-blocks one" by sight
+ * rather than by remembering its name. Same palette as the games.
  */
 export function GameGlyph({ id, size = 30 }: { id: GameId; size?: number }) {
   const { color, pieces } = useTokenColors()
 
   switch (id) {
     case 'settle':
+      // Falling blocks: a piece coming down toward a stack with one gap.
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Rect x="4" y="20" width="7" height="7" rx="1.8" fill={color.ink4} />
-          <Rect x="12.5" y="20" width="7" height="7" rx="1.8" fill={color.ink4} />
-          <Rect x="21" y="20" width="7" height="7" rx="1.8" fill={pieces.ochre} />
-          <Rect x="21" y="11.5" width="7" height="7" rx="1.8" fill={pieces.ochre} />
-          <Rect x="12.5" y="4" width="7" height="7" rx="1.8" fill={pieces.clay} />
-          <Rect x="4" y="11.5" width="7" height="7" rx="1.8" fill={pieces.clay} />
-          <Rect x="12.5" y="11.5" width="7" height="7" rx="1.8" fill={pieces.clay} />
+          <Rect x="11" y="2" width="5.5" height="5.5" rx="1.2" fill={pieces.ochre} />
+          <Rect x="11" y="8" width="5.5" height="5.5" rx="1.2" fill={pieces.ochre} />
+          <Rect x="17" y="8" width="5.5" height="5.5" rx="1.2" fill={pieces.ochre} />
+          <Rect x="2" y="20" width="5.5" height="5.5" rx="1.2" fill={pieces.clay} />
+          <Rect x="2" y="26" width="5.5" height="5.5" rx="1.2" fill={pieces.clay} />
+          <Rect x="8" y="26" width="5.5" height="5.5" rx="1.2" fill={color.ink4} />
+          <Rect x="14" y="26" width="5.5" height="5.5" rx="1.2" fill={color.ink4} />
+          <Rect x="26" y="20" width="5.5" height="5.5" rx="1.2" fill={pieces.sage} />
+          <Rect x="26" y="26" width="5.5" height="5.5" rx="1.2" fill={pieces.sage} />
         </Svg>
       )
     case 'cascade':
@@ -60,12 +64,16 @@ export function GameGlyph({ id, size = 30 }: { id: GameId; size?: number }) {
         </Svg>
       )
     case 'kindle':
+      // 2048: numbered tiles that merge.
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Rect x="4" y="4" width="10.5" height="10.5" rx="2.5" fill={color.surface3} />
-          <Rect x="17.5" y="4" width="10.5" height="10.5" rx="2.5" fill={color.ink4} />
-          <Rect x="4" y="17.5" width="10.5" height="10.5" rx="2.5" fill={pieces.ochre} />
-          <Rect x="17.5" y="17.5" width="10.5" height="10.5" rx="2.5" fill={pieces.bone} />
+          <Rect x="3" y="3" width="12" height="12" rx="2.6" fill={color.surface3} />
+          <Rect x="17" y="3" width="12" height="12" rx="2.6" fill={pieces.straw} />
+          <Rect x="3" y="17" width="12" height="12" rx="2.6" fill={pieces.ochre} />
+          <Rect x="17" y="17" width="12" height="12" rx="2.6" fill={pieces.clay} />
+          <SvgText x="23" y="12.6" fontSize="9" fontWeight="700" textAnchor="middle" fill={color.accentInk}>4</SvgText>
+          <SvgText x="9" y="26.6" fontSize="9" fontWeight="700" textAnchor="middle" fill={color.accentInk}>8</SvgText>
+          <SvgText x="23" y="26.2" fontSize="7.5" fontWeight="700" textAnchor="middle" fill={color.accentInk}>16</SvgText>
         </Svg>
       )
     case 'pond':
@@ -78,32 +86,51 @@ export function GameGlyph({ id, size = 30 }: { id: GameId; size?: number }) {
         </Svg>
       )
     case 'drift':
+      // Sliding tiles: a 3 by 3 board with one empty slot.
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-          <Rect x="4" y="4" width="10.5" height="10.5" rx="2.5" fill={color.ink4} />
-          <Rect x="17.5" y="4" width="10.5" height="10.5" rx="2.5" fill={pieces.clay} />
-          <Rect x="4" y="17.5" width="10.5" height="10.5" rx="2.5" fill={pieces.ochre} />
-          <Rect x="18.25" y="18.25" width="9" height="9" rx="2" stroke={color.ink4} strokeWidth={1.4} strokeDasharray="2.5 2" />
+          <Rect x="2.5" y="2.5" width="8.4" height="8.4" rx="1.8" fill={pieces.clay} />
+          <Rect x="11.8" y="2.5" width="8.4" height="8.4" rx="1.8" fill={pieces.clay} />
+          <Rect x="21.1" y="2.5" width="8.4" height="8.4" rx="1.8" fill={pieces.ochre} />
+          <Rect x="2.5" y="11.8" width="8.4" height="8.4" rx="1.8" fill={color.ink4} />
+          <Rect x="11.8" y="11.8" width="8.4" height="8.4" rx="1.8" fill={pieces.ochre} />
+          <Rect x="21.1" y="11.8" width="8.4" height="8.4" rx="1.8" fill={color.ink4} />
+          <Rect x="2.5" y="21.1" width="8.4" height="8.4" rx="1.8" fill={pieces.straw} />
+          <Rect x="11.8" y="21.1" width="8.4" height="8.4" rx="1.8" fill={pieces.straw} />
+          <Rect x="21.6" y="21.6" width="7.4" height="7.4" rx="1.6" stroke={color.ink4} strokeWidth={1.1} strokeDasharray="2 1.8" />
         </Svg>
       )
     case 'nine':
+      // Sudoku: a 3 by 3 grid with digits.
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-          <Rect x="4.5" y="4.5" width="23" height="23" rx="3.5" stroke={color.ink4} strokeWidth={1.4} />
-          <Path d="M12.2 4.5 V27.5 M19.8 4.5 V27.5 M4.5 12.2 H27.5 M4.5 19.8 H27.5" stroke={color.ink4} strokeWidth={1} />
-          <Circle cx="8.4" cy="8.4" r="2" fill={pieces.ochre} />
-          <Circle cx="16" cy="16" r="2" fill={pieces.bone} />
-          <Circle cx="23.6" cy="23.6" r="2" fill={pieces.straw} />
+          <Rect x="3.5" y="3.5" width="25" height="25" rx="3.5" stroke={color.ink4} strokeWidth={1.4} />
+          <Path d="M11.8 3.5 V28.5 M20.2 3.5 V28.5 M3.5 11.8 H28.5 M3.5 20.2 H28.5" stroke={color.ink4} strokeWidth={1} />
+          <SvgText x="7.7" y="10.4" fontSize="7" fontWeight="700" textAnchor="middle" fill={pieces.ochre}>5</SvgText>
+          <SvgText x="16" y="18.8" fontSize="7" fontWeight="700" textAnchor="middle" fill={color.ink}>3</SvgText>
+          <SvgText x="24.3" y="10.4" fontSize="7" fontWeight="700" textAnchor="middle" fill={color.ink2}>9</SvgText>
+          <SvgText x="24.3" y="27.2" fontSize="7" fontWeight="700" textAnchor="middle" fill={pieces.ochre}>8</SvgText>
         </Svg>
       )
     case 'weave':
+      // Nonogram: clue numbers along the edges, a picture filling in.
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32">
-          <Rect x="12.5" y="4" width="7" height="7" rx="1.6" fill={pieces.ochre} />
-          <Rect x="4" y="12.5" width="7" height="7" rx="1.6" fill={pieces.straw} />
-          <Rect x="12.5" y="12.5" width="7" height="7" rx="1.6" fill={pieces.straw} />
-          <Rect x="21" y="12.5" width="7" height="7" rx="1.6" fill={pieces.straw} />
-          <Rect x="12.5" y="21" width="7" height="7" rx="1.6" fill={color.ink3} />
+          <SvgText x="15" y="6" fontSize="5.5" fontWeight="700" textAnchor="middle" fill={color.ink3}>1</SvgText>
+          <SvgText x="21.5" y="6" fontSize="5.5" fontWeight="700" textAnchor="middle" fill={color.ink3}>3</SvgText>
+          <SvgText x="28" y="6" fontSize="5.5" fontWeight="700" textAnchor="middle" fill={color.ink3}>1</SvgText>
+          <SvgText x="5" y="14.5" fontSize="5.5" fontWeight="700" textAnchor="middle" fill={color.ink3}>1</SvgText>
+          <SvgText x="5" y="21" fontSize="5.5" fontWeight="700" textAnchor="middle" fill={color.ink3}>3</SvgText>
+          <SvgText x="5" y="27.5" fontSize="5.5" fontWeight="700" textAnchor="middle" fill={color.ink3}>1</SvgText>
+          <Rect x="12" y="9" width="6" height="6" rx="1" fill={color.surface3} />
+          <Rect x="18.5" y="9" width="6" height="6" rx="1" fill={pieces.ochre} />
+          <Rect x="25" y="9" width="6" height="6" rx="1" fill={color.surface3} />
+          <Rect x="12" y="15.5" width="6" height="6" rx="1" fill={pieces.straw} />
+          <Rect x="18.5" y="15.5" width="6" height="6" rx="1" fill={pieces.straw} />
+          <Rect x="25" y="15.5" width="6" height="6" rx="1" fill={pieces.straw} />
+          <Rect x="12" y="22" width="6" height="6" rx="1" fill={color.surface3} />
+          <Rect x="18.5" y="22" width="6" height="6" rx="1" fill={pieces.ochre} />
+          <Rect x="25" y="22" width="6" height="6" rx="1" fill={color.surface3} />
         </Svg>
       )
     case 'dim':
@@ -121,12 +148,17 @@ export function GameGlyph({ id, size = 30 }: { id: GameId; size?: number }) {
         </Svg>
       )
     case 'lanterns':
+      // Memory pairs: two cards turned up and matching, two still face down.
       return (
         <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
-          <Rect x="5" y="8" width="9.5" height="16" rx="4.75" fill={pieces.rosewood} />
-          <Rect x="17.5" y="8" width="9.5" height="16" rx="4.75" fill={pieces.ochre} />
-          <Circle cx="9.75" cy="16" r="2.1" fill={pieces.bone} />
-          <Circle cx="22.25" cy="16" r="2.1" fill={color.accentInk} />
+          <Rect x="3" y="3" width="12" height="12" rx="2.4" fill={color.surface3} stroke={color.ink4} strokeWidth={0.8} />
+          <Rect x="17" y="3" width="12" height="12" rx="2.4" fill={pieces.rosewood} />
+          <Rect x="3" y="17" width="12" height="12" rx="2.4" fill={pieces.rosewood} />
+          <Rect x="17" y="17" width="12" height="12" rx="2.4" fill={color.surface3} stroke={color.ink4} strokeWidth={0.8} />
+          <Path d="M23 6.2 C25.2 8.2 25.2 10.4 23 12.4 C20.8 10.4 20.8 8.2 23 6.2 Z" fill={pieces.bone} />
+          <Path d="M9 20.2 C11.2 22.2 11.2 24.4 9 26.4 C6.8 24.4 6.8 22.2 9 20.2 Z" fill={pieces.bone} />
+          <Circle cx="9" cy="9" r="1.2" fill={color.ink4} />
+          <Circle cx="23" cy="23" r="1.2" fill={color.ink4} />
         </Svg>
       )
     case 'rally':

@@ -210,7 +210,9 @@ float chladni(float n, float m, float u, float v) {
 float4 sAdagio(float2 p, float asp, float3 c1, float3 c2, float3 c4) {
   float v = p.y / asp;
   float f = mix(chladni(chl.x, chl.y, p.x, v), chladni(chl.z, chl.w, p.x, v), chlMix);
-  float line = exp(-abs(f) * 12.0) * 0.035;
+  // Clearer and finer up high, where the dial's glass sits over them.
+  float up = exp(-pow((p.y - 0.3 * asp) / (0.32 * asp), 2.0));
+  float line = exp(-abs(f) * (12.0 + 10.0 * up)) * (0.035 + 0.06 * up);
   float4 acc = lit(mix(c4, c1, 0.5), exp(-p.y * 2.5) * 0.12);
   return over(lit(c2, line), acc);
 }

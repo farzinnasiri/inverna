@@ -71,9 +71,9 @@ export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return
     if (sessionActive) {
-      void activateKeepAwakeAsync('lull-session').catch(() => {})
+      void activateKeepAwakeAsync('inverna-session').catch(() => {})
     } else {
-      void deactivateKeepAwake('lull-session').catch(() => {})
+      void deactivateKeepAwake('inverna-session').catch(() => {})
     }
   }, [sessionActive])
 

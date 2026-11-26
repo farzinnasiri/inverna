@@ -360,7 +360,7 @@
     "pages": [
       {
         "id": "intro",
-        "title": "Hi, I'm Lull",
+        "title": "Hi, I'm Inverna",
         "body": "I help you slow down in the hour before bed.\nQuiet games, soft sounds, and a warmer screen.",
         "button": "Let's begin",
         "skip": "Skip"
@@ -577,7 +577,7 @@
       "line": 133,
       "old": "No bedtime yet",
       "new": "When do you go to bed?",
-      "why": "Speaks in Lull's voice instead of a cold empty-state label."
+      "why": "Speaks in Inverna's voice instead of a cold empty-state label."
     },
     {
       "file": "app/(tabs)/index.tsx",
@@ -723,7 +723,7 @@
       "file": "app/(tabs)/settings.tsx",
       "line": 189,
       "old": "Hold to clear data & restart onboarding",
-      "new": "Hold to reset Lull",
+      "new": "Hold to reset Inverna",
       "why": "Removes developer jargon ('clear data', 'onboarding')."
     },
     {
@@ -793,7 +793,7 @@
       "file": "src/ui/rn/NightSheet.tsx",
       "line": 185,
       "old": "Hold to clear data & restart onboarding",
-      "new": "Hold to reset Lull",
+      "new": "Hold to reset Inverna",
       "why": "Removes developer jargon."
     },
     {
@@ -871,7 +871,7 @@
       "line": 49,
       "old": "Melt away / Quiet focus / End on a light note",
       "new": "See checkIn.questions[1] (Sleepy, Relaxed, Worn out, Overthinking, Wide awake)",
-      "why": "Asks how the person feels right now so Lull chooses tonight's games and sound instead of making the user pick."
+      "why": "Asks how the person feels right now so Inverna chooses tonight's games and sound instead of making the user pick."
     },
     {
       "file": "src/ui/rn/NightCheckIn.tsx",
@@ -883,7 +883,7 @@
     {
       "file": "src/ui/rn/NightCheckIn.tsx",
       "line": 174,
-      "old": "Lull will arrange tonight's games and sound to match your pace.",
+      "old": "Inverna will arrange tonight's games and sound to match your pace.",
       "new": "I'll pick tonight's games and sound for you.",
       "why": "First-person voice feels alive instead of robotic third-person."
     },
@@ -941,7 +941,7 @@
       "line": 264,
       "old": "Tap to listen. Sound fades out at lights out.",
       "new": "Tap any sound to listen. I'll fade it out once you're asleep.",
-      "why": "Removes banned 'lights out' jargon and uses Lull's voice."
+      "why": "Removes banned 'lights out' jargon and uses Inverna's voice."
     },
     {
       "file": "src/ui/rn/SessionCurtain.tsx",
@@ -1177,15 +1177,15 @@
     {
       "file": "src/platform/notifications.ts",
       "line": 39,
-      "old": "Put away the feeds and open Lull.",
+      "old": "Put away the feeds and open Inverna.",
       "new": "See notifications.windDown rotating list",
       "why": "Sounds scolding; replace with warm, rotating reminders that invite a check-in."
     },
     {
       "file": "src/platform/web/calendar.ts",
       "line": 35,
-      "old": "Put away the feeds and open Lull for a quiet wind-down.",
-      "new": "Bedtime is an hour away. Open Lull when you're ready to relax.",
+      "old": "Put away the feeds and open Inverna for a quiet wind-down.",
+      "new": "Bedtime is an hour away. Open Inverna when you're ready to relax.",
       "why": "Gentler and never scolding."
     },
     {

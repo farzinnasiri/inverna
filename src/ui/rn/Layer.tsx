@@ -9,8 +9,8 @@ import { NightFilterOverlay } from './NightFilterOverlay'
  * - On iOS: react-native-screens FullWindowOverlay avoids native Modal stacking freezes.
  * - On Android & Web: transparent Modal portal.
  *
- * Mounts `<NightFilterOverlay />` on top of the portal content so adjusting the
- * Night Light slider inside NightSheet visibly dims & warms the UI live.
+ * Mounts the night filter's dimming on top of the portal content, so sheets
+ * dim with the rest of the app (the warm layer stays in the main window).
  */
 export function Layer({
   visible,
@@ -29,7 +29,7 @@ export function Layer({
     <GestureHandlerRootView style={styles.root}>
       <View style={styles.root}>
         {children}
-        <NightFilterOverlay />
+        <NightFilterOverlay dimOnly />
       </View>
     </GestureHandlerRootView>
   )

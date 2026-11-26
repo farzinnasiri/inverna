@@ -55,8 +55,9 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
               style={[
                 styles.chip,
                 {
-                  backgroundColor: active ? color.surface3 : color.surface2,
-                  borderColor: active ? color.accentDim : color.line,
+                  // Selected: warm, not outlined (the app's selection treatment).
+                  backgroundColor: active ? 'rgba(194, 161, 95, 0.2)' : color.surface2,
+                  borderColor: active ? 'rgba(255, 236, 200, 0.2)' : color.line,
                 },
               ]}
             >

@@ -12,7 +12,7 @@ export interface KeyValueStore {
   keys(): string[]
 }
 
-export const NAMESPACE = 'lull:'
+export const NAMESPACE = 'inverna:'
 
 function memoryStore(): KeyValueStore {
   const map = new Map<string, string>()
@@ -57,7 +57,7 @@ export function removeKey(key: string): void {
   active.removeItem(NAMESPACE + key)
 }
 
-/** Wipes every Lull key. Used by Settings → "Forget everything". */
+/** Wipes every Inverna key. Used by Settings → "Forget everything". */
 export function clearAll(): void {
   for (const k of active.keys()) if (k.startsWith(NAMESPACE)) active.removeItem(k)
 }

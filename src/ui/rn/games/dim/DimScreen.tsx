@@ -224,15 +224,15 @@ export function DimScreen({ onExit }: GameScreenProps) {
       setLastPress({ index, at: Date.now() })
       if (next.solved) {
         cue('chime', 0.95)
-        haptic('success')
+        haptic('complete')
         clearTimeout(completionTimer.current)
         completionTimer.current = setTimeout(() => setShowCompletion(true), COMPLETION_DELAY_MS)
       } else if (litCount(next.lights) < litCount(prev.lights)) {
         cue('place', 0.6)
-        haptic('light')
+        haptic('settle')
       } else {
         cue('tap', 0.5)
-        haptic('light')
+        haptic('tick')
       }
     },
     [commit, cue, haptic],
@@ -247,14 +247,13 @@ export function DimScreen({ onExit }: GameScreenProps) {
     setHintIndex(null)
     setLastPress(null)
     cue('undo', 0.6)
-    haptic('light')
   }, [commit, cue, haptic])
 
   const doHint = useCallback(() => {
     if (pausedRef.current || stateRef.current.solved) return
     setHintIndex(hint(stateRef.current))
     cue('tap', 0.4)
-    haptic('light')
+    haptic('tick')
   }, [cue, haptic])
 
   const startBoard = useCallback(
@@ -312,6 +311,7 @@ export function DimScreen({ onExit }: GameScreenProps) {
       paused={paused}
       onPauseChange={setPaused}
       onRestart={doRestart}
+      onNewGame={doNewBoard}
       onExit={onExit}
       controls={
         <GameControlBar>

@@ -1,5 +1,5 @@
 /**
- * Lull v3 — "Watchmaker Ink & Brass" design tokens.
+ * Inverna v3 — "Watchmaker Ink & Brass" design tokens.
  *
  * Pure TypeScript (no DOM imports) so React Native / Expo reuses this file
  * directly. Warmth is a token transform in OKLab, never an overlay:

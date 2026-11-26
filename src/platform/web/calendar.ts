@@ -24,15 +24,15 @@ export function downloadBedtimeIcs(schedule: Schedule): void {
   const ics = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Lull//Bedtime//EN',
+    'PRODID:-//Inverna//Bedtime//EN',
     'BEGIN:VEVENT',
-    `UID:lull-winddown-${Date.now()}@lull.local`,
+    `UID:inverna-winddown-${Date.now()}@inverna.local`,
     `DTSTAMP:${dt(new Date())}`,
     `DTSTART:${dt(start)}`,
     `DTEND:${dt(end)}`,
     `RRULE:FREQ=WEEKLY;BYDAY=${byday}`,
     'SUMMARY:Time to wind down',
-    'DESCRIPTION:Bedtime is an hour away. Open Lull when you’re ready to relax.',
+    'DESCRIPTION:Bedtime is an hour away. Open Inverna when you’re ready to relax.',
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
     'TRIGGER:PT0M',
@@ -46,7 +46,7 @@ export function downloadBedtimeIcs(schedule: Schedule): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'lull-bedtime.ics'
+  a.download = 'inverna-bedtime.ics'
   document.body.appendChild(a)
   a.click()
   a.remove()

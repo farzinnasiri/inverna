@@ -137,6 +137,18 @@ export interface Sim {
 
   cueId: number
   cueClock: number
+
+  /**
+   * Scenes woven together for a hand-made mix: the main scene (sceneB) first,
+   * then up to three more, with each one's share of particles (sums to 1).
+   * Each slot picks its scene by its own `seed`, and only takes it if the
+   * slot is inside that scene's count, so a scene gets about share x its
+   * usual particles and the total never exceeds the busiest scene's: mixing
+   * everything up costs no more than one scene. Only the main scene has
+   * structures (strings, grass, pines) and the field shader.
+   */
+  mixScenes: number[]
+  mixShares: number[]
 }
 
 /* Worklets below are ordered so each is defined after everything it calls:
@@ -235,7 +247,7 @@ export function presence(s: Sim, scene: number, x: number, y: number): number {
 
 export function sceneActive(s: Sim, scene: number): boolean {
   'worklet'
-  return s.sceneB === scene || (s.prog < 1 && s.sceneA === scene)
+  return s.sceneB === scene || (s.prog < 1 && s.sceneA === scene) || s.mixScenes.indexOf(scene) >= 0
 }
 
 function rainWobble(seed: number, y: number): number {
@@ -609,6 +621,8 @@ export function createSim(W: number, H: number, scene: number, seed: number): Si
     crest: 0.45,
     cueId: -1,
     cueClock: -CUE_SILENCE,
+    mixScenes: [scene],
+    mixShares: [1],
   }
   for (let i = 0; i < N; i++) {
     s.seed[i] = rand(s)
@@ -1078,8 +1092,53 @@ function flow(s: Sim, i: number, dt: number): void {
   }
 }
 
-/** Advance everything by dt real seconds. */
-export function simStep(s: Sim, dtReal: number, env: SimEnv, target: number, cue: MotifCue | null): void {
+/** Sets the woven scenes: the main one, plus flat [scene, weight] pairs (weight relative to the main scene's 1). */
+function setMix(s: Sim, blend: readonly number[] | null): void {
+  'worklet'
+  const scenes: number[] = [s.sceneB]
+  const shares: number[] = [1]
+  if (blend) {
+    for (let k = 0; k + 1 < blend.length && scenes.length < 4; k += 2) {
+      const sc = blend[k]!
+      const w = blend[k + 1]!
+      if (sc >= 0 && w > 0.01 && scenes.indexOf(sc) < 0) {
+        scenes.push(sc)
+        shares.push(Math.min(1, w))
+      }
+    }
+  }
+  let sum = 0
+  for (let k = 0; k < shares.length; k++) sum += shares[k]!
+  for (let k = 0; k < shares.length; k++) shares[k] = shares[k]! / sum
+  s.mixScenes = scenes
+  s.mixShares = shares
+}
+
+/** Which scene slot i belongs to now, or -1 if it sleeps. */
+export function slotOwner(s: Sim, i: number): number {
+  'worklet'
+  const u = s.seed[i]!
+  let cum = 0
+  const n = s.mixScenes.length
+  for (let k = 0; k < n; k++) {
+    cum += s.mixShares[k]!
+    if (u < cum || k === n - 1) {
+      const sc = s.mixScenes[k]!
+      return i < SCENE_PARTICLES[sc]! ? sc : -1
+    }
+  }
+  return -1
+}
+
+/** Advance everything by dt real seconds. `blend`: other scenes woven in, flat [scene, weight] pairs. */
+export function simStep(
+  s: Sim,
+  dtReal: number,
+  env: SimEnv,
+  target: number,
+  cue: MotifCue | null,
+  blend: readonly number[] | null = null,
+): void {
   'worklet'
   const dt = dtReal * env.timeScale
   s.clock += dtReal
@@ -1095,21 +1154,29 @@ export function simStep(s: Sim, dtReal: number, env: SimEnv, target: number, cue
     if (s.prog >= 1) s.sceneA = s.sceneB
   }
 
+  setMix(s, blend)
   stepSceneState(s, dt)
 
   const morphRate = dtReal / MORPH_SECONDS
-  const countB = SCENE_PARTICLES[s.sceneB]!
   for (let i = 0; i < MAX_PARTICLES; i++) {
+    const want = slotOwner(s, i)
     if (!s.alive[i]) {
-      if (i < countB) {
-        s.owner[i] = s.sceneB
-        spawn(s, i, s.sceneB, false)
-      }
+      if (want >= 0) spawn(s, i, want, false)
       continue
     }
-    if (s.owner[i] !== s.sceneB) {
-      const warp = (s.seed[i]! - 0.5) * 0.2
-      if (coverAt(s, s.x[i]!, s.y[i]!, warp) > 0.5) convert(s, i, s.sceneB)
+    // Slots for the main scene, and slots with no scene now (surplus): the
+    // front hands them over (surplus fades out in convert).
+    if (want === s.sceneB || want < 0) {
+      if (s.owner[i] !== s.sceneB) {
+        const warp = (s.seed[i]! - 0.5) * 0.2
+        if (coverAt(s, s.x[i]!, s.y[i]!, warp) > 0.5) convert(s, i, s.sceneB)
+      } else if (want < 0 && s.dieAt[i]! > s.age[i]! + 1.2) {
+        // The main scene's share shrank (another scene was woven in): this one fades out.
+        s.dieAt[i] = s.age[i]! + 1.2
+      }
+    } else if (want >= 0 && s.owner[i] !== want && s.morph[i]! >= 1 && rand(s) < dtReal * 0.7) {
+      // A woven scene takes its slots over a second or two, not all at once.
+      convert(s, i, want)
     }
     if (s.morph[i]! < 1) s.morph[i] = Math.min(1, s.morph[i]! + morphRate)
     s.age[i] = s.age[i]! + dt
@@ -1120,7 +1187,9 @@ export function simStep(s: Sim, dtReal: number, env: SimEnv, target: number, cue
     const out =
       own !== S_STARFIELD && (x < -s.W * 0.4 || x > s.W + 80 || y < -120 || y > s.H + 80)
     if (out || s.age[i]! >= s.life[i]! || s.age[i]! >= s.dieAt[i]!) {
-      if (i < SCENE_PARTICLES[own]!) spawn(s, i, own, false)
+      // Behind the front the old scene carries on until the front reaches it.
+      if (want === s.sceneB && own === s.sceneA && s.prog < 1 && i < SCENE_PARTICLES[own]!) spawn(s, i, own, false)
+      else if (want >= 0) spawn(s, i, want, false)
       else s.alive[i] = 0
     }
   }

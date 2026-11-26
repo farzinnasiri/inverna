@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { computeDescent, type DescentSnapshot } from '@/core/sound/arc'
-import { minutesUntilBedtime } from '@/core/night'
+import { minutesUntilRangeEnd } from '@/core/night'
 import { DEFAULT_PRESET_ID, isSilent, presetById, type Mix, type SoundIconId } from '@/core/sound/catalog'
 import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics'
 import { sound } from '@/platform'
@@ -16,24 +16,36 @@ interface SoundState {
   volume: number
   stopAt: number | null
   playPreset: (id: string, timerMinutes?: number) => void
-  playMix: (mix: Mix, timerMinutes?: number) => void
-  updateMix: (mix: Mix) => void
+  /** What the lock screen calls a mix: a saved sound's name, or "Your mix". */
+  mixMeta: MixMeta | null
+  playMix: (mix: Mix, timerMinutes?: number, meta?: MixMeta | null) => void
+  /** `meta` renames what's playing; left out, the name stays. */
+  updateMix: (mix: Mix, meta?: MixMeta | null) => void
   setVolume: (volume: number) => void
   setTimer: (minutes: number) => void
   syncDescent: (now?: Date, rampSeconds?: number) => DescentSnapshot
   stop: (fadeSeconds?: number, opts?: { hideNotification?: boolean }) => void
 }
 
+export interface MixMeta {
+  title: string
+  hint: string
+  icon: SoundIconId
+}
+
 const SLEEP_FADE_SECONDS = 12
 
-/** Sleep-timer choice meaning "fade out at tonight's lights out". */
+/** Sleep-timer choice meaning "fade out at the end of my sleep time" (the late edge of the range). */
 export const UNTIL_LIGHTS_OUT = -1
+/** Past the end of the sleep time already: fade after this long rather than play all night. */
+const LATE_FADE_MIN = 45
 
 /** Minutes until the sound should fade (0 = no timer) for a timer choice. */
-export function resolveTimer(choice: number): number {
+export function resolveTimer(choice: number, now = new Date()): number {
   if (choice !== UNTIL_LIGHTS_OUT) return Math.max(0, choice)
-  const until = minutesUntilBedtime(currentSchedule(), new Date())
-  return until !== null && until > 0 && until <= 12 * 60 ? until : 0
+  const until = minutesUntilRangeEnd(currentSchedule(now), now)
+  if (until === null) return 0
+  return until > 0 && until <= 12 * 60 ? until : LATE_FADE_MIN
 }
 
 const timerToStopAt = (minutes: number | undefined) => (minutes && minutes > 0 ? Date.now() + minutes * 60_000 : null)
@@ -77,6 +89,14 @@ function buildDescentSnapshot(presetId: string | null, now = new Date()): Descen
   })
 }
 
+function mixNowPlaying(mix: Mix, meta: MixMeta | null, choice: number) {
+  return {
+    title: meta?.title ?? 'Your mix',
+    subtitle: nowPlayingSubtitle(meta?.hint || 'Your own sleep sound', choice),
+    icon: meta?.icon ?? inferIconFromMix(mix),
+  }
+}
+
 function nowPlayingSubtitle(hint: string, choice: number): string {
   if (choice === UNTIL_LIGHTS_OUT) return resolveTimer(choice) > 0 ? `${hint} (stops at bedtime)` : hint
   return choice > 0 ? `${hint} (${choice} min timer)` : hint
@@ -106,6 +126,7 @@ export const useSound = create<SoundState>()((set, get) => {
     playing: false,
     presetId: null,
     mix: null,
+    mixMeta: null,
     harmonicKey: initialKey,
     descent: initialDescent,
     volume: useSettings.getState().volume,
@@ -133,17 +154,18 @@ export const useSound = create<SoundState>()((set, get) => {
         playing: true,
         presetId: preset.id,
         mix: preset.mix,
+        mixMeta: null,
         harmonicKey: preset.harmonicKey,
         descent,
         stopAt: timerToStopAt(mins),
       })
     },
 
-    playMix: (mix, timerMinutes) => {
+    playMix: (mix, timerMinutes, meta = null) => {
       // Nothing to hear: stopped, not "playing" silence.
       if (isSilent(mix)) {
         get().stop()
-        set({ mix, presetId: null })
+        set({ mix, presetId: null, mixMeta: meta })
         return
       }
       void sound.unlock()
@@ -151,14 +173,9 @@ export const useSound = create<SoundState>()((set, get) => {
       const mins = resolveTimer(choice)
       const key = mix.harmonicKey ?? get().harmonicKey ?? DEFAULT_HARMONIC_KEY
       const descent = buildDescentSnapshot(null)
-      const icon = inferIconFromMix(mix)
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(descent, 0.6)
-      sound.setNowPlayingMeta?.({
-        title: 'Your mix',
-        subtitle: nowPlayingSubtitle('Custom sleep sound', choice),
-        icon,
-      })
+      sound.setNowPlayingMeta?.(mixNowPlaying(mix, meta, choice))
       sound.setMaster(get().volume, 0.5)
       sound.setMix({ ...mix, harmonicKey: key }, 1.2)
       syncNativeSleepFade(mins)
@@ -169,30 +186,28 @@ export const useSound = create<SoundState>()((set, get) => {
         harmonicKey: key,
         descent,
         stopAt: timerToStopAt(mins),
+        mixMeta: meta,
       })
     },
 
-    updateMix: (mix) => {
+    updateMix: (mix, meta) => {
+      const mixMeta = meta === undefined ? get().mixMeta : meta
       const key = mix.harmonicKey ?? get().harmonicKey ?? DEFAULT_HARMONIC_KEY
       const nextMix = { ...mix, harmonicKey: key }
       sound.setHarmonicKey?.(key)
       if (get().playing) {
         const mins = useSettings.getState().sleepTimer
-        sound.setNowPlayingMeta?.({
-          title: 'Your mix',
-          subtitle: nowPlayingSubtitle('Custom sleep sound', mins),
-          icon: inferIconFromMix(nextMix),
-        })
+        sound.setNowPlayingMeta?.(mixNowPlaying(nextMix, mixMeta, mins))
         sound.setMix(nextMix, 0.25)
       }
       // Turning every layer down stops the sound in the engine; say so here too,
       // or Play shows a sound that isn't playing and the sleep timer keeps running.
       if (get().playing && isSilent(nextMix)) {
         sound.cancelSleepFade?.()
-        set({ mix: nextMix, presetId: null, harmonicKey: key, playing: false, stopAt: null })
+        set({ mix: nextMix, mixMeta, presetId: null, harmonicKey: key, playing: false, stopAt: null })
         return
       }
-      set({ mix: nextMix, presetId: null, harmonicKey: key })
+      set({ mix: nextMix, mixMeta, presetId: null, harmonicKey: key })
     },
 
     setVolume: (raw) => {

@@ -9,38 +9,50 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
-import { ChevronRight, Compass, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
-import { soundsHelp } from '@/ui/copy'
+import { Compass, PenLine, Plus, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
+import { soundsHelp, soundTimer, studioCopy } from '@/ui/copy'
+import { feel } from '@/ui/feel'
+import { formatBedtime12h, formatHHMM } from '@/core/night'
 import { soundOrder } from '@/core/profile'
 import {
-  BANDS,
   DEFAULT_PRESET_ID,
   PRESET_PAGES,
   PRESETS,
   presetById,
   SILENT_MIX,
+  type CustomSound,
+  type Mix,
   type SoundIconId,
 } from '@/core/sound/catalog'
-import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { FRAME_MAX_WIDTH, PopoverMenu, Slider } from '@/ui/rn/controls'
+import { FRAME_MAX_WIDTH, Slider } from '@/ui/rn/controls'
+import { TimerSheet } from '@/ui/rn/TimerSheet'
 import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
-import { scrollEndClearance, useResponsiveLayout } from '@/ui/rn/hooks'
-import { MixSheet, type StudioTab } from '@/ui/rn/MixSheet'
+import { scrollEndClearance, tabBarClearance, useResponsiveLayout } from '@/ui/rn/hooks'
+import { describeMix, MixSheet, type SoundMeta, type StudioTarget } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
 import { SoundGlyph } from '@/ui/rn/SoundGlyph'
 import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
-import { UNTIL_LIGHTS_OUT, useSound } from '@/ui/state/sound'
+import { resolveTimer, UNTIL_LIGHTS_OUT, useSound, type MixMeta } from '@/ui/state/sound'
 
-const TIMER_OPTIONS = [
-  { value: UNTIL_LIGHTS_OUT, label: 'Until bedtime' },
-  { value: 0, label: 'Keep playing' },
-  { value: 15, label: 'Fade out in 15 min' },
-  { value: 30, label: 'Fade out in 30 min' },
-  { value: 45, label: 'Fade out in 45 min' },
-  { value: 60, label: 'Fade out in 60 min' },
-] as const
+/** One tile in the sound grid: a preset, or a sound they made. */
+interface SoundItem {
+  id: string
+  name: string
+  hint: string
+  icon: SoundIconId
+  custom: CustomSound | null
+}
+
+const PAGE_SIZE = 6
+
+const metaOf = (c: CustomSound): MixMeta => ({ title: c.name, hint: c.hint, icon: c.icon })
+
+const clockIn = (minutes: number) => {
+  const d = new Date(Date.now() + minutes * 60_000)
+  return formatBedtime12h(formatHHMM(d.getHours(), d.getMinutes()))
+}
 
 function inferIcon(mix: typeof SILENT_MIX): SoundIconId {
   if (mix.classicalMotif === 'reverie') return 'feather'
@@ -67,7 +79,7 @@ function inferIcon(mix: typeof SILENT_MIX): SoundIconId {
  * - Spacious Volume slider above the native Liquid Glass tab bar.
  */
 export default function SoundsScreen() {
-  const { insets, isCompact, sideMargin } = useResponsiveLayout()
+  const { insets, isCompact, sideMargin, height } = useResponsiveLayout()
   const { color } = useTokenColors()
 
   const playing = useSound((s) => s.playing)
@@ -83,9 +95,9 @@ export default function SoundsScreen() {
   const setSoundTimer = useSound((s) => s.setTimer)
 
   const customMix = useSettings((s) => s.mix)
+  const customSounds = useSettings((s) => s.customSounds)
   const savedPreset = useSettings((s) => s.sessionPreset)
   const sleepTimer = useSettings((s) => s.sleepTimer)
-  const hapticsOn = useSettings((s) => s.haptics)
   const setSettings = useSettings((s) => s.set)
 
   const mixOpen = useNav((s) => s.mixOpen)
@@ -94,9 +106,12 @@ export default function SoundsScreen() {
   const [selectedId, setSelectedId] = useState<string>(
     () => activePresetId ?? presetById(savedPreset)?.id ?? DEFAULT_PRESET_ID,
   )
-  const [studioTab, setStudioTab] = useState<StudioTab>('layers')
+  const [studio, setStudio] = useState<StudioTarget>({ kind: 'current' })
+  // What the studio is changing; it becomes "Your mix" until it's saved.
+  const [draft, setDraft] = useState<Mix | null>(null)
   const [timerOpen, setTimerOpen] = useState(false)
-  const [pageIdx, setPageIdx] = useState<0 | 1>(() => presetById(activePresetId ?? savedPreset)?.page ?? 0)
+  const [viewportH, setViewportH] = useState(0)
+  const [pageIdx, setPageIdx] = useState<number>(() => presetById(activePresetId ?? savedPreset)?.page ?? 0)
   const [pagerWidth, setPagerWidth] = useState(0)
   const pagerRef = useRef<ComponentRef<typeof ScrollView>>(null)
 
@@ -107,34 +122,72 @@ export default function SoundsScreen() {
     () => (profile ? soundOrder(profile).map((id) => presetById(id)!).filter(Boolean) : PRESETS),
     [profile],
   )
-  const currentPreset = currentId === 'custom' ? null : (presetById(currentId) ?? PRESETS[0]!)
-  const currentName = currentPreset ? currentPreset.name : 'Your mix'
-  const displayMix = playing && activeMix ? activeMix : (currentPreset?.mix ?? customMix)
-  const currentIcon: SoundIconId = currentPreset?.icon ?? inferIcon(displayMix)
+  // The presets' pages, then pages of their own sounds, six to a page.
+  const pages = useMemo(() => {
+    const out: SoundItem[][] = PRESET_PAGES.map((pg) =>
+      orderedPresets
+        .filter((p) => p.page === pg.id)
+        .map((p) => ({ id: p.id, name: p.name, hint: p.hint, icon: p.icon, custom: null })),
+    )
+    for (let i = 0; i < customSounds.length; i += PAGE_SIZE) {
+      out.push(
+        customSounds.slice(i, i + PAGE_SIZE).map((c) => ({
+          id: c.id,
+          name: c.name,
+          hint: c.hint || describeMix(c.mix),
+          icon: c.icon,
+          custom: c,
+        })),
+      )
+    }
+    return out
+  }, [orderedPresets, customSounds])
+  const pageOf = (id: string) => Math.max(0, pages.findIndex((pg) => pg.some((it) => it.id === id)))
 
-  const openStudio = (tab: StudioTab) => {
-    if (hapticsOn) haptics.play('light')
-    setStudioTab(tab)
+  const currentCustom = customSounds.find((c) => c.id === currentId) ?? null
+  const currentPreset = currentId === 'custom' || currentCustom ? null : (presetById(currentId) ?? PRESETS[0]!)
+  const currentName = currentCustom?.name ?? currentPreset?.name ?? studioCopy.yourMix
+  const displayMix = playing && activeMix ? activeMix : (currentCustom?.mix ?? currentPreset?.mix ?? customMix)
+  const currentIcon: SoundIconId = currentCustom?.icon ?? currentPreset?.icon ?? inferIcon(displayMix)
+
+  const goToPage = (idx: number) => {
+    setPageIdx(idx)
+    if (pagerWidth > 0) pagerRef.current?.scrollTo({ x: idx * pagerWidth, animated: true })
+  }
+
+  const openStudio = (target: StudioTarget) => {
+    setStudio(target)
+    setDraft(target.kind === 'saved' ? target.sound.mix : displayMix)
+    // Opening one of their sounds (touch and hold) makes it the one on screen.
+    if (target.kind === 'saved' && currentId !== target.sound.id) {
+      setSelectedId(target.sound.id)
+      if (playing) playMix(target.sound.mix, sleepTimer, metaOf(target.sound))
+    }
     setMixOpen(true)
   }
 
-  const selectPreset = (id: string, autoPlay = true) => {
-    if (hapticsOn) haptics.play('light')
+  const selectSound = (id: string, autoPlay = true) => {
+    feel('tick')
     if (playing && id === currentId) {
       stopSound(0.9)
       return
     }
     setSelectedId(id)
-    setSettings({ sessionPreset: id })
-    if (autoPlay) {
-      playPreset(id, sleepTimer)
+    const mine = customSounds.find((c) => c.id === id)
+    if (mine) {
+      if (autoPlay) playMix(mine.mix, sleepTimer, metaOf(mine))
+      return
     }
+    setSettings({ sessionPreset: id })
+    if (autoPlay) playPreset(id, sleepTimer)
   }
 
   const togglePlayback = () => {
-    if (hapticsOn) haptics.play('medium')
+    feel('settle')
     if (playing) {
       stopSound(1.0)
+    } else if (currentCustom) {
+      playMix(currentCustom.mix, sleepTimer, metaOf(currentCustom))
     } else if (currentId === 'custom') {
       playMix(customMix, sleepTimer)
     } else {
@@ -143,32 +196,115 @@ export default function SoundsScreen() {
   }
 
   const swipePreset = (dir: -1 | 1) => {
-    const idx = PRESETS.findIndex((p) => p.id === (currentPreset?.id ?? DEFAULT_PRESET_ID))
-    const next = PRESETS[(idx + dir + PRESETS.length) % PRESETS.length]!
-    if (next.page !== pageIdx && pagerWidth > 0) {
-      setPageIdx(next.page)
-      pagerRef.current?.scrollTo({ x: next.page * pagerWidth, animated: true })
-    }
-    selectPreset(next.id, playing)
+    const all = pages.flat()
+    const idx = Math.max(0, all.findIndex((it) => it.id === currentId))
+    const next = all[(idx + dir + all.length) % all.length]!
+    const page = pageOf(next.id)
+    if (page !== pageIdx) goToPage(page)
+    selectSound(next.id, playing)
   }
 
   const onPagerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (pagerWidth <= 0) return
-    const idx = Math.round(e.nativeEvent.contentOffset.x / pagerWidth) === 1 ? 1 : 0
+    const idx = Math.min(pages.length - 1, Math.max(0, Math.round(e.nativeEvent.contentOffset.x / pagerWidth)))
     if (idx !== pageIdx) setPageIdx(idx)
   }
 
-  const bandMeta = BANDS.find((b) => b.id === displayMix.band)
-  const rhythmPillText =
-    descent.depth === 'off'
-      ? `Tune rhythm`
-      : `${bandMeta?.greek ?? 'θ'} ${descent.bandLabel} · ${descent.modHz.toFixed(1)} Hz`
+  // The studio's mix: heard as it changes, kept as "Your mix" until saved.
+  const studioMeta = studio.kind === 'saved' ? metaOf(studio.sound) : null
+  const changeDraft = (next: Mix) => {
+    setDraft(next)
+    setSettings({ mix: next, hasCustomMix: true })
+    // A saved sound keeps its name on screen while it's being changed.
+    if (studio.kind !== 'saved') setSelectedId('custom')
+    if (playing) updateMix(next, studioMeta)
+    else playMix(next, sleepTimer, studioMeta)
+  }
 
-  const compactTimer = sleepTimer === UNTIL_LIGHTS_OUT ? 'Bedtime' : sleepTimer > 0 ? `${sleepTimer}m` : 'Off'
+  const closeStudio = () => {
+    setMixOpen(false)
+    // Changed and not saved: it carries on as "Your mix".
+    if (studio.kind === 'saved' && draft && draft !== studio.sound.mix && currentId === studio.sound.id) {
+      setSelectedId('custom')
+      if (playing) updateMix(draft, null)
+    }
+  }
+
+  const saveSound = (meta: SoundMeta, asNew: boolean) => {
+    const mix = draft ?? displayMix
+    let id: string
+    let list: CustomSound[]
+    if (studio.kind === 'saved' && !asNew) {
+      id = studio.sound.id
+      list = customSounds.map((c) => (c.id === id ? { ...c, ...meta, mix } : c))
+    } else {
+      id = `mine-${Date.now().toString(36)}`
+      list = [...customSounds, { id, ...meta, mix, createdAt: Date.now() }]
+    }
+    setSettings({ customSounds: list })
+    setSelectedId(id)
+    if (playing) playMix(mix, sleepTimer, { title: meta.name, hint: meta.hint, icon: meta.icon })
+    setMixOpen(false)
+    feel('complete')
+    // Show its tile.
+    const index = list.findIndex((c) => c.id === id)
+    const page = PRESET_PAGES.length + Math.floor(index / PAGE_SIZE)
+    setTimeout(() => goToPage(page), 320)
+  }
+
+  const deleteSound = (id: string) => {
+    const gone = customSounds.find((c) => c.id === id)
+    const list = customSounds.filter((c) => c.id !== id)
+    setSettings(gone && currentId === id ? { customSounds: list, mix: gone.mix, hasCustomMix: true } : { customSounds: list })
+    if (currentId === id) {
+      setSelectedId('custom')
+      if (playing) updateMix(useSound.getState().mix ?? gone?.mix ?? customMix, null)
+    }
+    setMixOpen(false)
+    const lastPage = PRESET_PAGES.length + Math.ceil(list.length / PAGE_SIZE) - 1
+    if (pageIdx > lastPage) goToPage(lastPage)
+  }
+
+  // The Mix chip shows the live rhythm: the letter and rate of the band the
+  // pulse is in right now (both from the descent, so they always agree).
+  const rhythmGreek = descent.modHz >= 7.2 ? 'α' : descent.modHz >= 3.6 ? 'θ' : 'δ'
+  const rhythmChip = descent.depth === 'off' ? null : `${rhythmGreek} ${descent.modHz.toFixed(1)} Hz`
+
+  // The chip says what the timer does: the clock time it stops, a length, or all night.
+  const endClock = clockIn(resolveTimer(UNTIL_LIGHTS_OUT))
+  const stopAt = useSound((s) => s.stopAt)
+  const fadingAt = playing && stopAt ? clockIn(Math.max(0, Math.round((stopAt - Date.now()) / 60_000))) : null
+  const timerSummary =
+    sleepTimer === UNTIL_LIGHTS_OUT ? soundTimer.untilEnd(endClock) : sleepTimer > 0 ? soundTimer.after(sleepTimer) : soundTimer.allNight
+
+  // Everything fits one screen on any phone: the orb takes whatever height
+  // the rest leaves. The page should end a fixed gap above the floating tab
+  // bar; we measure where it really ends on screen and grow or shrink the orb
+  // by the difference (one correction; the rest of the page doesn't depend on
+  // the orb). Very short phones scroll a little rather than go below 160.
+  const frameRef = useRef<ComponentRef<typeof View>>(null)
+  const [orbSize, setOrbSize] = useState(isCompact ? 176 : 210)
+  const padTop = insets.top + (isCompact ? 6 : 10)
+  const pageEnd = height - tabBarClearance(insets.bottom) - 8
+  const fitOrb = () => {
+    frameRef.current?.measureInWindow((_x, y, _w, h) => {
+      if (!h) return
+      const next = Math.round(Math.max(160, Math.min(280, orbSize + (pageEnd - (y + h)))))
+      if (Math.abs(next - orbSize) > 2) setOrbSize(next)
+    })
+  }
+  // Below the page: what's left of the scroll view, so it doesn't scroll for nothing.
+  const padBottom = viewportH > 0 ? Math.max(12, viewportH - pageEnd) : scrollEndClearance(insets.bottom)
+  const sectionGap = isCompact ? 10 : 12
+  const rowH = isCompact ? 62 : 66
 
   return (
     <View style={styles.root}>
       <ScrollView
+        onLayout={(e: LayoutChangeEvent) => {
+          const h = Math.round(e.nativeEvent.layout.height)
+          if (h > 0 && Math.abs(h - viewportH) > 1) setViewportH(h)
+        }}
         style={styles.scroll}
         // Insets are counted once, here, so the last row clears the floating tab bar.
         contentInsetAdjustmentBehavior="never"
@@ -177,53 +313,55 @@ export default function SoundsScreen() {
           styles.content,
           {
             paddingHorizontal: sideMargin,
-            paddingTop: insets.top + (isCompact ? 8 : 12),
-            paddingBottom: scrollEndClearance(insets.bottom),
+            paddingTop: padTop,
+            paddingBottom: padBottom,
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.frame, { gap: isCompact ? 12 : 14 }]}>
+        <View ref={frameRef} style={[styles.frame, { gap: sectionGap }]} onLayout={fitOrb}>
           {/* Top Watchmaker utility bar: Timer | Title | Mix */}
+          {/* Equal sides, so the name sits in the true centre whatever each chip says. */}
           <View style={styles.topBar}>
+            <View style={styles.topSide}>
             <Pressable
               onPress={() => {
-                if (hapticsOn) haptics.play('light')
                 setTimerOpen(true)
               }}
               accessibilityRole="button"
-              accessibilityLabel="Sleep timer"
+              accessibilityLabel={`${soundTimer.title}, ${timerSummary}`}
               style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
             >
               <GlassSurface variant="pill" radius={999} interactive style={styles.topChip}>
                 <Timer size={14} strokeWidth={1.7} color={sleepTimer !== 0 ? color.accent : color.ink3} />
                 <Text style={[styles.topChipText, { color: sleepTimer !== 0 ? color.ink : color.ink3 }]}>
-                  {compactTimer}
+                  {soundTimer.chip}
                 </Text>
               </GlassSurface>
             </Pressable>
+            </View>
 
-            <Text style={[styles.heading, { color: color.ink, fontSize: isCompact ? 22 : 25 }]} numberOfLines={1}>
-              {currentName}
-            </Text>
-
+            <View style={[styles.topSide, styles.topSideEnd]}>
             <Pressable
-              onPress={() => openStudio('layers')}
+              onPress={() => openStudio(currentCustom ? { kind: 'saved', sound: currentCustom } : { kind: 'current' })}
               accessibilityRole="button"
-              accessibilityLabel="Open mix studio"
+              accessibilityLabel={rhythmChip ? `Composer, pulse ${descent.bandLabel} ${descent.modHz.toFixed(1)} hertz` : 'Composer'}
               style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
             >
               <GlassSurface variant="pill" radius={999} interactive style={styles.topChip}>
-                <SlidersHorizontal size={14} strokeWidth={1.7} color={color.ink2} />
-                <Text style={[styles.topChipText, { color: color.ink }]}>Mix</Text>
+                <SlidersHorizontal size={14} strokeWidth={1.7} color={playing && rhythmChip ? color.accent : color.ink2} />
+                <Text style={[styles.topChipText, { color: color.ink }]}>{rhythmChip ?? 'Compose'}</Text>
               </GlassSurface>
             </Pressable>
+            </View>
           </View>
 
-          {/* Enlarged Hero Watchmaker Dial with active soundscape icon + Rhythm pill directly below */}
+          {/* The orb, then what's playing: its name, what it is, and its rhythm. */}
           <View style={styles.heroCenter}>
             <SoundField
+              size={orbSize}
               mix={displayMix}
+              presetId={currentPreset?.id ?? null}
               playing={playing}
               label={currentName}
               icon={currentIcon}
@@ -232,20 +370,17 @@ export default function SoundsScreen() {
               onSwipe={swipePreset}
             />
 
-            <Pressable
-              onPress={() => openStudio('rhythm')}
-              accessibilityRole="button"
-              accessibilityLabel="Tune wave rhythm and bedtime descent"
-              style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
-            >
-              <GlassSurface variant="pill" radius={999} accent={playing} style={styles.telemetryPill}>
-                <View style={[styles.pulseDot, { backgroundColor: playing ? color.accent : color.ink3 }]} />
-                <Text style={[styles.telemetryText, { color: playing ? color.ink : color.ink2 }]} numberOfLines={1}>
-                  {rhythmPillText}
-                </Text>
-                <ChevronRight size={13} strokeWidth={1.7} color={color.ink3} />
-              </GlassSurface>
-            </Pressable>
+            <View style={styles.nowPlaying}>
+              <Text
+                style={[styles.heading, { color: color.ink, fontSize: isCompact ? 24 : 27 }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                accessibilityRole="header"
+              >
+                {currentName}
+              </Text>
+            </View>
           </View>
 
           {/* Swipeable 2-page x 6-card soundscape browser + minimal page dots */}
@@ -265,11 +400,10 @@ export default function SoundsScreen() {
                 onMomentumScrollEnd={onPagerScrollEnd}
                 scrollEventThrottle={32}
               >
-                {PRESET_PAGES.map((pg) => {
-                  const pageItems = orderedPresets.filter((p) => p.page === pg.id)
+                {pages.map((pageItems, pi) => {
                   return (
                     <GlassGroup
-                      key={pg.id}
+                      key={pi}
                       spacing={0}
                       style={[styles.gridPage, { width: pagerWidth || '100%', gap: isCompact ? 9 : 10 }]}
                     >
@@ -279,9 +413,20 @@ export default function SoundsScreen() {
                         return (
                           <Pressable
                             key={item.id}
-                            onPress={() => selectPreset(item.id, true)}
+                            onPress={() => selectSound(item.id, true)}
+                            onLongPress={
+                              item.custom
+                                ? () => {
+                                    feel('commit')
+                                    openStudio({ kind: 'saved', sound: item.custom! })
+                                  }
+                                : undefined
+                            }
+                            accessibilityHint={item.custom ? studioCopy.editHint : undefined}
                             style={({ pressed }) => [
                               styles.cardWrap,
+                              // Exactly half a row, alone or not: six to a page, always.
+                              pagerWidth > 0 ? { width: (pagerWidth - (isCompact ? 9 : 10)) / 2 } : null,
                               {
                                 opacity: pressed ? 0.85 : 1,
                                 transform: [{ scale: pressed ? 0.97 : 1 }],
@@ -292,7 +437,7 @@ export default function SoundsScreen() {
                               variant="card"
                               radius={18}
                               accent={live || selected}
-                              style={[styles.presetCard, { minHeight: isCompact ? 62 : 68 }]}
+                              style={[styles.presetCard, { height: rowH }]}
                             >
                               <View style={styles.presetTop}>
                                 <View style={styles.presetTitleRow}>
@@ -309,6 +454,10 @@ export default function SoundsScreen() {
                                   </Text>
                                 </View>
                                 {live ? <View style={[styles.liveDot, { backgroundColor: color.accent }]} /> : null}
+                                {/* Made by them: a small pen, quiet but there. */}
+                                {item.custom ? (
+                                  <PenLine size={12} strokeWidth={1.7} color={live || selected ? color.accent : color.ink3} />
+                                ) : null}
                               </View>
                               <Text numberOfLines={1} style={[styles.presetHint, { color: color.ink3 }]}>
                                 {item.hint}
@@ -324,13 +473,12 @@ export default function SoundsScreen() {
             </View>
 
             <View style={styles.pageDots}>
-              {PRESET_PAGES.map((pg) => (
+              {pages.map((_, pi) => (
                 <Pressable
-                  key={pg.id}
+                  key={pi}
                   onPress={() => {
-                    if (hapticsOn) haptics.play('light')
-                    setPageIdx(pg.id)
-                    if (pagerWidth > 0) pagerRef.current?.scrollTo({ x: pg.id * pagerWidth, animated: true })
+                    feel('tick')
+                    goToPage(pi)
                   }}
                   hitSlop={10}
                 >
@@ -338,8 +486,8 @@ export default function SoundsScreen() {
                     style={[
                       styles.pageDot,
                       {
-                        width: pageIdx === pg.id ? 18 : 6,
-                        backgroundColor: pageIdx === pg.id ? color.accent : 'rgba(255,255,255,0.22)',
+                        width: pageIdx === pi ? 18 : 6,
+                        backgroundColor: pageIdx === pi ? color.accent : 'rgba(255,255,255,0.22)',
                       },
                     ]}
                   />
@@ -357,27 +505,43 @@ export default function SoundsScreen() {
             <Text style={[styles.volPct, { color: color.accent }]}>{Math.round(volume * 100)}%</Text>
           </GlassSurface>
 
-          {/* Two questions, then two sounds to try. */}
-          <Pressable
-            onPress={() => useNav.getState().setCheckIn('sound')}
-            accessibilityRole="button"
-            style={({ pressed }) => [styles.helpCell, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}
-          >
-            <GlassSurface variant="card" radius={20} interactive style={styles.helpRow}>
-              <Compass size={17} strokeWidth={1.7} color={color.accent} />
-              <Text style={[styles.helpText, { color: color.ink }]}>{soundsHelp.link}</Text>
-              <ChevronRight size={16} strokeWidth={1.7} color={color.ink3} />
-            </GlassSurface>
-          </Pressable>
+          {/* Two ways to a sound you'll like: be asked (two questions), or make your own. */}
+          <View style={styles.actionRow}>
+            <Pressable
+              onPress={() => useNav.getState().setCheckIn('sound')}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.helpCell, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}
+            >
+              <GlassSurface variant="card" radius={20} interactive style={styles.helpRow}>
+                <Compass size={17} strokeWidth={1.7} color={color.accent} />
+                <Text style={[styles.helpText, { color: color.ink }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                  {soundsHelp.link}
+                </Text>
+              </GlassSurface>
+            </Pressable>
+            <Pressable
+              onPress={() => openStudio({ kind: 'new', from: currentName })}
+              accessibilityRole="button"
+              accessibilityLabel={soundsHelp.create}
+              style={({ pressed }) => [styles.createCell, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}
+            >
+              <GlassSurface variant="card" radius={20} interactive style={[styles.helpRow, styles.createRow]}>
+                <Plus size={18} strokeWidth={2} color={color.accent} />
+                <Text style={[styles.helpText, styles.createText, { color: color.ink }]} numberOfLines={1}>
+                  {soundsHelp.create}
+                </Text>
+              </GlassSurface>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
 
-      <PopoverMenu
+      <TimerSheet
         open={timerOpen}
         onClose={() => setTimerOpen(false)}
-        label="Sleep timer"
-        options={TIMER_OPTIONS}
         value={sleepTimer}
+        endClock={endClock}
+        fadingAt={fadingAt}
         onSelect={(m) => {
           setSettings({ sleepTimer: m })
           setSoundTimer(m)
@@ -386,23 +550,22 @@ export default function SoundsScreen() {
 
       <MixSheet
         open={mixOpen}
-        initialTab={studioTab}
-        onClose={() => setMixOpen(false)}
-        mix={displayMix}
-        preset={currentPreset}
-        onChange={(next) => {
-          setSettings({ mix: next, hasCustomMix: true })
-          setSelectedId('custom')
-          if (playing) {
-            updateMix(next)
-          } else {
-            playMix(next, sleepTimer)
-          }
+        target={studio}
+        onClose={closeStudio}
+        mix={draft ?? displayMix}
+        onChange={changeDraft}
+        playing={playing}
+        onTogglePlay={() => {
+          if (playing) stopSound(1.0)
+          else playMix(draft ?? displayMix, sleepTimer, studioMeta)
         }}
+        onSave={saveSound}
+        onDelete={deleteSound}
         onReset={() => {
           const fallback = presetById(DEFAULT_PRESET_ID)?.mix ?? SILENT_MIX
           setSettings({ mix: SILENT_MIX, hasCustomMix: false })
           setSelectedId(DEFAULT_PRESET_ID)
+          setDraft(fallback)
           if (playing) updateMix(fallback)
         }}
       />
@@ -436,6 +599,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
   },
+  topSide: {
+    flex: 1,
+    flexBasis: 0,
+    alignItems: 'flex-start',
+  },
+  topSideEnd: {
+    alignItems: 'flex-end',
+  },
   topChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,8 +619,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
+  nowPlaying: {
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 4,
+    maxWidth: '86%',
+  },
   heading: {
-    flex: 1,
     textAlign: 'center',
     fontWeight: '400',
     letterSpacing: -0.5,
@@ -458,23 +634,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 4,
-  },
-  telemetryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    height: 31,
-    paddingHorizontal: 14,
-  },
-  pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  telemetryText: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    fontVariant: ['tabular-nums'],
   },
   browserBlock: {
     width: '100%',
@@ -489,7 +648,6 @@ const styles = StyleSheet.create({
   },
   cardWrap: {
     width: '48.4%',
-    flexGrow: 1,
   },
   presetCard: {
     paddingHorizontal: 14,
@@ -534,21 +692,37 @@ const styles = StyleSheet.create({
   },
   volumeBar: {
     width: '100%',
-    height: 52,
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 12,
   },
-  helpCell: {
+  actionRow: {
     width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  helpCell: {
+    flex: 1.55,
+  },
+  createCell: {
+    flex: 1,
   },
   helpRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    height: 52,
-    paddingHorizontal: 16,
+    gap: 10,
+    height: 50,
+    paddingHorizontal: 14,
+  },
+  // A short label: icon and word sit together in the middle, not pinned left.
+  createRow: {
+    justifyContent: 'center',
+    gap: 8,
+  },
+  createText: {
+    flex: 0,
   },
   helpText: {
     flex: 1,

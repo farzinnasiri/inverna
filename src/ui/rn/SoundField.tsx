@@ -1,65 +1,53 @@
-import { useEffect, useState } from 'react'
-import { PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
-import Animated, { useAnimatedProps, useFrameCallback, useSharedValue } from 'react-native-reanimated'
-import Svg, { Circle, Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
+import { useState } from 'react'
+import { PanResponder, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { useIsFocused } from 'expo-router'
+import { Play } from 'lucide-react-native'
+import { paletteFamily, resolveBackdrop, SCENE_PALETTES } from '@/core/backdrop/scenes'
 import type { Mix, SoundIconId } from '@/core/sound/catalog'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
-import { GlassSurface } from './Glass'
+import { GlassLens } from './Glass'
+import { useCovered } from './ambientClock'
 import { useAppActive, useReducedMotion } from './hooks'
+import { LensLight } from './sound/LensLight'
 import { SoundGlyph } from './SoundGlyph'
 
-const AnimatedPath = Animated.createAnimatedComponent(Path)
-const AnimatedCircle = Animated.createAnimatedComponent(Circle)
-
-const VB = 260
-const C = VB / 2
-const RING_FRAME = 1 / 30
-
-/** Static watch-bezel geometry, computed once. */
-const BEZEL_TICKS = Array.from({ length: 48 }, (_, i) => {
-  const a = (i / 48) * Math.PI * 2
-  const major = i % 4 === 0
-  const r1 = 118
-  const r2 = major ? 126 : 122
-  return { x1: C + Math.cos(a) * r1, y1: C + Math.sin(a) * r1, x2: C + Math.cos(a) * r2, y2: C + Math.sin(a) * r2, major }
-})
-
-function ringPath(idx: number, phase: number, playing: boolean, norm: number, waves: number, pad: number): string {
-  'worklet'
-  const baseR = 48 + idx * 26 + (playing ? Math.sin(phase - idx * 0.65) * 4.5 : 0)
-  let d = ''
-  const steps = 48
-  for (let i = 0; i <= steps; i++) {
-    const a = (i / steps) * Math.PI * 2
-    const wobble =
-      Math.sin(a * (3 + idx) + phase * (1.45 + idx * 0.28)) * (2.6 + norm * 5.2) * (playing ? 1 : 0.28) +
-      Math.cos(a * 5 - phase * 0.85) * (1.3 + waves * 3.5 + pad * 1.5)
-    const r = baseR + wobble
-    d += `${i === 0 ? 'M' : 'L'} ${(C + Math.cos(a) * r).toFixed(1)} ${(C + Math.sin(a) * r).toFixed(1)} `
-  }
-  return d + 'Z'
+/** A stable small number per sound, so each one draws its own rings. */
+function shapeFor(key: string): number {
+  let h = 7
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0
+  return h
 }
 
 /**
- * Watchmaker Acoustic Dial:
- * - Precision watch bezel ticks + 3 breathing 0.1 Hz harmonic wave rings
- * - Clean floating center icon (no heavy medallion circle) directly inside the acoustic field
- * - Swipe left/right to glide between soundscapes, tap to play/pause
+ * The sound orb: a lens of real glass with the sound's light inside it.
  *
- * The rings breathe on the UI thread at 30 fps, only while playing and on screen;
- * paused, they rest still.
+ * - The glass (GlassLens) is clear native Liquid Glass: it bends the living
+ *   scene behind it rather than showing a disc of its own.
+ * - The light (LensLight, Skia) is three closed rings drawn as glowing
+ *   harmonographs, a rim lit in the scene's colours, and light pooling low
+ *   inside. Each sound draws its own rings; they breathe with the sound.
+ * - Playing shows itself: the rings move and glow, with the sound's icon at
+ *   the centre. Paused, they settle into still, dim circles around a play
+ *   sign. No caption.
+ *
+ * Tap to play or pause; swipe sideways to move to the next sound.
  */
 export function SoundField({
   mix,
+  presetId,
   playing,
   label,
   icon,
   breathHz = 0.1,
   onToggle,
   onSwipe,
+  size: sizeProp,
 }: {
+  /** Diameter; the screen sizes it to fit. Defaults to a size from the window. */
+  size?: number
   mix: Mix
+  /** The preset playing or shown, for its scene colours and its own ring pattern. */
+  presetId: string | null
   playing: boolean
   label: string
   icon: SoundIconId
@@ -71,22 +59,8 @@ export function SoundField({
   const reduced = useReducedMotion()
   const focused = useIsFocused()
   const appActive = useAppActive()
+  const covered = useCovered()
   const onSwipeRef = useSharedRef(onSwipe)
-
-  const phase = useSharedValue(0)
-  const acc = useSharedValue(0)
-  const rate = Math.PI * 2 * Math.max(0.06, breathHz)
-  const ringClock = useFrameCallback((frame) => {
-    'worklet'
-    acc.set(acc.get() + (frame.timeSincePreviousFrame ?? 16) / 1000)
-    if (acc.get() < RING_FRAME * 0.9) return
-    phase.set(phase.get() + acc.get() * rate)
-    acc.set(0)
-  }, false)
-  const animate = playing && focused && appActive && !reduced
-  useEffect(() => {
-    ringClock.setActive(animate)
-  }, [animate, ringClock])
 
   const [panResponder] = useState(() =>
     PanResponder.create({
@@ -101,9 +75,11 @@ export function SoundField({
   )
 
   const { width, height } = useWindowDimensions()
-  const size = Math.min(212, Math.max(174, Math.round(Math.min(width - 134, height * 0.245))))
+  const size = sizeProp ?? Math.min(232, Math.max(184, Math.round(Math.min(width - 120, height * 0.27))))
+
+  // How much the sound moves: its layers, its pad, its pulse.
   const l = mix.layers
-  const activeEnergy =
+  const energy =
     (l.rain ?? 0) +
     (l.waves ?? 0) +
     (l.fire ?? 0) +
@@ -113,17 +89,11 @@ export function SoundField({
     (l.white ?? 0) +
     (mix.padGain ?? 0) * 0.8 +
     (mix.band ? mix.bandGain : 0)
-  const norm = Math.min(1, activeEnergy / 2.4)
-  const waves = l.waves ?? 0
-  const pad = mix.padGain ?? 0
+  const motion = Math.min(1, energy / 2.4)
 
-  const ring0 = useAnimatedProps(() => ({ d: ringPath(0, phase.get(), playing, norm, waves, pad) }))
-  const ring1 = useAnimatedProps(() => ({ d: ringPath(1, phase.get(), playing, norm, waves, pad) }))
-  const ring2 = useAnimatedProps(() => ({ d: ringPath(2, phase.get(), playing, norm, waves, pad) }))
-  const halo = useAnimatedProps(() => ({ r: playing ? 86 + Math.sin(phase.get()) * 8 : 74 }))
-  const ringProps = [ring0, ring1, ring2]
-
-  const iconSize = Math.round(size * 0.19)
+  // The glass takes its light from the scene behind it.
+  const palette = SCENE_PALETTES[paletteFamily(resolveBackdrop(presetId, mix))]
+  const iconSize = Math.round(size * 0.17)
 
   return (
     <View {...panResponder.panHandlers} style={styles.wrap}>
@@ -131,61 +101,30 @@ export function SoundField({
         onPress={onToggle}
         accessibilityRole="button"
         accessibilityLabel={playing ? `Pause ${label}` : `Play ${label}`}
-        style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.975 : 1 }] }]}
+        style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}
       >
-        <GlassSurface
-          variant="elevated"
-          radius={size / 2}
-          accent={playing}
-          style={[styles.orb, { width: size, height: size }]}
-        >
-          <Svg width={size} height={size} viewBox={`0 0 ${VB} ${VB}`}>
-            <Defs>
-              <RadialGradient id="dialCoreHalo" cx="50%" cy="50%" r="50%">
-                <Stop offset="0%" stopColor={color.accent} stopOpacity={playing ? 0.26 : 0.08} />
-                <Stop offset="52%" stopColor={color.accent} stopOpacity={playing ? 0.07 : 0.02} />
-                <Stop offset="100%" stopColor="#000000" stopOpacity="0" />
-              </RadialGradient>
-            </Defs>
-
-            <AnimatedCircle cx={C} cy={C} animatedProps={halo} fill="url(#dialCoreHalo)" />
-
-            {BEZEL_TICKS.map((tk, i) => (
-              <Line
-                key={i}
-                x1={tk.x1}
-                y1={tk.y1}
-                x2={tk.x2}
-                y2={tk.y2}
-                stroke={playing && tk.major ? color.accent : color.ink4}
-                strokeWidth={tk.major ? 1.35 : 0.8}
-                strokeOpacity={playing ? (tk.major ? 0.78 : 0.42) : 0.32}
-              />
-            ))}
-
-            {ringProps.map((animatedProps, i) => (
-              <AnimatedPath
-                key={i}
-                animatedProps={animatedProps}
-                fill="none"
-                stroke={i === 1 ? color.accent : color.ink2}
-                strokeWidth={i === 1 ? 1.55 : 1}
-                strokeOpacity={playing ? 0.72 - i * 0.14 : 0.24 - i * 0.05}
-              />
-            ))}
-          </Svg>
-
-          {/* Clean floating soundscape icon at the center — no inner disc or heavy border */}
-          <View pointerEvents="none" style={styles.centerIcon}>
-            <SoundGlyph icon={icon} size={iconSize} color={playing ? color.accent : color.ink} />
+        <GlassLens size={size} rim={false} interactive>
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <LensLight
+              size={size}
+              playing={playing}
+              animate={focused && appActive && !reduced && !covered}
+              motion={motion}
+              shape={shapeFor(presetId ?? label)}
+              breathHz={breathHz}
+              light={palette.detail}
+              bounce={palette.caustic}
+              accent={color.accent}
+            />
           </View>
-
-          <View pointerEvents="none" style={styles.caption}>
-            <Text style={[styles.stateText, { color: playing ? color.accent : color.ink3 }]}>
-              {playing ? 'Playing' : 'Tap to play'}
-            </Text>
+          <View pointerEvents="none" style={styles.center}>
+            {playing ? (
+              <SoundGlyph icon={icon} size={iconSize} color={color.accent} />
+            ) : (
+              <Play size={Math.round(iconSize * 0.9)} strokeWidth={1.6} color={color.ink} fill={color.ink} style={styles.play} />
+            )}
           </View>
-        </GlassSurface>
+        </GlassLens>
       </Pressable>
     </View>
   )
@@ -196,27 +135,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  orb: {
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  centerIcon: {
+  center: {
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  caption: {
-    position: 'absolute',
-    bottom: 16,
-    alignItems: 'center',
-  },
-  stateText: {
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 0.7,
-    textTransform: 'uppercase',
+  // A play triangle's weight sits left of its box; nudge it to look centred.
+  play: {
+    marginLeft: 4,
   },
 })
 

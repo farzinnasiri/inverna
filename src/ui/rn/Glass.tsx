@@ -1,11 +1,12 @@
 import type { ComponentType, ReactNode } from 'react'
 import { Platform, Pressable, StyleSheet, View, type StyleProp, type ViewProps, type ViewStyle } from 'react-native'
 import { BlurView } from 'expo-blur'
+import Svg, { Circle, Defs, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg'
 import { requireOptionalNativeModule } from 'expo'
 import { haptics } from '@/platform'
 import { useSettings } from '@/ui/state/settings'
 
-export type GlassVariant = 'chrome' | 'card' | 'elevated' | 'pill'
+export type GlassVariant = 'chrome' | 'card' | 'elevated' | 'pill' | 'lens'
 
 type NativeGlassViewProps = ViewProps & {
   glassEffectStyle?: 'clear' | 'regular' | 'none'
@@ -99,6 +100,15 @@ const VARIANT_CONFIG: Record<
     nativeStyle: 'regular',
     border: 'rgba(255, 255, 255, 0.15)',
   },
+  /** Clear glass with no colour of its own: it shows (and bends) what's behind. */
+  lens: {
+    iosIntensity: 12,
+    iosBg: 'rgba(8, 10, 14, 0.16)',
+    webBg: 'rgba(10, 12, 16, 0.28)',
+    nativeTint: 'rgba(0, 0, 0, 0.06)',
+    nativeStyle: 'clear',
+    border: 'rgba(255, 255, 255, 0.08)',
+  },
   pill: {
     iosIntensity: 38,
     iosBg: 'rgba(20, 22, 29, 0.48)',
@@ -109,7 +119,21 @@ const VARIANT_CONFIG: Record<
   },
 }
 
-const ACCENT_BORDER = 'rgba(194, 161, 95, 0.46)'
+/**
+ * Selected, chosen, the obvious next step: the glass itself turns warm (iOS's
+ * own way to make glass stand out), with the same thin edge as everything
+ * else. Never an outline drawn round the glass: that stops it reading as
+ * glass. Shades can differ (`tint`), the treatment doesn't.
+ */
+export const GLASS_TINT = {
+  /** Selected or chosen. */
+  selected: 'rgba(194, 161, 95, 0.22)',
+  /** The main action. */
+  primary: 'rgba(194, 161, 95, 0.26)',
+  /** Tonight's suggestion on Play: a touch quieter than a selection. */
+  suggested: 'rgba(194, 161, 95, 0.2)',
+} as const
+const SELECTED_WEB_BG = 'rgba(70, 58, 34, 0.62)'
 
 const WEB_GLASS_STYLE =
   Platform.OS === 'web'
@@ -155,6 +179,7 @@ export function GlassSurface({
   variant = 'card',
   radius = 20,
   accent,
+  tint,
   interactive = false,
   style,
   children,
@@ -162,6 +187,11 @@ export function GlassSurface({
   variant?: GlassVariant
   radius?: number
   accent?: boolean
+  /**
+   * Colour the glass itself (iOS's own way to make glass stand out), instead
+   * of drawing on top of it. Replaces the variant's tint.
+   */
+  tint?: string
   interactive?: boolean
   style?: StyleProp<ViewStyle>
   children: ReactNode
@@ -176,14 +206,16 @@ export function GlassSurface({
         glassEffectStyle={cfg.nativeStyle}
         colorScheme="dark"
         isInteractive={interactive}
-        tintColor={cfg.nativeTint}
+        tintColor={tint ?? (accent ? GLASS_TINT.selected : cfg.nativeTint)}
         style={[
           styles.nativeBase,
           {
             borderRadius: radius,
             borderCurve: 'continuous',
-            borderWidth: accent ? 1 : StyleSheet.hairlineWidth,
-            borderColor: accent ? ACCENT_BORDER : 'rgba(255, 255, 255, 0.12)',
+            // One thin edge in every state, selected or not, so nothing re-wraps.
+            // The lens draws its own edge light; a uniform hairline would flatten it.
+            borderWidth: variant === 'lens' ? 0 : StyleSheet.hairlineWidth,
+            borderColor: accent ? 'rgba(255, 236, 200, 0.2)' : 'rgba(255, 255, 255, 0.12)',
           },
           style,
         ]}
@@ -201,8 +233,8 @@ export function GlassSurface({
         {
           borderRadius: radius,
           borderCurve: 'continuous',
-          backgroundColor: Platform.OS === 'ios' ? cfg.iosBg : cfg.webBg,
-          borderColor: accent ? ACCENT_BORDER : cfg.border,
+          backgroundColor: tint ?? (accent ? SELECTED_WEB_BG : Platform.OS === 'ios' ? cfg.iosBg : cfg.webBg),
+          borderColor: accent ? 'rgba(255, 236, 200, 0.2)' : cfg.border,
         },
         style,
       ]}
@@ -224,7 +256,7 @@ export function GlassPressable({
   radius = 22,
   accent,
   disabled,
-  hapticFeedback = true,
+  hapticFeedback = false,
   onPress,
   accessibilityLabel,
   accessibilityRole = 'button',
@@ -247,7 +279,7 @@ export function GlassPressable({
   const handlePress = () => {
     if (disabled) return
     if (hapticFeedback && hapticsOn) {
-      haptics.play('light')
+      haptics.play('tick')
     }
     onPress?.()
   }
@@ -272,7 +304,91 @@ export function GlassPressable({
   )
 }
 
+/**
+ * A round lens of liquid glass, made to behave like glass rather than look
+ * like it:
+ * - the body is real iOS 26 clear glass with no tint, so it bends whatever is
+ *   behind it (the living backdrop) instead of showing a grey disc;
+ * - there is no painted shine. Light shows only where real glass shows it:
+ *   along the rim, brightest where the scene's light falls (top right), with
+ *   a thin reflection just inside it, and a faint bounce of the scene's own
+ *   colour on the opposite edge (`bounce`).
+ *
+ * `rim={false}` leaves the light to the caller (the sound orb draws its own,
+ * animated, in Skia). Used for the intro mark and the sound orb.
+ */
+export function GlassLens({
+  size,
+  bounce = '#C2A15F',
+  light = '#EAF4F2',
+  rim = true,
+  interactive = false,
+  style,
+  children,
+}: {
+  size: number
+  /** The scene's colour, caught on the lower-left edge. */
+  bounce?: string
+  /** The light falling on the top-right edge. */
+  light?: string
+  rim?: boolean
+  interactive?: boolean
+  style?: StyleProp<ViewStyle>
+  children?: ReactNode
+}) {
+  const id = `lens-${Math.round(size)}`
+  const c = size / 2
+  const r = c - 0.75
+  /** A point on the rim at an angle (degrees, 0 = right, clockwise). */
+  const at = (deg: number, rad = r) => {
+    const a = (deg * Math.PI) / 180
+    return `${(c + Math.cos(a) * rad).toFixed(2)} ${(c + Math.sin(a) * rad).toFixed(2)}`
+  }
+  const arc = (from: number, to: number, rad = r) => `M ${at(from, rad)} A ${rad} ${rad} 0 0 1 ${at(to, rad)}`
+  return (
+    <View style={[{ width: size, height: size }, style]}>
+      <GlassSurface variant="lens" radius={size / 2} interactive={interactive} style={StyleSheet.absoluteFill}>
+        <View />
+      </GlassSurface>
+      {rim ? (
+        <Svg width={size} height={size} style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Defs>
+            <LinearGradient id={`${id}-key`} x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={light} stopOpacity="0" />
+              <Stop offset="0.5" stopColor={light} stopOpacity="0.85" />
+              <Stop offset="1" stopColor={light} stopOpacity="0" />
+            </LinearGradient>
+            <LinearGradient id={`${id}-bounce`} x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor={bounce} stopOpacity="0" />
+              <Stop offset="0.5" stopColor={bounce} stopOpacity="0.55" />
+              <Stop offset="1" stopColor={bounce} stopOpacity="0" />
+            </LinearGradient>
+            <RadialGradient id={`${id}-depth`} cx="50%" cy="50%" rx="50%" ry="50%">
+              <Stop offset="0.72" stopColor="#000000" stopOpacity="0" />
+              <Stop offset="1" stopColor="#000000" stopOpacity="0.28" />
+            </RadialGradient>
+          </Defs>
+          {/* Thick glass darkens toward its edge. */}
+          <Circle cx={c} cy={c} r={r} fill={`url(#${id}-depth)`} />
+          {/* A hairline so the edge reads even where no light falls on it. */}
+          <Circle cx={c} cy={c} r={r} fill="none" stroke={light} strokeOpacity={0.1} strokeWidth={1} />
+          <Path d={arc(-110, 10)} fill="none" stroke={`url(#${id}-key)`} strokeWidth={1.6} strokeLinecap="round" />
+          <Path d={arc(-95, -20, r - size * 0.035)} fill="none" stroke={light} strokeOpacity={0.16} strokeWidth={1.2} strokeLinecap="round" />
+          <Path d={arc(95, 175)} fill="none" stroke={`url(#${id}-bounce)`} strokeWidth={1.3} strokeLinecap="round" />
+        </Svg>
+      ) : null}
+      <View style={[StyleSheet.absoluteFill, styles.lensContent]} pointerEvents="box-none">
+        {children}
+      </View>
+    </View>
+  )
+}
+
 const styles = StyleSheet.create({
+  lensContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   base: {
     borderWidth: 1,
     overflow: 'hidden',

@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { formatBedtime12h, formatHHMM, nightKey } from '@/core/night'
-import { haptics } from '@/platform'
+import { feel } from '@/ui/feel'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
@@ -26,7 +26,6 @@ export function WindDownSheet() {
   const setOpen = useNav((s) => s.setWindDownOpen)
 
   const minutes = useSettings((s) => s.sessionMinutes)
-  const hapticsOn = useSettings((s) => s.haptics)
   const set = useSettings((s) => s.set)
   const startSession = useSession((s) => s.start)
 
@@ -34,7 +33,7 @@ export function WindDownSheet() {
   const lightsOutHHMM = formatHHMM(lightsOut.getHours(), lightsOut.getMinutes())
 
   const start = () => {
-    if (hapticsOn) haptics.play('medium')
+    feel('commit')
     const now = new Date()
     const end = new Date(now.getTime() + minutes * 60_000)
     set({ tonightBedtime: { night: nightKey(now), bedtime: formatHHMM(end.getHours(), end.getMinutes()) } })
@@ -60,7 +59,7 @@ export function WindDownSheet() {
           options={DURATIONS}
           value={minutes}
           onChange={(v) => {
-            if (hapticsOn) haptics.play('selection')
+            feel('tick')
             set({ sessionMinutes: v })
           }}
         />

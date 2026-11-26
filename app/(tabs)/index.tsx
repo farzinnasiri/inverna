@@ -1,24 +1,28 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
-import { useRouter } from 'expo-router'
+import { useIsFocused, useRouter } from 'expo-router'
 import { Award, Moon, Pause, Play } from 'lucide-react-native'
-import { arrangeGames } from '@/core/games/arrange'
-import { gameMeta, type GameId } from '@/core/games/catalog'
+import { arrangeGames, tonightPicks } from '@/core/games/arrange'
+import { feel } from '@/ui/feel'
+import { GAMES, gameMeta, type GameId } from '@/core/games/catalog'
 import { profileIntent } from '@/core/profile'
 import { bestFor, formatBestCompact } from '@/core/highscores'
 import { eveningState, windowProgress, type EveningState } from '@/core/evening'
 import { formatBedtime12h, formatHHMM, nightKey, overrideActive } from '@/core/night'
-import { haptics } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { greeting, play as copy } from '@/ui/copy'
 import { ContinuePreview } from '@/ui/rn/ContinuePreview'
-import { FRAME_MAX_WIDTH } from '@/ui/rn/controls'
+import { Button, FRAME_MAX_WIDTH, Sheet } from '@/ui/rn/controls'
 import { GameGlyph } from '@/ui/rn/GameGlyph'
 import { SoundGlyph } from '@/ui/rn/SoundGlyph'
-import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
+import { useCovered } from '@/ui/rn/ambientClock'
+import { GLASS_TINT, GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { Horizon } from '@/ui/rn/Horizon'
-import { tabBarClearance, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
+import { tabBarClearance, useAppActive, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
+import { SoundRibbon } from '@/ui/rn/sound/SoundRibbon'
+import { paletteFamily, resolveBackdrop, SCENE_PALETTES } from '@/core/backdrop/scenes'
+import { presetById } from '@/core/sound/catalog'
 import { Rise } from '@/ui/rn/motion'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
@@ -57,18 +61,17 @@ const ARRIVE = { distance: 8, duration: 360 } as const
 const GRID_ROWS = 5
 const DOCK_H = 56
 /** Least height the hero needs: the big line, one line under it, and the accessory slot. */
-const HERO_MIN = 132
+const HERO_MIN = 144
 
 export default function HomeScreen() {
   const router = useRouter()
-  const { height, insets, isCompact, isLarge, sideMargin } = useResponsiveLayout()
+  const { height, width, insets, isCompact, isLarge, sideMargin } = useResponsiveLayout()
   const { color } = useTokenColors()
   const reduced = useReducedMotion()
 
   const onboarded = useSettings((s) => s.onboarded)
   const name = useSettings((s) => s.userName)
   const lastGame = useSettings((s) => s.lastGame)
-  const hapticsOn = useSettings((s) => s.haptics)
   const lastCheckInDate = useSettings((s) => s.lastCheckInDate)
   const tonightIntent = useSettings((s) => s.tonightIntent)
   const lastLightsOutNight = useSettings((s) => s.lastLightsOutNight)
@@ -85,7 +88,11 @@ export default function HomeScreen() {
 
   const [now, setNow] = useState(() => new Date())
   const [gridW, setGridW] = useState(0)
+  const [viewportH, setViewportH] = useState(0)
   const [tonightOpen, setTonightOpen] = useState(false)
+  /** The game being peeked at (press and hold a tile). */
+  const [peek, setPeek] = useState<GameId | null>(null)
+  const peekMeta = peek ? gameMeta(peek) : null
   const schedule = useCurrentSchedule(now)
   const ambient = useAmbientToggle()
 
@@ -143,25 +150,46 @@ export default function HomeScreen() {
     return () => clearTimeout(timer)
   }, [onboarded, nearBedtime, lastCheckInDate, now, checkInOpen, setCheckIn])
 
-  // Tonight's check-in leads for one night; favourites (from what they play)
-  // take the wide tiles; onboarding's answers set the order underneath.
+  // The layout is set once a night, so tiles never move while someone is
+  // using Play (a game opened counts as a play, which changes favourites).
+  // Tonight's check-in marks its games in place instead of reordering.
   const profile = useSettings((s) => s.profile)
   const plays = useSettings((s) => s.plays)
-  const tonightPlan = lastCheckInDate === nightKey(now) ? tonightIntent : null
-  const { ordered, wideIds } = useMemo(() => {
-    const { order, wide } = arrangeGames({ tonight: tonightPlan, usual: profile ? profileIntent(profile) : null, plays })
-    return { ordered: order.map(gameMeta), wideIds: new Set<GameId>(wide) }
-  }, [tonightPlan, profile, plays])
+  const playLayout = useSettings((s) => s.playLayout)
+  const usual = profile ? profileIntent(profile) : null
+  const night = nightKey(now)
+  const layoutFresh =
+    playLayout !== null &&
+    playLayout.night === night &&
+    playLayout.usual === usual &&
+    playLayout.order.length === GAMES.length &&
+    Array.isArray(playLayout.picks)
+  const layout = useMemo(() => {
+    if (layoutFresh) return playLayout
+    const { order, wide } = arrangeGames({ usual, plays })
+    return { night, usual, order, wide, picks: tonightPicks({ tonight: null, usual, plays }) }
+    // A fresh layout ignores later plays on purpose: that's what keeps it still.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutFresh, playLayout, night, usual])
+  useEffect(() => {
+    if (!layoutFresh && onboarded) setSettings({ playLayout: layout })
+  }, [layoutFresh, layout, onboarded, setSettings])
+  const tonightPlan = lastCheckInDate === night ? tonightIntent : null
+  const ordered = useMemo(() => layout.order.map(gameMeta), [layout])
+  const wideIds = useMemo(() => new Set<GameId>(layout.wide), [layout])
+  const picks = useMemo(
+    () => new Set<GameId>(tonightPlan ? tonightPicks({ tonight: tonightPlan, usual, plays: {} }) : layout.picks),
+    [tonightPlan, usual, layout],
+  )
 
   const launchGame = (id: GameId) => {
-    if (hapticsOn) haptics.play('light')
     const st = useSettings.getState()
     setSettings({ lastGame: id, plays: { ...st.plays, [id]: (st.plays[id] ?? 0) + 1 } })
     router.push(`/game/${id}`)
   }
 
   const toggleWindDown = () => {
-    if (hapticsOn) haptics.play('light')
+    feel('commit')
     if (session) {
       dismissSession()
       stopSound(1.2)
@@ -180,10 +208,14 @@ export default function HomeScreen() {
   const sectionGap = isCompact ? 10 : 14
   const tileGap = isCompact ? 8 : 10
   const bottomReserve = tabBarClearance(insets.bottom)
-  const preferredTile = isCompact ? 80 : isLarge ? 94 : 88
-  const fitTile = Math.floor(
-    (height - insets.top - HERO_MIN - sectionGap * 2 - DOCK_H - bottomReserve - tileGap * (GRID_ROWS - 1)) / GRID_ROWS,
-  )
+  // Tiles take the spare height (up to these), not the hero: the space is worth more as bigger targets.
+  const preferredTile = isCompact ? 82 : isLarge ? 110 : 102
+  // From the scroll view's real height once it's measured, so the tiles fill
+  // what's actually there (an estimate from the window left ~50pt unused on
+  // some phones). The scroll view's height doesn't depend on its content, so
+  // this can't feed back on itself the way measuring the frame would.
+  const frameAvail = (viewportH > 0 ? viewportH : height) - insets.top - bottomReserve
+  const fitTile = Math.floor((frameAvail - HERO_MIN - sectionGap * 2 - DOCK_H - tileGap * (GRID_ROWS - 1)) / GRID_ROWS)
   const tileHeight = clamp(fitTile, 64, preferredTile)
   const colW = gridW > 0 ? Math.floor((gridW - tileGap * 2) / 3) : 104
   const wideW = colW * 2 + tileGap
@@ -193,6 +225,10 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <ScrollView
         style={styles.scroll}
+        onLayout={(e: LayoutChangeEvent) => {
+          const h = Math.round(e.nativeEvent.layout.height)
+          if (h > 0 && Math.abs(h - viewportH) > 1) setViewportH(h)
+        }}
         contentInsetAdjustmentBehavior="never"
         automaticallyAdjustsScrollIndicatorInsets={false}
         alwaysBounceVertical
@@ -205,7 +241,6 @@ export default function HomeScreen() {
             <Pressable
               onPress={() => {
                 if (session) return
-                if (hapticsOn) haptics.play('light')
                 setTonightOpen(true)
               }}
               disabled={Boolean(session)}
@@ -236,13 +271,12 @@ export default function HomeScreen() {
               ) : askingPastBedtime ? (
                 <View style={styles.choices}>
                   <Pressable onPress={toggleWindDown} accessibilityRole="button" style={styles.choice}>
-                    <GlassSurface variant="pill" radius={20} accent style={styles.choicePill}>
+                    <GlassSurface variant="pill" radius={20} tint={GLASS_TINT.suggested} style={styles.choicePill}>
                       <Text style={[styles.choiceText, { color: color.accent }]}>{copy.pastWindDown}</Text>
                     </GlassSurface>
                   </Pressable>
                   <Pressable
                     onPress={() => {
-                      if (hapticsOn) haptics.play('light')
                       setTonightOpen(true)
                     }}
                     accessibilityRole="button"
@@ -253,7 +287,12 @@ export default function HomeScreen() {
                     </GlassSurface>
                   </Pressable>
                 </View>
-              ) : null}
+              ) : (
+                // Nothing to show here tonight: the sound, as a ribbon of light.
+                <View style={[styles.ribbon, { marginHorizontal: -sideMargin }]} pointerEvents="none">
+                  <PlayRibbon width={width} />
+                </View>
+              )}
             </View>
           </Rise>
 
@@ -270,6 +309,7 @@ export default function HomeScreen() {
             {ordered.map((game, idx) => {
               const wide = wideIds.has(game.id)
               const isLead = idx === 0
+              const isPick = picks.has(game.id)
               const isLastPlayed = lastGame === game.id
               const best = game.id !== 'pond' ? bestFor(highScores, game.id) : null
               const compactBest = game.id !== 'pond' ? formatBestCompact(game.id, best) : null
@@ -280,11 +320,22 @@ export default function HomeScreen() {
                 <Animated.View key={game.id} layout={TILE_MORPH} style={{ width: wide ? wideW : colW }}>
                   <Pressable
                     onPress={() => launchGame(game.id)}
+                    onLongPress={() => {
+                      feel('settle')
+                      setPeek(game.id)
+                    }}
+                    delayLongPress={350}
+                    accessibilityHint={copy.peekHint}
                     accessibilityRole="button"
-                    accessibilityLabel={compactBest ? `${game.name}, best ${compactBest}` : game.name}
+                    accessibilityLabel={`${game.name}${compactBest ? `, best ${compactBest}` : ''}${isPick ? `, ${copy.pickLabel}` : ''}`}
                     style={({ pressed }) => [{ opacity: pressed ? 0.86 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                   >
-                    <GlassSurface variant="card" radius={20} accent={isLead} style={[styles.tile, { height: tileHeight }]}>
+                    <GlassSurface
+                      variant="card"
+                      radius={20}
+                      tint={isPick ? GLASS_TINT.suggested : undefined}
+                      style={[styles.tile, { height: tileHeight }]}
+                    >
                       <View style={styles.tileTop}>
                         <View style={styles.tileArt}>
                           {hasPreview ? <ContinuePreview id={game.id} size={roomy ? 36 : 30} /> : null}
@@ -299,19 +350,17 @@ export default function HomeScreen() {
                           <View style={styles.continueTag}>
                             <Text style={[styles.continueText, { color: color.accent }]}>Continue</Text>
                           </View>
-                        ) : wide ? (
-                          <Text style={[styles.tileTag, { color: color.ink3 }]} numberOfLines={1}>
-                            {game.classic}
-                          </Text>
                         ) : null}
                       </View>
 
+                      {/* The name, and the kind of game everyone knows, so it's easy to find again. */}
                       <View style={styles.tileBottom}>
                         <Text style={[styles.tileName, { color: color.ink }]} numberOfLines={1}>
                           {game.name}
                         </Text>
-                        {wide && (compactBest || isLastPlayed) ? (
-                          <Text style={[styles.tileTag, { color: color.ink3 }]} numberOfLines={1}>
+                        {/* Short screens (iPhone SE) keep one line; press and hold still says what it is. */}
+                        {tileHeight >= 76 ? (
+                          <Text style={[styles.tileKind, { color: color.ink3 }]} numberOfLines={1}>
                             {game.classic}
                           </Text>
                         ) : null}
@@ -333,8 +382,9 @@ export default function HomeScreen() {
               accessibilityLabel={session ? copy.endWindDown : copy.windDown}
               style={({ pressed }) => [styles.dockSlot, { transform: [{ scale: pressed ? 0.97 : 1 }] }]}
             >
-              <GlassSurface variant="pill" radius={DOCK_H / 2} accent style={styles.dockPill}>
-                <Moon size={17} strokeWidth={1.7} color={color.accent} />
+              {/* Warm only while a wind-down is running: on Play, a warm pill means something is on. */}
+              <GlassSurface variant="pill" radius={DOCK_H / 2} accent={Boolean(session)} style={styles.dockPill}>
+                <Moon size={17} strokeWidth={1.7} color={session ? color.accent : color.ink2} />
                 <Text style={[styles.dockLabel, { color: session ? color.accent : color.ink }]} numberOfLines={1}>
                   {session ? copy.endWindDown : copy.windDown}
                 </Text>
@@ -343,11 +393,10 @@ export default function HomeScreen() {
 
             <Pressable
               onPress={() => {
-                if (hapticsOn) haptics.play('light')
                 ambient.toggle()
               }}
               onLongPress={() => {
-                if (hapticsOn) haptics.play('medium')
+                feel('settle')
                 router.push('/sounds')
               }}
               accessibilityRole="button"
@@ -379,6 +428,99 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
       <TonightSheet open={tonightOpen} onClose={() => setTonightOpen(false)} />
+
+      {/* Press and hold a tile: what the game is, how it feels, how you've done, and a way in. */}
+      <Sheet open={peek !== null} onClose={() => setPeek(null)} label={peekMeta?.name ?? ''}>
+        {peekMeta ? <GamePeek id={peekMeta.id} pick={picks.has(peekMeta.id)} onPlay={() => {
+          const id = peekMeta.id
+          setPeek(null)
+          launchGame(id)
+        }} /> : null}
+      </Sheet>
+    </View>
+  )
+}
+
+/** Room above and below the ribbon's waves for their glow to fade out (it overflows its slot). */
+const RIBBON_PAD = 22
+
+/** The ribbon on Play follows whatever sound is playing (or would play), in its scene's colour. */
+function PlayRibbon({ width }: { width: number }) {
+  const { color } = useTokenColors()
+  const playing = useSound((s) => s.playing)
+  const presetId = useSound((s) => s.presetId)
+  const liveMix = useSound((s) => s.mix)
+  const breathHz = useSound((s) => s.descent.breathHz)
+  const sessionPreset = useSettings((s) => s.sessionPreset)
+  const focused = useIsFocused()
+  const appActive = useAppActive()
+  const covered = useCovered()
+  const reduced = useReducedMotion()
+  const id = presetId ?? sessionPreset
+  const mix = (playing ? liveMix : null) ?? presetById(id ?? '')?.mix ?? null
+  const palette = SCENE_PALETTES[paletteFamily(resolveBackdrop(id, mix))]
+  const l = mix?.layers ?? {}
+  const energy = (l.rain ?? 0) + (l.waves ?? 0) + (l.fire ?? 0) + (l.wind ?? 0) + (l.brown ?? 0) + (l.pink ?? 0) + (mix?.padGain ?? 0) * 0.8
+  return (
+    <SoundRibbon
+      width={width}
+      height={56 + RIBBON_PAD * 2}
+      pad={RIBBON_PAD}
+      playing={playing}
+      animate={focused && appActive && !reduced && !covered}
+      motion={Math.min(1, energy / 2.4)}
+      breathHz={breathHz}
+      tint={palette.caustic}
+      accent={color.accent}
+    />
+  )
+}
+
+/**
+ * The peek card: the game's board picture large on glass, what kind of game it
+ * is and what it asks of you, the two lines that explain it, and what you've
+ * done in it. One way in (Play); swipe down or tap outside to leave.
+ */
+function GamePeek({ id, pick, onPlay }: { id: GameId; pick: boolean; onPlay: () => void }) {
+  const { color } = useTokenColors()
+  const meta = gameMeta(id)
+  const plays = useSettings((s) => s.plays[id] ?? 0)
+  const table = useHighScores((s) => s.table)
+  const best = id !== 'pond' ? formatBestCompact(id, bestFor(table, id)) : null
+  const facts = [
+    pick ? copy.pickChip : null,
+    best ? copy.peekBest(best) : null,
+    plays > 0 ? copy.peekPlays(plays) : copy.peekNew,
+  ].filter((f): f is string => Boolean(f))
+
+  return (
+    <View style={styles.peek}>
+      <View style={styles.peekHead}>
+        <GlassSurface variant="card" radius={22} style={styles.peekArt}>
+          <GameGlyph id={id} size={52} />
+        </GlassSurface>
+        <View style={styles.peekTitles}>
+          <Text style={[styles.peekKind, { color: color.accent }]}>{meta.classic}</Text>
+          <Text style={[styles.peekName, { color: color.ink }]}>{meta.name}</Text>
+          <Text style={[styles.peekEffect, { color: color.ink3 }]}>{meta.effect}</Text>
+        </View>
+      </View>
+
+      <Text style={[styles.peekGoal, { color: color.ink }]}>{meta.rules.goal}</Text>
+      <Text style={[styles.peekLine, { color: color.ink2 }]}>{meta.rules.play}</Text>
+
+      <View style={styles.peekFacts}>
+        {facts.map((f) => (
+          <View key={f} style={[styles.peekFact, { borderColor: color.line }]}>
+            <Text style={[styles.peekFactText, { color: color.ink2 }]}>{f}</Text>
+          </View>
+        ))}
+      </View>
+
+      <Button variant="primary" block onPress={onPlay}>
+        <Play size={15} strokeWidth={2} color={color.accent} fill={color.accent} />
+        <Text style={[styles.peekPlay, { color: color.accent }]}>{copy.peekPlay}</Text>
+      </Button>
     </View>
   )
 }
@@ -439,8 +581,15 @@ const styles = StyleSheet.create({
   },
   accessory: {
     alignSelf: 'stretch',
-    height: 44,
+    height: 56,
     justifyContent: 'flex-end',
+  },
+  ribbon: {
+    height: 56,
+    // The canvas is taller than the slot so the glow can fade out; it overlaps
+    // the space around it without taking any.
+    justifyContent: 'center',
+    overflow: 'visible',
   },
   choices: {
     flexDirection: 'row',
@@ -505,15 +654,80 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '600',
   },
-  tileBottom: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
+  tileBottom: {},
   tileTag: {
     fontSize: 11.5,
     fontWeight: '400',
+  },
+  tileKind: {
+    fontSize: 11,
+    fontWeight: '400',
+    marginTop: 1,
+  },
+  peek: {
+    gap: 12,
+    paddingTop: 2,
+  },
+  peekHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 4,
+  },
+  peekArt: {
+    width: 84,
+    height: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  peekTitles: {
+    flex: 1,
+    gap: 1,
+  },
+  peekKind: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
+  },
+  peekName: {
+    fontSize: 30,
+    fontWeight: '600',
+    letterSpacing: -0.7,
+  },
+  peekEffect: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  peekGoal: {
+    fontSize: 17,
+    lineHeight: 24,
+    fontWeight: '500',
+  },
+  peekLine: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  peekFacts: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+  peekFact: {
+    borderWidth: 1,
+    borderRadius: 99,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+  peekFactText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+  },
+  peekPlay: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   tileName: {
     fontSize: 14.5,

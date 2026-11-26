@@ -81,7 +81,7 @@ function createSoftTanhCurve(samples = 1024): Float32Array {
 }
 
 /**
- * Unified Real-Time Neuroacoustic Synthesis Engine for Lull.
+ * Unified Real-Time Neuroacoustic Synthesis Engine for Inverna.
  *
  * Powers Web (browser AudioContext) and Native iOS/Android (`react-native-audio-api`
  * C++ CoreAudio/Oboe) from a single zero-audio-file synthesis graph:

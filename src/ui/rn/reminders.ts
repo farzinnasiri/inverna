@@ -39,7 +39,7 @@ export function useReminderPlanner() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') void planRemindersNow()
-      // Leaving Lull at night is one hint of when they fall asleep (core/sleepRange).
+      // Leaving Inverna at night is one hint of when they fall asleep (core/sleepRange).
       // recordSleep ignores the daytime; a changed range re-plans the reminders above.
       if (state === 'background' && useSettings.getState().onboarded) useSettings.getState().recordSleep('leftApp')
     })

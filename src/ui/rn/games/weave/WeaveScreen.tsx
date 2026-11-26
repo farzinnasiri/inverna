@@ -167,7 +167,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
   const triggerSolved = useCallback(() => {
     dragRef.current = null
     cue('chime', 0.9)
-    haptic('success')
+    haptic('complete')
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
     completionTimerRef.current = setTimeout(() => {
       setShowCompletion(true)
@@ -192,10 +192,10 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
         triggerSolved()
       } else if (value === 1) {
         cue('place', 0.72)
-        haptic('light')
+        haptic('settle')
       } else {
         cue('tap', 0.45)
-        haptic('light')
+        haptic('tick')
       }
     },
     [setSave, triggerSolved, cue, haptic],
@@ -221,10 +221,10 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
         triggerSolved()
       } else if (nextVal === 1) {
         cue('place', 0.72)
-        haptic('light')
+        haptic('settle')
       } else {
         cue('tap', 0.45)
-        haptic('light')
+        haptic('tick')
       }
     },
     [setSave, triggerSolved, cue, haptic],
@@ -242,7 +242,6 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('undo', 0.65)
-    haptic('light')
   }, [setSave, cue, haptic])
 
   const handleHint = useCallback(() => {
@@ -294,7 +293,6 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('undo', 0.7)
-    haptic('light')
   }, [setSave, cue, haptic])
 
   const handleRestart = useCallback(() => {
@@ -489,6 +487,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
       paused={paused}
       onPauseChange={setPaused}
       onRestart={handleRestart}
+      onNewGame={handleNext}
       onExit={onExit}
       controls={
         <View style={styles.controlsBar}>
@@ -506,7 +505,7 @@ export function WeaveScreen({ onExit }: GameScreenProps) {
                       if (active) return
                       setTool(value)
                       cue('tap', 0.45)
-                      haptic('light')
+                      haptic('tick')
                     }}
                     style={({ pressed }) => [
                       styles.toolOption,

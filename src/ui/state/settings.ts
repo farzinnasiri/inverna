@@ -6,7 +6,7 @@ import type { DayAnswer, NowAnswer } from '@/core/tonight'
 import { DEFAULT_RANGE_MIN, DEFAULT_SCHEDULE, effectiveSchedule, nightKey, type BedtimeOverride, type Schedule } from '@/core/night'
 import { learnedRange, recordSignal, type SleepSignal, type SleepSignalKind } from '@/core/sleepRange'
 import type { ModulationDepth } from '@/core/sound/arc'
-import { DEFAULT_PRESET_ID, normalizeBand, SILENT_MIX, type Mix } from '@/core/sound/catalog'
+import { DEFAULT_PRESET_ID, normalizeBand, SILENT_MIX, type CustomSound, type Mix } from '@/core/sound/catalog'
 import { kv, NAMESPACE } from '@/core/storage'
 import { bootPlatform } from '@/platform'
 
@@ -24,11 +24,24 @@ export type { NightIntent }
 
 export type { Difficulty }
 
+export interface PlayLayout {
+  /** nightKey() it was set for. */
+  night: string
+  /** The usual intent it was made for; a new one (onboarding again) remakes it. */
+  usual: NightIntent | null
+  order: GameId[]
+  wide: GameId[]
+  /** Games marked for tonight before any check-in (a check-in tonight replaces them). */
+  picks: GameId[]
+}
+
 export interface SettingsState {
-  /** Single unified night light level, 0 = normal, 1 = lowest. */
-  light: number
-  /** Let the bedtime schedule deepen light before bedtime. */
-  followBedtime: boolean
+  /** Screen warmth from the Warmth slider, 0 = the app's own colours, 1 = warmest. */
+  warmth: number
+  /** Screen brightness from the Brightness slider, 1 = as it is, 0 = dimmest. */
+  brightness: number
+  /** Adaptive light & colour: warmth and brightness follow the time and bedtime; the sliders only show it. */
+  adaptiveLight: boolean
   schedule: Schedule
   sessionMinutes: number
   sessionPreset: string | null
@@ -42,6 +55,8 @@ export interface SettingsState {
   mix: Mix
   /** True once user has edited a custom mix (adds "Custom" to Sounds mode strip). */
   hasCustomMix: boolean
+  /** Sounds they made in the Mix studio and saved, oldest first. On this device only. */
+  customSounds: CustomSound[]
   /** Sleep timer for ambient sound, minutes (0 = until stopped). */
   sleepTimer: number
   /** Whether the initial tuning has been completed/skipped. */
@@ -53,7 +68,7 @@ export interface SettingsState {
   /** Tonight's check-in answers (reset by lastCheckInDate each night). */
   tonightDay: DayAnswer | null
   tonightNow: NowAnswer | null
-  /** What Lull decided from the check-in: which kind of games lead tonight. */
+  /** What Inverna decided from the check-in: which kind of games lead tonight. */
   tonightIntent: NightIntent | null
   /** First name, if they shared it. Used sparingly: greetings and reminders. */
   userName: string
@@ -67,6 +82,8 @@ export interface SettingsState {
   profile: SleepProfile | null
   /** Times each game was opened; Play gives the favourites the wide tiles. */
   plays: Partial<Record<GameId, number>>
+  /** Play's tile layout, set once a night so tiles never move while in use. */
+  playLayout: PlayLayout | null
   /** Sound volume, 0..1, kept between launches. */
   volume: number
   /** nightKey() of the night the in-game bedtime prompt was answered, so it asks once. */
@@ -91,8 +108,9 @@ export interface SettingsState {
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
-      light: 0.3,
-      followBedtime: true,
+      warmth: 0,
+      brightness: 1,
+      adaptiveLight: true,
       schedule: DEFAULT_SCHEDULE,
       sessionMinutes: 15,
       sessionPreset: DEFAULT_PRESET_ID,
@@ -102,6 +120,7 @@ export const useSettings = create<SettingsState>()(
       haptics: true,
       mix: SILENT_MIX,
       hasCustomMix: false,
+      customSounds: [],
       sleepTimer: -1, // until lights out
       onboarded: false,
       lastGame: null,
@@ -115,6 +134,7 @@ export const useSettings = create<SettingsState>()(
       defaultDifficulty: 'medium',
       profile: null,
       plays: {},
+      playLayout: null,
       volume: 0.85,
       bedtimeNudgeNight: null,
       lastLightsOut: null,
@@ -144,7 +164,7 @@ export const useSettings = create<SettingsState>()(
     {
       name: 'settings',
       storage: kvStorage,
-      version: 6,
+      version: 8,
       migrate: (persisted, version) => {
         if (!persisted || typeof persisted !== 'object') return persisted
         const p = persisted as Record<string, unknown>
@@ -197,6 +217,23 @@ export const useSettings = create<SettingsState>()(
             sleepSignals: [],
             rangeLearnedNights: null,
           }
+        }
+        if (version < 7) {
+          // One night-light slider became Warmth and Brightness, and following
+          // bedtime became Adaptive light & colour.
+          const light = typeof next.light === 'number' ? Math.min(1, Math.max(0, next.light)) : 0.3
+          const { light: _l, followBedtime, ...rest } = next
+          next = {
+            ...rest,
+            warmth: light,
+            brightness: 1 - light * 0.85,
+            adaptiveLight: followBedtime !== false,
+          }
+        }
+        if (version < 8 && next.profile && typeof next.profile === 'object') {
+          // "Which game style helps" became "what do you do on your phone in bed".
+          const { styles: _s, ...profile } = next.profile as Record<string, unknown>
+          next = { ...next, profile: { ...profile, habits: Array.isArray(profile.habits) ? profile.habits : [] } }
         }
         if (version < 4) {
           // The check-in asks different questions now.

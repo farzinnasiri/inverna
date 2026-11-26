@@ -102,7 +102,7 @@ on water, Chladni sand, ...). `AmbientBackdrop` stacks two layers:
 
 ## Data
 
-All data is on-device under the `lull:` key prefix. Clearing site data resets
+All data is on-device under the `inverna:` key prefix. Clearing site data resets
 everything. There is no server, account or analytics.
 
 ## Deploy

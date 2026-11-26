@@ -1,7 +1,7 @@
 /**
- * Draws one frame of the backdrop simulation onto a Skia canvas: scene
- * structures (rain trails, strings, grass, pines) and every particle in a
- * single drawAtlas call.
+ * Draws one frame of the backdrop simulation onto a Skia canvas: each scene's
+ * upper-half light (./upper.ts), its structures (rain trails, strings, grass,
+ * pines), and every particle in a single drawAtlas call.
  *
  * Takes the Skia API and enum values as arguments and imports nothing from
  * React Native, so the same code runs in the app (as a UI-thread worklet), on
@@ -12,6 +12,7 @@
  */
 import type { SkCanvas, SkImage, SkPaint, SkPathBuilder, SkRect, SkRSXform, Uniforms } from '@shopify/react-native-skia'
 import { SCENE, SCENE_RGB } from '@/core/backdrop/scenes'
+import { drawUpper } from './upper'
 import {
   GRASS_BLADES,
   LOOK_STRIDE,
@@ -389,7 +390,11 @@ function drawParticles(canvas: SkCanvas, s: Sim, g: Gfx): void {
 /** Draw a whole frame: structures of the outgoing and incoming scene, then particles. */
 export function drawFrame(canvas: SkCanvas, s: Sim, g: Gfx): void {
   'worklet'
-  if (s.prog < 1 && s.sceneA !== s.sceneB) drawStructures(canvas, s, s.sceneA, g)
+  if (s.prog < 1 && s.sceneA !== s.sceneB) {
+    drawUpper(canvas, s, s.sceneA, g)
+    drawStructures(canvas, s, s.sceneA, g)
+  }
+  drawUpper(canvas, s, s.sceneB, g)
   drawStructures(canvas, s, s.sceneB, g)
   drawParticles(canvas, s, g)
 }

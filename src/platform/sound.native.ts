@@ -1,8 +1,9 @@
 import { Image } from 'react-native'
 import { AudioContext, AudioManager, PlaybackNotificationManager } from 'react-native-audio-api'
-import type { SoundIconId } from '@/core/sound/catalog'
+import { artworkIcon, type ArtworkIconId, type SoundIconId } from '@/core/sound/catalog'
 import type { NowPlayingMeta, SoundEngine } from '@/core/sound/engine'
 import { createNeuroSoundEngine, type NowPlayingState } from './audio'
+import { precomputeNoise } from './audio/buffers'
 import type { AudioContextLike } from './audio/types'
 
 const DEFAULT_ARTWORK_MODULE = require('../../assets/images/icon.png')
@@ -11,7 +12,7 @@ const DEFAULT_ARTWORK_MODULE = require('../../assets/images/icon.png')
  * Exact 1-to-1 512x512 Watchmaker PNG artworks matching EVERY in-app soundscape icon
  * so Dynamic Island & Lock Screen always show the exact icon of the playing soundscape.
  */
-const ICON_ARTWORK_MODULES: Record<SoundIconId, number> = {
+const ICON_ARTWORK_MODULES: Record<ArtworkIconId, number> = {
   rain: require('../../assets/artwork/icon-rain.png'),
   piano: require('../../assets/artwork/icon-piano.png'),
   fire: require('../../assets/artwork/icon-fire.png'),
@@ -32,7 +33,7 @@ function resolveArtworkUri(icon?: SoundIconId): string | undefined {
   const key = icon ?? 'default'
   if (artworkUriCache.has(key)) return artworkUriCache.get(key)
   try {
-    const mod = icon ? ICON_ARTWORK_MODULES[icon] : DEFAULT_ARTWORK_MODULE
+    const mod = icon ? ICON_ARTWORK_MODULES[artworkIcon(icon)] : DEFAULT_ARTWORK_MODULE
     const resolved = Image.resolveAssetSource(mod)
     const uri = resolved?.uri || undefined
     artworkUriCache.set(key, uri)
@@ -54,6 +55,10 @@ function resolveArtworkUri(icon?: SoundIconId): string | undefined {
  *   Lock Screen / Dynamic Island Play & Pause controls when paused.
  */
 export function createPlatformSoundEngine(): SoundEngine {
+  // Work out the sound textures quietly after launch, so the first play starts
+  // at once. This touches no audio session: music from other apps keeps playing.
+  setTimeout(() => precomputeNoise(), 2000)
+
   let sessionConfigured = false
   let sessionActive = false
   let controlsConfigured = false
@@ -91,7 +96,7 @@ export function createPlatformSoundEngine(): SoundEngine {
       const artwork = resolveArtworkUri(meta?.icon)
       const showPromise = PlaybackNotificationManager.show({
         title: meta?.title ?? 'Theta rain',
-        artist: 'Lull',
+        artist: 'Inverna',
         album: meta?.subtitle ?? 'Night Soundscape',
         ...(artwork ? { artwork: { uri: artwork } } : {}),
         state: state === 'playing' ? 'playing' : 'paused',
@@ -131,7 +136,12 @@ export function createPlatformSoundEngine(): SoundEngine {
         // Measured on device: development builds can't keep up there (the
         // audio library compiles unoptimised and runs a debug check on every
         // 128-frame slice), so judge this in a release build.
-        return new AudioContext({ latencyHint: 'playback' }) as unknown as AudioContextLike
+        // 24 kHz, not the device's 48: every sound passes the master warmth
+        // filter (3.2 kHz at most) and the noise beds are made at 24 kHz or
+        // less, so nothing audible lives above 12 kHz. Half the rate is about
+        // half the audio work, which is slack when the phone is hot, charging,
+        // or busy for a moment (taking a screenshot crackled).
+        return new AudioContext({ latencyHint: 'playback', sampleRate: 24000 }) as unknown as AudioContextLike
       } catch {
         return null
       }

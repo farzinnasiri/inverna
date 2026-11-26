@@ -1,7 +1,7 @@
 /**
- * Lull's voice: the words the app says, in one place.
+ * Inverna's voice: the words the app says, in one place.
  *
- * Lull talks like a calm friend, one idea at a time, in plain words people
+ * Inverna talks like a calm friend, one idea at a time, in plain words people
  * actually use ("go to bed", "fall asleep", "relax"). Source of truth for the
  * wording: design/copy/copy.json and design/copy/VOICE.md.
  * The user's name is used sparingly: greetings and reminders, not every line.
@@ -31,6 +31,14 @@ export const play = {
   rangeSub: (lateEdge: string) => `Your usual sleep time, until ${lateEdge}`,
   pastWindDown: 'Wind down now',
   pastChange: 'Change bedtime',
+  peekHint: 'Press and hold to see what it is',
+  peekPlay: 'Play',
+  peekBest: (best: string) => `Your best ${best}`,
+  peekPlays: (n: number) => (n === 1 ? 'Played once' : `Played ${n} times`),
+  peekNew: 'Not played yet',
+  pickChip: 'Suggested tonight',
+  /** Read out on a tile Inverna suggests tonight. */
+  pickLabel: 'suggested for tonight',
   restBig: (name: string) => named('Rest well', name),
   restSub: 'I’m here if you need a sound',
   morningSub: 'Hope you slept well',
@@ -42,6 +50,8 @@ export const play = {
 export const checkIn = {
   skip: 'Skip',
   back: 'Back',
+  mute: 'Mute onboarding sounds',
+  unmute: 'Play onboarding sounds',
   dayQuestion: 'How was your day?',
   day: {
     good: 'Good',
@@ -65,7 +75,154 @@ export const checkIn = {
 
 export const soundsHelp = {
   link: 'Help me pick a sound',
+  create: 'Create',
   heading: 'Try one of these tonight.',
+}
+
+/** The Mix studio: make a sound, hear it, save it. Plain words; the details are in its guides. */
+export const studioCopy = {
+  titleEdit: 'Composer',
+  titleNew: 'New sound',
+  startsFrom: (name: string) => `Starts from ${name}. Change anything, then save it as your own.`,
+  legend: 'Each line is one sound. Taller is louder; slower waves are lower sounds.',
+  silence: 'Silence. Raise a slider to begin.',
+  pulseAims: (target: string, hz: string) => `Pulse aims for ${target.toLowerCase()} · ${hz} Hz`,
+  rowChords: 'Chords',
+  sounds: 'Sounds',
+  noiseWords: { brown: 'Low', pink: 'Even', white: 'Bright' } as Record<string, string>,
+  chords: 'Soft chords',
+  pulse: 'Pulse',
+  pulseStrength: 'Strength',
+  guide: 'Guide',
+  bands: {
+    off: { name: 'Off', target: 'No pulse' },
+    alpha: { name: 'Relax', target: 'Calm and awake' },
+    theta: { name: 'Drift off', target: 'The edge of sleep' },
+    delta: { name: 'Deep sleep', target: 'Deep sleep' },
+  },
+  strengths: {
+    subtle: { name: 'Gentle', sub: 'Barely there' },
+    deep: { name: 'Strong', sub: 'A clearer beat' },
+  },
+  play: 'Play',
+  pause: 'Pause',
+  saveNew: 'Save as new',
+  saveChanges: 'Save changes',
+  saveAsNew: 'Save as a new sound',
+  reset: 'Reset',
+  nameTitle: 'Name your sound',
+  detailsTitle: 'Details',
+  save: 'Save',
+  nameLabel: 'Name',
+  namePlaceholder: 'Rainy cabin',
+  hintLabel: 'A few words',
+  hintOptional: 'Optional',
+  hintPlaceholder: 'Rain on the roof, low hum',
+  iconLabel: 'Icon',
+  back: 'Back',
+  deleteHold: 'Hold to delete this sound',
+  yours: 'Your sound',
+  yourMix: 'Your mix',
+  editHint: 'Touch and hold to edit',
+}
+
+/** One line in a studio guide: what it is, and when to reach for it. */
+export interface GuideRow {
+  id: string
+  name: string
+  /** Small print after the name (a symbol, a rate). */
+  tag?: string
+  use: string
+}
+
+export interface GuideSection {
+  title?: string
+  note?: string
+  rows: GuideRow[]
+}
+
+export interface StudioGuide {
+  title: string
+  intro: string
+  sections: GuideSection[]
+  tip?: string
+}
+
+/** The (i) guides in the Mix studio: when to use what, in plain words. */
+export const studioGuides: Record<'sounds' | 'chords' | 'pulse', StudioGuide> = {
+  sounds: {
+    title: 'Which sounds?',
+    intro: 'Each slider is one sound. Mix a nature sound with a noise, or use either on its own.',
+    sections: [
+      {
+        title: 'Nature',
+        rows: [
+          { id: 'rain', name: 'Rain', use: 'Steady and familiar. For a busy mind that wants something gentle to follow.' },
+          { id: 'waves', name: 'Waves', use: 'Slow swells to breathe along with. For when you feel tense or restless.' },
+          { id: 'fire', name: 'Fire', use: 'Warm and close, with soft crackles. For cold nights and feeling cosy.' },
+          { id: 'wind', name: 'Wind', use: 'Soft and airy, with very little going on. For when other sounds feel like too much.' },
+        ],
+      },
+      {
+        title: 'Noise',
+        note: 'One steady hiss with its weight moved from low to high. It covers the sounds that would wake you.',
+        rows: [
+          { id: 'brown', name: 'Brown', tag: 'Low', use: 'Deep, like distant thunder. Covers low sounds: traffic, a TV next door, snoring. The calmest for most people.' },
+          { id: 'pink', name: 'Pink', tag: 'Even', use: 'Balanced, like steady rain. Covers a bit of everything. Try it if brown feels muffled.' },
+          { id: 'white', name: 'White', tag: 'Bright', use: 'Like a fan. Covers sharp sounds: voices, doors, a dog barking. Keep it low; it can feel harsh.' },
+        ],
+      },
+    ],
+    tip: 'Start with one noise at about half, then add a nature sound on top.',
+  },
+  chords: {
+    title: 'Soft chords',
+    intro: 'Four soft notes held under everything, slowly shifting. Their colour also sets the notes games play, so a game always fits your sound.',
+    sections: [
+      {
+        rows: [
+          { id: 'up', name: 'Bring it up', use: 'When silence makes you listen for things, or a little music helps you let go.' },
+          { id: 'down', name: 'Bring it down', use: 'When any music keeps you thinking, or you only want noise. All the way down turns it off.' },
+        ],
+      },
+      {
+        title: 'Colour',
+        rows: [
+          { id: 'd-dorian', name: 'Wistful', use: 'Thoughtful and a little bittersweet. For rainy nights.' },
+          { id: 'e-min-classical', name: 'Nocturne', use: 'Calm and classical, like piano at night. A safe first choice.' },
+          { id: 'f-lydian', name: 'Glow', use: 'Warm and bright, like lamplight. For a cosy, content mood.' },
+          { id: 'c-maj9', name: 'Open', use: 'Spacious and simple, with nothing to follow. Clear, like the sea at night.' },
+          { id: 'g-min9', name: 'Velvet', use: 'Dark and deep, the lowest notes. For the deepest calm.' },
+          { id: 'a-min9', name: 'Air', use: 'Light and floating. For when you want it barely there.' },
+        ],
+      },
+    ],
+  },
+  pulse: {
+    title: 'Pulse',
+    intro:
+      'A slow rhythm woven into the sound. The brain tends to fall in step with a steady rhythm, so a slower one can help you settle. ' +
+      'The evidence is promising but still modest. With headphones it is a soft beat between your ears; on a speaker, a gentle sway.',
+    sections: [
+      {
+        title: 'Which rhythm',
+        rows: [
+          { id: 'off', name: 'Off', use: 'Just the sound. For when any pulse distracts you.' },
+          { id: 'alpha', name: 'Relax', tag: 'α 8–12 Hz', use: 'Calm but awake. While you wind down: reading, a game, tidying up.' },
+          { id: 'theta', name: 'Drift off', tag: 'θ 4–8 Hz', use: 'The edge of sleep. Lying in bed, ready to fall asleep. A good default.' },
+          { id: 'delta', name: 'Deep sleep', tag: 'δ 1–4 Hz', use: 'Deep sleep. To help you stay asleep through the night.' },
+        ],
+      },
+      {
+        title: 'How strong',
+        rows: [
+          { id: 'subtle', name: 'Gentle', use: 'Barely there. Start here; most people never need more.' },
+          { id: 'deep', name: 'Strong', use: 'A clearer beat. Try it with headphones, or if Gentle does nothing for you.' },
+        ],
+      },
+    ],
+    tip: 'With Slow down before bed on (in Settings), the pulse slows by itself in the hour before bed.',
+  },
 }
 
 export type SciencePillarKey = 'attention' | 'sound' | 'light'
@@ -73,11 +230,15 @@ export type SciencePillarKey = 'attention' | 'sound' | 'light'
 export const onboarding = {
   skip: 'Skip',
   back: 'Back',
+  mute: 'Mute onboarding sounds',
+  unmute: 'Play onboarding sounds',
   continue: 'Continue',
   intro: {
-    name: 'Lull',
-    title: 'For minds that don’t switch off.',
-    subline: 'A quieter way out of late-night scrolling, when silence feels too loud.',
+    name: 'Inverna',
+    /** The intro has no question; the lens and the name lead. */
+    title: '',
+    tagline: 'Made for busy minds and night owls.',
+    subline: 'Calm games, soft sound and warm light ease you from your phone to sleep.',
     button: 'See how it works',
   },
   science: {
@@ -128,13 +289,17 @@ export const onboarding = {
     label: 'Your mind at bedtime',
     stages: ['Quiet', 'A little busy', 'Busy', 'Very busy'],
   },
-  games: {
-    title: 'Which of these helps you switch off?',
-    styles: {
-      soothing: { title: 'Something slow and soothing', games: 'Pond, Hue, Lanterns' },
-      puzzle: { title: 'A puzzle I can get lost in', games: 'Nine, Weave, Thread' },
-      quick: { title: 'Something quick and light', games: 'Settle, Chime, Cascade' },
+  habits: {
+    title: 'What do you usually do on your phone in bed?',
+    habits: {
+      short_video: 'Scroll Instagram, TikTok or YouTube',
+      x_news: 'Read X or the news',
+      reading: 'Read a book',
+      audio: 'Listen to music or podcasts',
+      games: 'Play games',
+      other: 'Something else',
     },
+    note: 'Pick any. Inverna suggests games that can take their place.',
   },
   listen: {
     title: 'Which of these sounds do you like?',
@@ -149,16 +314,50 @@ export const onboarding = {
   },
 }
 
+/** The sound's sleep timer on Sounds: when the sound fades out. */
+export const soundTimer = {
+  title: 'Sleep timer',
+  chip: 'Sleep timer',
+  sub: 'When the sound fades out, gently.',
+  fadingAt: (clock: string) => `Fading out at ${clock}`,
+  endOfSleep: 'End of my sleep time',
+  untilEnd: (clock: string) => `At the end of my sleep time, ${clock}`,
+  after: (min: number) => (min === 60 ? 'After 1 hour' : `After ${min} minutes`),
+  min: 'min',
+  hour: 'hour',
+  allNight: 'Keep playing all night',
+  allNightShort: 'All night',
+  allNightNote: 'No timer',
+}
+
+/** The "around, give or take" sleep-time control (onboarding and Settings). */
+export const sleepAround = {
+  around: 'Around',
+  giveOrTake: 'Give or take',
+  giveOrTakeLabel: (min: number) => (min === 60 ? '1 hour' : `${min} min`),
+  summary: (range: string) => `So usually ${range}`,
+}
+
 export const settingsCopy = {
   nameLabel: 'Your name',
-  namePlaceholder: 'Add your first name',
+  namePlaceholder: 'Your name',
   rangeLabel: 'Asleep between',
-  rangeNote: 'Set when your hour starts. Lull learns it from your nights.',
+  lightLabel: 'Light & colour',
+  lightAdaptiveSummary: 'Adaptive',
+  lightManualSummary: 'Manual',
+  adaptiveLabel: 'Adaptive light & colour',
+  adaptiveNote: 'Dims and warms the screen by itself as bedtime gets closer. Normal colours in the day.',
+  brightness: 'Brightness',
+  warmth: 'Warmth',
+  brightnessStage: (b: number) => (b < 0.25 ? 'Dimmest' : b < 0.5 ? 'Low' : b < 0.85 ? 'Soft' : 'Full'),
+  warmthStage: (w: number) => (w < 0.15 ? 'Neutral' : w < 0.45 ? 'Soft warm' : w < 0.75 ? 'Candlelight' : 'Ember'),
   rangeLearned: (nights: number) => `Learned from your last ${nights} nights`,
+  slowDownLabel: 'Slow down before bed',
+  slowDownNote: 'In the hour before bed, sounds grow softer and darker and their pulse slows.',
   reminderLabel: 'Bedtime reminder',
   reminderNote: 'Sends a quiet reminder an hour before bed.',
   reminderDenied: 'Turn on notifications in iPhone Settings.',
-  howItWorks: 'How Lull works',
+  howItWorks: 'How Inverna works',
   howItWorksNote: 'The three-pillar system and science behind it',
   erase: 'Erase all data',
   eraseHold: 'Hold to erase everything',
@@ -181,9 +380,9 @@ export interface WaveBandInfo {
 }
 
 export const scienceSheet = {
-  title: 'How Lull works',
+  title: 'How Inverna works',
   intro:
-    'An active mind rarely settles in plain silence. Lull coordinates three systems across the hour before bed: cognitive load, neuroacoustics, and circadian light.',
+    'An active mind rarely settles in plain silence. Inverna coordinates three systems across the hour before bed: cognitive load, neuroacoustics, and circadian light.',
   attention: {
     key: 'attention' as SciencePillarKey,
     kicker: 'Pillar 1 · Cognitive psychology',
@@ -222,7 +421,7 @@ export const scienceSheet = {
         name: 'Beta',
         hz: '13–30 Hz',
         state: 'Active thinking, problem-solving, late-night racing thoughts.',
-        role: 'Where most busy minds start at bedtime. Lull meets you here instead of demanding instant stillness.',
+        role: 'Where most busy minds start at bedtime. Inverna meets you here instead of demanding instant stillness.',
       },
       {
         key: 'alpha',
@@ -230,7 +429,7 @@ export const scienceSheet = {
         name: 'Alpha',
         hz: '8–12 Hz',
         state: 'Relaxed wakefulness, eyes resting, inner chatter loosening.',
-        role: 'Lull’s acoustic descent begins near the Alpha-Theta border (~7.8 Hz) to ease mental grip.',
+        role: 'Inverna’s acoustic descent begins near the Alpha-Theta border (~7.8 Hz) to ease mental grip.',
       },
       {
         key: 'theta',
@@ -278,7 +477,7 @@ export const scienceSheet = {
       peakLabel: '460–480 nm melanopsin peak',
       peakBadge: 'Filtered',
       endNm: '700 nm',
-      safeBadge: 'Lull night palette + #000 OLED',
+      safeBadge: 'Inverna night palette + #000 OLED',
     },
     points: [
       {
@@ -326,9 +525,25 @@ export const gameDoor = {
   hard: 'Hard',
   continue: 'Continue where you left off',
   newGame: 'New game',
+  start: 'Start a new game',
+  replay: 'Restart this one',
+  keepPlaying: 'Keep playing',
   endless: 'Endless',
   endlessNote: 'No game over. Keep playing as long as you like.',
   classic: 'Classic',
+}
+
+/** Pond's end of round and its few words on the water. */
+export const pondCopy = {
+  another: 'Next',
+  rest: 'Done',
+  restNote: 'You can put the phone down',
+  water: 'Pond. Draw a loop around one whole family of matching buds and the koi swims it, drawing that stroke of the picture. A loop with two families or a sleeping bud inside opens nothing',
+  mode: 'Mode',
+  modePictures: 'Pictures',
+  modeEndless: 'Endless',
+  openNearest: 'Open the nearest bud',
+  painting: (name: string, season: string) => `Tonight's painting, ${name}. ${season}`,
 }
 
 /** The maker's note at the bottom of Settings, in Farzin's own words. */
@@ -336,7 +551,7 @@ export const about = {
   credit: 'Made with ❤️ by Farzin',
   title: 'Hi, I’m Farzin',
   lines: [
-    'I’m the developer of this app. I made Lull because my always-on ADHD brain wouldn’t shut down at night. I barely had good sleep, and I woke up tired every morning.',
+    'I’m the developer of this app. I made Inverna because my always-on ADHD brain wouldn’t shut down at night. I barely had good sleep, and I woke up tired every morning.',
     'I noticed that playing casual games instead of doomscrolling on social media, and listening to calming music, helped me. So I decided to bring the two together.',
   ],
   signature: 'Farzin',

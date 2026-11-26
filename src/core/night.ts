@@ -82,6 +82,36 @@ export function rangeEnd(schedule: Schedule): string {
   return formatHHMM(Math.floor(t / 60), t % 60)
 }
 
+/**
+ * "Around 11:45 PM, give or take 30 minutes": how people describe their sleep
+ * time, and how onboarding and Settings ask for it. Underneath it's the same
+ * range: it starts `giveOrTake` before the time and is twice that long.
+ */
+export const GIVE_OR_TAKE_MIN = [15, 30, 45, 60] as const
+
+/** "HH:MM" moved by some minutes, wrapping around midnight. */
+export function shiftHHMM(value: string, minutes: number): string {
+  const { h, m } = parseHHMM(value)
+  const t = (((h * 60 + m + minutes) % 1440) + 1440) % 1440
+  return formatHHMM(Math.floor(t / 60), t % 60)
+}
+
+/** The middle of the range ("around"), "HH:MM". */
+export function rangeCentre(schedule: Schedule): string {
+  return shiftHHMM(schedule.bedtime, Math.round(rangeMinutesOf(schedule) / 2))
+}
+
+/** Half the range, snapped to the closest give-or-take choice. */
+export function giveOrTakeOf(schedule: Schedule): number {
+  const half = rangeMinutesOf(schedule) / 2
+  return GIVE_OR_TAKE_MIN.reduce((best, g) => (Math.abs(g - half) < Math.abs(best - half) ? g : best), GIVE_OR_TAKE_MIN[0])
+}
+
+/** The range for "around `centre`, give or take `giveOrTake` minutes". */
+export function rangeAround(centre: string, giveOrTake: number): Pick<Schedule, 'bedtime' | 'rangeMinutes'> {
+  return { bedtime: shiftHHMM(centre, -giveOrTake), rangeMinutes: giveOrTake * 2 }
+}
+
 /** "11:30 PM – 12:30 AM", or one time when the range is empty. */
 export function formatRange(schedule: Schedule): string {
   if (rangeMinutesOf(schedule) === 0) return formatBedtime12h(schedule.bedtime)
@@ -146,6 +176,19 @@ export function minutesUntilBedtime(schedule: Schedule, now: Date): number | nul
   return next ? Math.round((next.getTime() - now.getTime()) / 60000) : null
 }
 
+/**
+ * Minutes until the late edge of the sleep range: the one tonight is in, or
+ * the next. Null with no schedule. This is when "fade at the end of my sleep
+ * time" stops a sound.
+ */
+export function minutesUntilRangeEnd(schedule: Schedule, now: Date): number | null {
+  if (!schedule.enabled || schedule.days.length === 0) return null
+  const range = rangeMinutesOf(schedule) * 60_000
+  const { previous, next } = bedtimeAround(schedule, now)
+  const end = previous && now.getTime() < previous.getTime() + range ? previous.getTime() + range : next ? next.getTime() + range : null
+  return end === null ? null : Math.round((end - now.getTime()) / 60_000)
+}
+
 export type NightPhase = 'day' | 'winding' | 'bedtime'
 
 /** Where we are relative to tonight's bedtime. */
@@ -168,28 +211,48 @@ export function nightPhase(schedule: Schedule, now: Date): { phase: NightPhase; 
   return { phase: 'day', progress: 0 }
 }
 
-/** Convert single user `light` level (0..1) into warmth + dim filter channels. */
-export function lightToFilter(light: number): NightFilter {
-  const l = clamp01(light)
-  return { warmth: l, dim: 0.6 * l }
-}
-
 /**
- * Effective light level combining the user's manual `light` with the bedtime
- * schedule. The schedule deepens *from* the user's chosen level, so dragging
- * the slider always has an immediate visible effect even inside the lead window.
+ * Adaptive light & colour: what the screen does by itself through the day.
+ *
+ * - Daytime: nothing. Colours are the app's own.
+ * - The evening (the 3 hours before wind down starts): a slight warmth and
+ *   dimming creep in, too slow to notice.
+ * - Wind down (the lead window before the usual range): warmer and dimmer,
+ *   toward the night level.
+ * - From bedtime until 6 AM: the night level. Warm (less blue, which keeps
+ *   melatonin suppressed) and dim enough to be easy on dark-adapted eyes, yet
+ *   still easy to read. It never goes as far as the sliders can.
  */
-export function scheduledLight(userLight: number, followBedtime: boolean, schedule: Schedule, now: Date): number {
-  const base = clamp01(userLight)
-  if (!followBedtime || !schedule.enabled) return base
+export const ADAPTIVE_NIGHT: NightFilter = { warmth: 0.75, dim: 0.45 }
+const ADAPTIVE_EVENING: NightFilter = { warmth: 0.3, dim: 0.12 }
+const EVENING_LEAD_MIN = 180
+
+export function adaptiveFilter(schedule: Schedule, now: Date): NightFilter {
   const { phase, progress } = nightPhase(schedule, now)
-  if (phase === 'day') return base
-  return clamp01(base + (1 - base) * 0.5 * smooth(progress))
+  if (phase === 'bedtime') return ADAPTIVE_NIGHT
+  const lerp = (a: NightFilter, b: NightFilter, t: number): NightFilter => ({
+    warmth: a.warmth + (b.warmth - a.warmth) * t,
+    dim: a.dim + (b.dim - a.dim) * t,
+  })
+  if (phase === 'winding') return lerp(ADAPTIVE_EVENING, ADAPTIVE_NIGHT, smooth(progress))
+  const toWindDown = minutesUntilBedtime(schedule, now)
+  if (toWindDown === null) return { warmth: 0, dim: 0 }
+  const before = toWindDown - schedule.leadMinutes
+  if (before >= EVENING_LEAD_MIN || before < 0) return { warmth: 0, dim: 0 }
+  return lerp({ warmth: 0, dim: 0 }, ADAPTIVE_EVENING, smooth(1 - before / EVENING_LEAD_MIN))
 }
 
-/** Legacy helper kept for compatibility: schedule filter from userLight = 0. */
-export function scheduleFilter(schedule: Schedule, now: Date, userLight = 0): NightFilter {
-  return lightToFilter(scheduledLight(userLight, schedule.enabled, schedule, now))
+/** Darkest the brightness slider goes (as `dim`, 0..1). */
+const MANUAL_DIM_MAX = 0.7
+
+/** The sliders: warmth 0..1 (1 warmest) and brightness 0..1 (1 is the screen as it is). */
+export function manualFilter(warmth: number, brightness: number): NightFilter {
+  return { warmth: clamp01(warmth), dim: MANUAL_DIM_MAX * (1 - clamp01(brightness)) }
+}
+
+/** Brightness slider position for a given `dim`, so the locked slider shows what adaptive is doing. */
+export function brightnessForDim(dim: number): number {
+  return clamp01(1 - dim / MANUAL_DIM_MAX)
 }
 
 /** Strongest of several filter requests wins, per channel. */

@@ -14,11 +14,11 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="theme-color" content="#000000" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Lull" />
+        <meta name="apple-mobile-web-app-title" content="Inverna" />
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="icon" type="image/png" href="/favicon.png" />
         <link rel="apple-touch-icon" href="/favicon.png" />
-        <title>Lull</title>
+        <title>Inverna</title>
         <ScrollViewStyleReset />
         <style
           dangerouslySetInnerHTML={{

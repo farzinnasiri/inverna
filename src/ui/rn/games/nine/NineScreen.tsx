@@ -161,7 +161,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
 
   const scheduleSolvedFeedback = useCallback(() => {
     cue('chime', 0.9)
-    haptic('success')
+    haptic('complete')
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
     completionTimerRef.current = setTimeout(() => {
       setShowCompletion(true)
@@ -189,13 +189,12 @@ export function NineScreen({ onExit }: GameScreenProps) {
         scheduleSolvedFeedback()
       } else if (feedback === 'place') {
         cue('place', 0.8)
-        haptic('light')
+        haptic('settle')
       } else if (feedback === 'undo') {
         cue('undo', 0.65)
-        haptic('light')
       } else {
         cue('tap', 0.5)
-        haptic('light')
+        haptic('tick')
       }
     },
     [setSave, scheduleSolvedFeedback, cue, haptic],
@@ -241,7 +240,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
       completed: isValidSave(prev) ? prev.completed : 0,
     }))
     cue('tap', 0.5)
-    haptic('light')
+    haptic('tick')
   }, [paused, setSave, cue, haptic])
 
   const handleUndo = useCallback(() => {
@@ -291,6 +290,16 @@ export function NineScreen({ onExit }: GameScreenProps) {
     setNewPuzzle(false)
     setStarted(true)
   }, [newPuzzle, difficulty, calm, setSave])
+
+  /** New game sheet: a fresh puzzle at the difficulty picked there. */
+  const handleNewGame = useCallback(() => {
+    if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
+    setShowCompletion(false)
+    const next = selectEmpty(nextPuzzle(stateRef.current, calm, difficulty))
+    stateRef.current = next
+    setSave((prev) => ({ version: 1, state: next, completed: isValidSave(prev) ? prev.completed : 0 }))
+    setNewPuzzle(false)
+  }, [calm, difficulty, setSave])
 
   const chooseNewPuzzle = useCallback(() => {
     if (completionTimerRef.current) clearTimeout(completionTimerRef.current)
@@ -381,6 +390,7 @@ export function NineScreen({ onExit }: GameScreenProps) {
       paused={isPaused}
       onPauseChange={setPaused}
       onRestart={handleRestart}
+      onNewGame={handleNewGame}
       onExit={onExit}
       controls={started && (
         <View style={[styles.controlsWrap, { gap: isCompact ? 4 : 6, maxWidth: contentWidth }]}>

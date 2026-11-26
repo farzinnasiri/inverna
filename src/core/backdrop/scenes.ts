@@ -78,7 +78,7 @@ export function paletteFamily(id: BackdropId): SoundSceneId {
 
 /**
  * Which scene to show: the preset's own scene, or for a hand-built mix the
- * scene of its dominant layer.
+ * scene of its dominant layer (the others are woven in: `resolveBlend`).
  */
 export function resolveBackdrop(presetId: string | null, mix: Mix | null): BackdropId {
   if (isBackdropId(presetId)) return presetId
@@ -86,16 +86,44 @@ export function resolveBackdrop(presetId: string | null, mix: Mix | null): Backd
   if (mix.classicalMotif === 'reverie') return 'ink-reverie'
   if (mix.classicalMotif === 'adagio') return 'adagio-dusk'
   if (mix.classicalMotif === 'nocturne') return 'nocturne'
+  const ranked = layerWeights(mix)
+  ranked.sort((a, b) => b[1] - a[1])
+  return ranked[0]![1] > 0.05 ? ranked[0]![0] : 'theta-rain'
+}
+
+/** The layer scenes a hand-made mix can weave together. */
+function layerWeights(mix: Mix): [BackdropId, number][] {
   const l = mix.layers
-  const ranked: [BackdropId, number][] = [
+  return [
     ['theta-rain', l.rain ?? 0],
     ['low-tide', l.waves ?? 0],
     ['hearth', l.fire ?? 0],
     ['still-horizon', l.wind ?? 0],
     ['deep-drift', (l.brown ?? 0) + (l.pink ?? 0) * 0.6 + (mix.band === 'delta' ? 0.5 : 0)],
   ]
-  ranked.sort((a, b) => b[1] - a[1])
-  return ranked[0]![1] > 0.05 ? ranked[0]![0] : 'theta-rain'
+}
+
+/**
+ * Other scenes to weave into a hand-made mix's main scene, as flat
+ * [scene index, weight] pairs (weight relative to the main scene's 1).
+ * Rain and fire both up gives drops and embers together; everything up gives
+ * a little of everything (the simulation shares one particle budget, so it
+ * costs no more than one scene). Presets and the classical scenes stay pure.
+ * A layer needs to be a real part of the mix (over a quarter of the loudest)
+ * to show.
+ */
+export function resolveBlend(presetId: string | null, mix: Mix | null): number[] {
+  if (isBackdropId(presetId) || !mix || mix.classicalMotif) return []
+  const main = resolveBackdrop(presetId, mix)
+  const ranked = layerWeights(mix).sort((a, b) => b[1] - a[1])
+  const top = ranked[0]![1]
+  if (top <= 0.05) return []
+  const out: number[] = []
+  for (const [id, v] of ranked) {
+    if (id === main || v < 0.12 || v < top * 0.25) continue
+    out.push(sceneIndex(id), Math.min(1, v / top))
+  }
+  return out.slice(0, 6)
 }
 
 function hexToRgb(hex: string): [number, number, number] {
