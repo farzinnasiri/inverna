@@ -53,12 +53,24 @@ describe('the purchase', () => {
     expect(isAppUnlocked()).toBe(false)
   })
 
-  it('re-locks when StoreKit reports a refund or Family Sharing revocation', async () => {
+  it('never takes Full Unlock away mid-session, even if StoreKit briefly says it is not bought', async () => {
     fake.owned = true
     await useUnlock.getState().check()
     expect(isAppUnlocked()).toBe(true)
 
+    // An empty entitlements list on a foreground check, or a refund arriving at 2 am.
     fake.owned = false
+    await useUnlock.getState().check()
+    expect(useUnlock.getState()).toMatchObject({ status: 'unlocked', unreachable: false })
+    fake.owned = false
+    expect(await useUnlock.getState().restore()).toBe(false)
+    expect(isAppUnlocked()).toBe(true)
+  })
+
+  it('re-locks at the next launch after a refund or the end of Family Sharing', async () => {
+    fake.owned = false
+    // A new run of the app starts at "checking".
+    useUnlock.setState({ status: 'checking' })
     await useUnlock.getState().check()
     expect(useUnlock.getState().status).toBe('locked')
     expect(isAppUnlocked()).toBe(false)

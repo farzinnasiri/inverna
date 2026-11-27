@@ -6,6 +6,7 @@ import { CascadeScreen } from './cascade/CascadeScreen'
 import { HueScreen } from './hue/HueScreen'
 import { ThreadScreen } from './thread/ThreadScreen'
 import { KindleScreen } from './kindle/KindleScreen'
+import { KumikoScreen } from './kumiko/KumikoScreen'
 import { PondScreen } from './pond/PondScreen'
 import { DriftScreen } from './drift/DriftScreen'
 import { NineScreen } from './nine/NineScreen'
@@ -16,6 +17,7 @@ import { RallyScreen } from './rally/RallyScreen'
 import { ChimeScreen } from './chime/ChimeScreen'
 
 export const GAME_SCREENS: Record<GameId, ComponentType<GameScreenProps>> = {
+  kumiko: KumikoScreen,
   settle: SettleScreen,
   cascade: CascadeScreen,
   hue: HueScreen,

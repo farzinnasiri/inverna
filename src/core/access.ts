@@ -2,19 +2,19 @@
  * Free taste vs. Full Unlock boundaries. Pure TypeScript: no React, no I/O.
  *
  * Inverna is free to download and genuinely usable every night:
- * - 4 distinct games across every mood (Pond, Hue, Nine, Settle)
+ * - 4 distinct games across every mood (Kumiko, Pond, Nine, Settle)
  * - 4 core sound presets covering rain, piano, waves and deep brown noise
  * - 1 saved custom sound in the Composer (editable and replaceable anytime)
  * - Adaptive night light, Wind-down, Sleep timer and Evening check-in
  *
- * A single non-consumable purchase unlocks all 13 games, all 12 sound presets,
+ * A single non-consumable purchase unlocks all 14 games, all 12 sound presets,
  * unlimited custom sounds in the Composer, and manual brightness & warmth.
  */
 import type { GameId } from './games/catalog'
 import { DEFAULT_PRESET_ID, presetById } from './sound/catalog'
 
-/** Games open to everyone without paying (one per night mood + flagship Pond). */
-export const FREE_GAMES: readonly GameId[] = ['pond', 'hue', 'nine', 'settle']
+/** Games open to everyone without paying (flagships Kumiko & Pond + Nine & Settle). */
+export const FREE_GAMES: readonly GameId[] = ['kumiko', 'pond', 'nine', 'settle']
 
 /** Sound presets open to everyone (matches all 3 onboarding families + brown noise). */
 export const FREE_PRESETS: readonly string[] = ['theta-rain', 'nocturne', 'low-tide', 'deep-drift']

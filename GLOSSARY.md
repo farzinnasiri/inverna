@@ -26,7 +26,9 @@ here, and a new idea gets a row here first.
 
 | Term | What it is | In code | Don't say |
 |---|---|---|---|
-| **Game** | One of the 13 games. | `GameId`, `src/core/games/catalog.ts` | level, activity |
+| **Game** | One of the 14 games. | `GameId`, `src/core/games/catalog.ts` | level, activity |
+| **Kumiko** | The endless Japanese hairline loop-weaving game that adapts to your pace and offers a quiet sleep timer when you slow down. | `'kumiko'`, `src/core/games/kumiko/` | Comico, loops |
+| **Crest** | A traditional Japanese geometric motif hidden inside Kumiko that reveals its kanji seal when closed in its canonical weave. | `CrestPattern`, `src/core/games/kumiko/patterns.ts` | secret level, bonus |
 | **Door** | The screen before a game starts: continue, new game, difficulty, mode. | `gameDoor`, `GameShell` | lobby, menu |
 | **Round** | One play of a game, from start to its end. | engine state | match, run |
 | **Mode** | A game's way of playing (Classic, Endless, Pictures). | per engine | variant |
@@ -67,8 +69,9 @@ here, and a new idea gets a row here first.
 
 | Term | What it is | In code | Don't say |
 |---|---|---|---|
-| **Purchase** | The one-time purchase that opens Inverna after onboarding. | `useUnlock`, `src/platform/store.*.ts` | subscription, premium, pro |
-| **Paywall** | The screen that asks for it ("Your evening is set up."). | `Paywall` | upgrade screen |
+| **Free tier** | What everyone has without paying: four games, four sounds, one saved sound, adaptive night light, wind-down, sleep timer, check-in. | `src/core/access.ts` | trial, lite |
+| **Full Unlock** | The one-time purchase that opens everything else: all games and sounds, unlimited saved sounds, manual light. Once seen in a run of the app it stays until the next launch. | `useUnlock`, `isAppUnlocked`, `src/platform/store.*.ts` | subscription, premium, pro |
+| **Paywall** | The sheet that offers Full Unlock, opened from whatever locked thing was tapped, and the last page of onboarding. | `PaywallSheet`, `useNav().openPaywall` | upgrade screen |
 | **Rating prompt** | Apple's own rating sheet, asked rarely. | `src/ui/rn/reviewPrompt.ts`, `src/core/reviewPrompt.ts` | review popup |
 | **Wide event** | One structured record of a unit of work, for debugging. Switched off; nothing leaves the phone. | `src/ui/log.ts` | analytics, tracking |
 

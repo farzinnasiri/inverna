@@ -20,8 +20,8 @@ import { GAMES, GAMES_BY_INTENT, type GameId, type NightIntent } from './catalog
 export const LEARN_AFTER_PLAYS = 10
 export const FAVOURITE_MIN_PLAYS = 3
 
-/** The bento's wide slots: row 1 left and row 3 right (see Play). */
-const WIDE_SLOTS = [0, 6] as const
+/** The bento's wide slot: row 1 left (14 games, 1 wide = 15 cells = 5×3 grid). */
+const WIDE_SLOTS = [0] as const
 
 export function favourites(plays: Partial<Record<GameId, number>>): GameId[] {
   const total = Object.values(plays).reduce((a, b) => a + (b ?? 0), 0)

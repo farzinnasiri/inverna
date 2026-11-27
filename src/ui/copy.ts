@@ -384,7 +384,7 @@ export const settingsCopy = {
   erase: 'Erase all data',
   eraseHold: 'Hold to erase everything',
   unlockTitle: 'Unlock all of Inverna',
-  unlockNote: 'All 13 games, 12 sounds, unlimited mixes & manual light',
+  unlockNote: 'All 14 games, 12 sounds, unlimited mixes & manual light',
   unlockedTitle: 'Full Inverna unlocked',
   unlockedNote: 'Thank you for supporting quiet, offline software',
   manualLightLocked: 'Adaptive light is free. Manual brightness & warmth are part of Full Unlock.',
@@ -541,7 +541,7 @@ export const reminders: readonly { title: string; named: string; body: string }[
 /** Contextual Full Unlock sheet & onboarding tier explainer. */
 export const paywall = {
   title: 'All of Inverna, yours to keep.',
-  titleForGame: (name?: string) => (name ? `Unlock ${name} & every game.` : 'Unlock all 13 quiet games.'),
+  titleForGame: (name?: string) => (name ? `Unlock ${name} & every game.` : 'Unlock all 14 quiet games.'),
   titleForSound: (name?: string) => (name ? `Unlock ${name} & every sound.` : 'Unlock all 12 sleep sounds.'),
   titleForCustomSound: 'Save unlimited custom mixes.',
   titleForManualLight: 'Tune brightness & warmth by hand.',
@@ -549,25 +549,25 @@ export const paywall = {
   bodyForCustomSound: 'Your first saved sound is free. Unlock once to save as many mixes as you like.',
   bodyForManualLight: 'Adaptive night light is always free. Unlock once to fine-tune light by hand.',
   features: {
-    games: { title: 'All 13 quiet games', detail: 'Every bedtime puzzle, endless & classic' },
+    games: { title: 'All 14 quiet games', detail: 'Every bedtime puzzle, endless & classic' },
     sounds: { title: '12 sleep sounds & unlimited mixes', detail: 'Every soundscape + save as many mixes as you like' },
     light: { title: 'Manual night light', detail: 'Fine-tune brightness & warmth anytime' },
   },
   pills: {
-    offline: 'Play Offline',
-    once: 'Pay Once',
-    noAds: 'Zero Ads',
-    private: 'No Data Collected',
+    offline: 'Plays offline',
+    once: 'Pay once',
+    noAds: 'No ads',
+    private: 'No data collected',
   },
   familySharing: 'Includes Apple Family Sharing',
   devPreviewNote: 'Dev preview — tapping unlock simulates a purchase without charging.',
-  cta: (price: string | null) => (price ? `Unlock Forever · ${price}` : 'Unlock Forever'),
+  cta: (price: string | null) => (price ? `Unlock forever · ${price}` : 'Unlock forever'),
   loadingPrice: 'Loading price…',
   retry: 'Try again',
   notNow: 'Not now',
   startFree: 'Start free',
-  restore: 'Restore Purchases',
-  privacy: 'Privacy Policy',
+  restore: 'Restore purchases',
+  privacy: 'Privacy policy',
   pending: 'Your purchase is waiting for approval. Inverna unlocks as soon as it’s through.',
   failed: 'The purchase couldn’t be confirmed. If you already paid, tap Restore Purchases.',
   nothingToRestore: 'No earlier purchase found on this Apple Account.',
@@ -623,6 +623,20 @@ export const pondCopy = {
   modeEndless: 'Endless',
   openNearest: 'Open the nearest bud',
   painting: (name: string, season: string) => `Tonight's painting, ${name}. ${season}`,
+}
+
+/** Kumiko's door hint, crest discovery and quiet sleep-timer handoff. */
+export const kumikoCopy = {
+  doorHint: 'Tap open hairline threads to turn them and close quiet knots. The weave slows as you get sleepy.',
+  boardLabel: 'Kumiko endless joinery weave. Tap any open tile to rotate it and close a loop.',
+  handoffTitle: 'Slowing down. Start a sleep timer and put your phone down?',
+  handoffWithTimer: (mins: number) => `Your sound fades out in ${mins} min. Put your phone down whenever you’re ready.`,
+  sleepTimerPill: (mins: number) => `Sleep timer · ${mins}m`,
+  shortMin: (mins: number) => `${mins}m`,
+  putPhoneDown: 'Put phone down',
+  slowerPace: 'Slower pace',
+  keepPlaying: 'Keep playing',
+  restNote: 'You can put your phone down',
 }
 
 /** The maker's note at the bottom of Settings, in Farzin's own words. */

@@ -66,7 +66,7 @@ const ARRIVE_HERO = { distance: 14, scaleFrom: 0.985, duration: 440 } as const
 const ARRIVE_TILE = { distance: 16, scaleFrom: 0.95, duration: 400 } as const
 const ARRIVE_DOCK = { distance: 14, scaleFrom: 0.98, duration: 420 } as const
 
-/** Rows in the bento above (13 games, two of them wide). */
+/** Rows in the bento above (14 games, one of them wide = 5×3). */
 const GRID_ROWS = 5
 const DOCK_H = 56
 /** Least height the hero needs: the big line, one line under it, and the accessory slot. */
@@ -367,12 +367,12 @@ export default function HomeScreen() {
               const isPick = picks.has(game.id)
               const locked = !canPlayGame(game.id, unlocked)
               const isLastPlayed = !locked && lastGame === game.id
-              const best = !locked && game.id !== 'pond' ? latestBest(highScores, game.id) : null
-              const compactBest = !locked && game.id !== 'pond' ? formatBestCompact(game.id, best) : null
+              const best = !locked && game.id !== 'pond' && game.id !== 'kumiko' ? latestBest(highScores, game.id) : null
+              const compactBest = !locked && game.id !== 'pond' && game.id !== 'kumiko' ? formatBestCompact(game.id, best) : null
               const hasPreview = !locked && isLead && ['kindle', 'hue', 'cascade', 'thread'].includes(game.id)
               const roomy = tileHeight >= 80
-              const tileRow = idx < 2 ? 0 : idx < 5 ? 1 : idx < 7 ? 2 : idx < 10 ? 3 : 4
-              const tileCol = idx < 2 ? idx : idx < 5 ? idx - 2 : idx < 7 ? idx - 5 : idx < 10 ? idx - 7 : idx - 10
+              const tileRow = idx < 2 ? 0 : Math.floor((idx - 2) / 3) + 1
+              const tileCol = idx < 2 ? idx : (idx - 2) % 3
 
               return (
                 <WaveLift key={game.id} layout={TILE_MORPH} baseX={gridX} baseY={insets.top + gridY} style={{ width: wide ? wideW : colW }}>
@@ -559,7 +559,7 @@ function GamePeek({ id, pick, locked = false, onPlay }: { id: GameId; pick: bool
   const meta = gameMeta(id)
   const plays = useSettings((s) => s.plays[id] ?? 0)
   const table = useHighScores((s) => s.table)
-  const best = id !== 'pond' ? formatBestCompact(id, latestBest(table, id)) : null
+  const best = id !== 'pond' && id !== 'kumiko' ? formatBestCompact(id, latestBest(table, id)) : null
   const facts = [
     pick ? copy.pickChip : null,
     best ? copy.peekBest(best) : null,

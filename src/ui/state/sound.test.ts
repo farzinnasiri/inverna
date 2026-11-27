@@ -241,15 +241,34 @@ describe('sound store: one deadline', () => {
   })
 })
 
-it('stops a revoked preset and prevents restarting it from a stale selection', async () => {
+it('fades out a paid preset when access goes, and keeps it from being started again', async () => {
   const { useUnlock } = await import('./unlock')
   useUnlock.setState({ status: 'unlocked' })
   useSound.getState().playPreset('hearth')
   expect(useSound.getState().playing).toBe(true)
   useUnlock.setState({ status: 'locked' })
-  expect(last('reset')).toBeDefined()
+  // A slow fade, never a dead stop.
+  expect(useSound.getState().playing).toBe(false)
+  expect(last('stop')?.args[0]).toBe(3)
   useSound.getState().playPreset('hearth')
-  expect(useSound.getState()).toMatchObject({ playing: false, presetId: null, mix: null })
+  expect(useSound.getState().playing).toBe(false)
+})
+
+it('leaves a free sound playing when access goes', async () => {
+  const { useUnlock } = await import('./unlock')
+  useUnlock.setState({ status: 'unlocked' })
+  useSound.getState().playPreset('theta-rain')
+  useUnlock.setState({ status: 'locked' })
+  expect(useSound.getState()).toMatchObject({ playing: true, presetId: 'theta-rain' })
+})
+
+it("lets onboarding's tour preview a locked preset, and nothing else", async () => {
+  const { useUnlock } = await import('./unlock')
+  useUnlock.setState({ status: 'locked' })
+  useSound.getState().playPreset('hearth')
+  expect(useSound.getState().playing).toBe(false)
+  useSound.getState().playPreset('hearth', 0, { preview: true })
+  expect(useSound.getState()).toMatchObject({ playing: true, presetId: 'hearth' })
 })
 
 it('keeps the first saved sound playable after a downgrade and preserves the rest for restore', async () => {

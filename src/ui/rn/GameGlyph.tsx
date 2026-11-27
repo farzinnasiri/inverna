@@ -11,6 +11,17 @@ export function GameGlyph({ id, size = 30 }: { id: GameId; size?: number }) {
   const { color, pieces } = useTokenColors()
 
   switch (id) {
+    case 'kumiko':
+      // Endless Japanese joinery: interlocking arcs and a 45° mitered diamond lit in brass.
+      return (
+        <Svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+          <Path d="M16 4 L28 16 L16 28 L4 16 Z" stroke={color.ink4} strokeWidth={1.3} strokeLinejoin="round" />
+          <Path d="M10 10 A6 6 0 0 1 16 16 A6 6 0 0 1 10 22" stroke={pieces.ochre} strokeWidth={1.8} strokeLinecap="round" />
+          <Path d="M22 10 A6 6 0 0 0 16 16 A6 6 0 0 0 22 22" stroke={pieces.ochre} strokeWidth={1.8} strokeLinecap="round" />
+          <Path d="M10 10 A6 6 0 0 0 16 4 A6 6 0 0 0 22 10" stroke={color.accent} strokeWidth={1.8} strokeLinecap="round" />
+          <Circle cx="16" cy="16" r="2.1" fill={color.bg} stroke={color.accent} strokeWidth={1.3} />
+        </Svg>
+      )
     case 'settle':
       // Falling blocks: a piece coming down toward a stack with one gap.
       return (

@@ -205,9 +205,10 @@ export function Onboarding() {
       return
     }
     if (muted) return
-    const id = fallbackFreePreset(PAGE_SCENE[page], unlocked)
-    if (!st.playing || st.presetId !== id) st.playPreset(id, 0)
-  }, [page, muted, unlocked, pickedSample])
+    // The tour plays each page's own sound, locked or not: it's a preview.
+    const id = PAGE_SCENE[page]
+    if (!st.playing || st.presetId !== id) st.playPreset(id, 0, { preview: true })
+  }, [page, muted, pickedSample])
 
   const toggleMuted = () => {
     tap()
@@ -249,7 +250,8 @@ export function Onboarding() {
     holdPrompts(2500)
     // How far they went and what they turned on; never their answers or name.
     startEvent('onboarding', { page: safeIndex, answered, reminders: useSettings.getState().reminders, named: name.trim().length > 0 }).end()
-    const nextPreset = chosenPlaying
+    // The sound they picked while listening is the app's sound, playing or not.
+    const nextPreset = pickedSample
       ? pickedSample
       : answered
         ? fallbackFreePreset(profileSound(final), isAppUnlocked())

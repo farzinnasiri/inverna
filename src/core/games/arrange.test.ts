@@ -12,19 +12,19 @@ describe('arranging the games on Play', () => {
 
   it('waits for enough plays before calling anything a favourite', () => {
     expect(favourites({ weave: 4 })).toEqual([])
-    expect(favourites({ weave: 6, rally: 3, pond: 1 })).toEqual(['weave', 'rally'])
+    expect(favourites({ weave: 6, rally: 3, pond: 1 })).toEqual(['weave'])
   })
 
-  it('gives favourites the wide tiles', () => {
+  it('gives the favourite the wide hero tile', () => {
     const { order, wide } = arrangeGames({ tonight: null, usual: 'melt', plays: { weave: 6, rally: 4 } })
-    expect(wide).toEqual(['weave', 'rally'])
+    expect(wide).toEqual(['weave'])
     expect(order[0]).toBe('weave')
   })
 
-  it('lets tonight lead for one night, with a favourite still wide', () => {
+  it('lets tonight lead the wide slot for one night', () => {
     const { order, wide } = arrangeGames({ tonight: 'focus', usual: 'melt', plays: { pond: 8, hue: 3 } })
     expect(order[0]).toBe('nine')
-    expect(wide).toEqual(['nine', 'pond'])
+    expect(wide).toEqual(['nine'])
   })
 
   it('keeps all free unlocked games at the top on the free tier regardless of intent or locked plays', () => {
@@ -33,7 +33,7 @@ describe('arranging the games on Play', () => {
       expect(new Set(order.slice(0, FREE_GAMES.length))).toEqual(new Set(FREE_GAMES))
       expect(new Set(order).size).toBe(GAMES.length)
       expect(FREE_GAMES).toContain(wide[0])
-      expect(wide).toHaveLength(2)
+      expect(wide).toHaveLength(1)
     }
   })
 

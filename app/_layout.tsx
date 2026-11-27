@@ -31,12 +31,16 @@ installCrashLogging()
 // Initialize design tokens synchronously before first render.
 applyTokens({ warmth: 0, force: true })
 
+/** When to ask StoreKit again after launch, if it couldn't be reached. */
+const UNLOCK_RETRY_MS = [4_000, 15_000, 45_000]
+
 export default function RootLayout() {
   useReminderPlanner()
 
   // Ask StoreKit whether Full Unlock is owned at launch, on every foreground
-  // resume (catching refunds, Ask-to-Buy approvals & Family Sharing changes),
-  // and whenever StoreKit emits an out-of-band transaction update.
+  // resume (an Ask-to-Buy approval, a purchase on another device), and when
+  // StoreKit sends a transaction update. Only launch can take it away (a
+  // refund, Family Sharing ending): see `status` in src/ui/state/unlock.ts.
   useEffect(() => {
     const check = async () => {
       await useUnlock.getState().check()
@@ -44,20 +48,28 @@ export default function RootLayout() {
       return status === 'unlocked' && !unreachable
     }
     const unsubStore = skipPaywall ? undefined : store.subscribe(check)
-    void check()
     noteNightUsedNow()
-    // OpenIAP 4.2.1 drops revoked Transaction.updates. Reconcile a long
-    // foreground session too, without prompting for an App Store sync.
-    const reconcile = !skipPaywall && Platform.OS === 'ios' ? setInterval(() => {
-      if (AppState.currentState === 'active' && useUnlock.getState().status === 'unlocked') void check()
-    }, 60_000) : undefined
+    // If StoreKit couldn't be reached at launch (offline, slow to start), ask
+    // again quietly a few times; a plain "not bought" is confirmed once.
+    let tries = 0
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const followUp = () => {
+      const { status, unreachable } = useUnlock.getState()
+      if (skipPaywall || status === 'unlocked' || tries >= UNLOCK_RETRY_MS.length) return
+      if (!unreachable && tries > 0) return
+      retry = setTimeout(() => {
+        tries += 1
+        void useUnlock.getState().check().then(followUp)
+      }, UNLOCK_RETRY_MS[tries])
+    }
+    void check().then(followUp)
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return
       noteNightUsedNow()
       void useUnlock.getState().check()
     })
     return () => {
-      clearInterval(reconcile)
+      clearTimeout(retry)
       unsubStore?.()
       sub.remove()
     }
@@ -137,8 +149,7 @@ export default function RootLayout() {
             >
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
-              <Stack.Screen name="paywall" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
-              <Stack.Screen
+                <Stack.Screen
                 name="game/[id]"
                 options={{
                   headerShown: false,

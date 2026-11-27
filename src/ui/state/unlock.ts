@@ -10,6 +10,12 @@ interface UnlockState {
    * Whether Full Unlock is bought. Never persisted to Inverna storage: asked
    * of StoreKit at every launch and foreground resume, so editing local storage
    * can never unlock paid features.
+   *
+   * Once this run of the app has seen it bought, it stays unlocked until the
+   * next launch: a refund or the end of Family Sharing takes effect then. A
+   * "not bought" mid-session is never trusted to take it away, because
+   * StoreKit can briefly answer with an empty list, and a wrong lock at 2 am
+   * would stop a paying customer's sound.
    */
   status: UnlockStatus
   /** StoreKit couldn't be reached the last time it was asked. */
@@ -56,8 +62,11 @@ export const useUnlock = create<UnlockState>()((set, get) => ({
     const revision = ++ownershipRevision
     const owned = await store.owned()
     if (revision !== ownershipRevision) return
-    if (owned !== null) {
-      set({ status: owned ? 'unlocked' : 'locked', unreachable: false })
+    if (owned === true) {
+      set({ status: 'unlocked', unreachable: false })
+    } else if (owned === false) {
+      // Never taken away mid-session (see `status`).
+      set((s) => ({ status: s.status === 'unlocked' ? 'unlocked' : 'locked', unreachable: false }))
     } else {
       set((s) => ({ status: s.status === 'unlocked' ? 'unlocked' : 'locked', unreachable: true }))
     }
@@ -114,7 +123,7 @@ export const useUnlock = create<UnlockState>()((set, get) => ({
       if (owned === true) {
         set({ status: 'unlocked', unreachable: false })
       } else if (owned === false) {
-        set({ status: 'locked', unreachable: false })
+        set((s) => ({ status: s.status === 'unlocked' ? 'unlocked' : 'locked', unreachable: false }))
       } else {
         set((s) => ({ status: s.status === 'unlocked' ? 'unlocked' : 'locked', unreachable: true }))
       }

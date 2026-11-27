@@ -1,4 +1,5 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { StyleSheet, View } from 'react-native'
 import { Redirect } from 'expo-router'
 import { NativeTabs } from 'expo-router/native-tabs'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
@@ -14,6 +15,8 @@ import { useSettings } from '@/ui/state/settings'
  */
 const SEE_THROUGH = { backgroundColor: 'rgba(0,0,0,0.004)' } as const
 const CLEAR_CONTENT = { backgroundColor: 'transparent' } as const
+/** How long launch waits for StoreKit before opening as free. */
+const CHECK_GRACE_MS = 1200
 
 /**
  * Native iOS 26 Liquid Glass tab bar via `NativeTabs` (UIKit UITabBar).
@@ -27,10 +30,18 @@ export default function TabsLayout() {
   const { color } = useTokenColors()
   const checking = useUnlock((s) => s.status === 'checking')
   const onboarded = useSettings((s) => s.onboarded)
+  // StoreKit usually answers in a moment; give it that (black, under the launch
+  // veil), so a buyer doesn't see locks flash. If it's slow, open as free and
+  // unlock in place when it answers: there's nothing to hold back.
+  const [waited, setWaited] = useState(false)
+  useEffect(() => {
+    if (!checking) return
+    const t = setTimeout(() => setWaited(true), CHECK_GRACE_MS)
+    return () => clearTimeout(t)
+  }, [checking])
   // First run (or after "Clear data"): meet Inverna first, then enter Play directly (freemium).
   if (!onboarded) return <Redirect href="/onboarding" />
-
-  if (checking) return <ActivityIndicator style={styles.root} color={color.accent} accessibilityLabel="Checking purchases" />
+  if (checking && !waited) return <View style={styles.root} />
 
   return (
     <View style={styles.root}>

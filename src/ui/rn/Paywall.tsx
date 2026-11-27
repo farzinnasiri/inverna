@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { router } from 'expo-router'
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Gamepad2, Infinity as InfinityIcon, Lock, LockOpen, ShieldOff, SunMoon, Users, Waves, WifiOff } from 'lucide-react-native'
 import { canPreviewFreeTier } from '@/platform'
 import { feel } from '@/ui/feel'
@@ -9,10 +8,8 @@ import { PRIVACY_URL } from '@/ui/links'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useNav, type PaywallContext } from '@/ui/state/nav'
 import { useIsUnlocked, useUnlock } from '@/ui/state/unlock'
-import { AmbientBackdrop } from './AmbientBackdrop'
 import { Button, Sheet } from './controls'
 import { GLASS_TINT, GlassSurface } from './Glass'
-import { useResponsiveLayout } from './hooks'
 
 /** Twilight Indigo accent dedicated to Full Unlock (brass stays reserved for selections). */
 export const UPGRADE_INK = '#BFB5FF'
@@ -260,40 +257,7 @@ export function PaywallSheet() {
   )
 }
 
-/** Standalone route (/paywall), dismissible back to Play. */
-export function Paywall() {
-  const { insets, sideMargin, frameWidth } = useResponsiveLayout()
-  const unlocked = useIsUnlocked()
-  const dismiss = () => {
-    if (router.canGoBack()) router.back()
-    else router.replace('/')
-  }
-
-  useEffect(() => {
-    if (unlocked) router.replace('/')
-  }, [unlocked])
-
-  return (
-    <View style={styles.root}>
-      <AmbientBackdrop presetId="deep-drift" />
-      <ScrollView
-        contentInsetAdjustmentBehavior="never"
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 32, paddingBottom: Math.max(insets.bottom, 16) + 12, paddingHorizontal: sideMargin },
-        ]}
-      >
-        <View style={{ width: '100%', maxWidth: frameWidth }}>
-          <PaywallBody context={{ reason: 'general' }} onDismiss={dismiss} />
-        </View>
-      </ScrollView>
-    </View>
-  )
-}
-
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
-  content: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
   column: { width: '100%', gap: 14 },
   header: { gap: 6 },
   badge: {

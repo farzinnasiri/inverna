@@ -28,7 +28,8 @@ interface SoundState {
   interrupted: boolean
   /** The sleep-timer choice for what's loaded (minutes, 0 = all night, UNTIL_LIGHTS_OUT). */
   timer: number
-  playPreset: (id: string, timerMinutes?: number) => void
+  /** `preview`: onboarding's tour may play any preset; nothing is picked or saved by it. */
+  playPreset: (id: string, timerMinutes?: number, opts?: { preview?: boolean }) => void
   /** What the lock screen calls a mix: a saved sound's name, or "Your mix". */
   mixMeta: MixMeta | null
   playMix: (mix: Mix, timerMinutes?: number, meta?: MixMeta | null) => void
@@ -190,11 +191,15 @@ export const useSound = create<SoundState>()((set, get) => {
     set({ stopAt })
   })
 
-  useUnlock.subscribe((access) => {
-    const { presetId, mixMeta, reset } = get()
-    const unlocked = isAppUnlocked(access)
-    if ((presetId && !canPlayPreset(presetId, unlocked)) ||
-        (mixMeta?.id && !canUseSavedSound(mixMeta.id, useSettings.getState().customSounds, unlocked))) reset()
+  // Access went away (only at launch, or the dev free-tier preview): a paid
+  // sound that's playing fades out instead of stopping dead.
+  useUnlock.subscribe((access, before) => {
+    if (isAppUnlocked(access) || !isAppUnlocked(before)) return
+    const { playing, presetId, mixMeta, stop } = get()
+    const allowed =
+      (!presetId || canPlayPreset(presetId, false)) &&
+      (!mixMeta?.id || canUseSavedSound(mixMeta.id, useSettings.getState().customSounds, false))
+    if (playing && !allowed) stop(3)
   })
 
   const initialPreset = presetById(useSettings.getState().sessionPreset ?? DEFAULT_PRESET_ID)
@@ -217,9 +222,9 @@ export const useSound = create<SoundState>()((set, get) => {
     interrupted: false,
     timer: useSettings.getState().sleepTimer,
 
-    playPreset: (id, timerMinutes) => {
+    playPreset: (id, timerMinutes, opts) => {
       const preset = presetById(id)
-      if (!preset || !canPlayPreset(preset.id, isAppUnlocked())) return
+      if (!preset || !(opts?.preview || canPlayPreset(preset.id, isAppUnlocked()))) return
       void sound.unlock()
       const choice = timerMinutes ?? useSettings.getState().sleepTimer
       const now = Date.now()

@@ -1,9 +1,10 @@
 /**
- * The thirteen Inverna games. Pure data — shared by web and native.
+ * The fourteen Inverna games. Pure data — shared by web and native.
  * Each has a clear nocturnal mood tier so tonight's check-in can curate
  * and morph the Home bento cleanly without streaks or leaderboards.
  */
 export type GameId =
+  | 'kumiko'
   | 'settle'
   | 'cascade'
   | 'hue'
@@ -52,6 +53,21 @@ export interface GameRules {
 }
 
 export const GAMES: readonly GameMeta[] = [
+  {
+    id: 'kumiko',
+    name: 'Kumiko',
+    classic: 'Endless loops',
+    line: 'Turn hairline threads to close quiet knots in an endless weave.',
+    effect: 'Quiet rhythm',
+    mood: 'calm',
+    status: 'ready',
+    difficulty: 'shared',
+    rules: {
+      goal: 'Close each hairline pattern into a quiet loop as the tapestry glides upward.',
+      play: 'Tap any open tile to turn it. Matched edges warm together; closing a whole knot lights it in brass and scrolls onward.',
+      tip: 'Some double-curved tiles close in more than one way. Finding the traditional crest reveals its seal. Nothing is timed, and the weave slows as you get sleepy.',
+    },
+  },
   {
     id: 'pond',
     name: 'Pond',
@@ -258,7 +274,7 @@ export type NightIntent = 'melt' | 'focus' | 'light'
 
 /** Play's game order for each intent, best match first. */
 export const GAMES_BY_INTENT: Record<NightIntent, readonly GameId[]> = {
-  melt: ['pond', 'hue', 'lanterns', 'drift', 'dim', 'thread', 'weave', 'nine', 'kindle', 'cascade', 'settle', 'chime', 'rally'],
-  focus: ['nine', 'weave', 'thread', 'drift', 'kindle', 'dim', 'hue', 'pond', 'lanterns', 'settle', 'cascade', 'chime', 'rally'],
-  light: ['settle', 'kindle', 'cascade', 'chime', 'rally', 'thread', 'dim', 'drift', 'hue', 'pond', 'nine', 'weave', 'lanterns'],
+  melt: ['kumiko', 'pond', 'hue', 'lanterns', 'drift', 'dim', 'thread', 'weave', 'nine', 'kindle', 'cascade', 'settle', 'chime', 'rally'],
+  focus: ['nine', 'kumiko', 'weave', 'thread', 'drift', 'kindle', 'dim', 'hue', 'pond', 'lanterns', 'settle', 'cascade', 'chime', 'rally'],
+  light: ['settle', 'kumiko', 'kindle', 'cascade', 'chime', 'rally', 'thread', 'dim', 'drift', 'hue', 'pond', 'nine', 'weave', 'lanterns'],
 }

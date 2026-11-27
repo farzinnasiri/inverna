@@ -5,6 +5,7 @@ import { createDim } from './dim/engine'
 import { createDrift } from './drift/engine'
 import { createHue } from './hue/engine'
 import { createKindle } from './kindle/engine'
+import { createKumiko } from './kumiko/engine'
 import { createLanterns } from './lanterns/engine'
 import { createNine } from './nine/engine'
 import { createSettle } from './settle/engine'
@@ -23,6 +24,7 @@ const DEALS: [string, (seed: number) => unknown][] = [
   ['drift', (seed) => createDrift({ seed, calm: 0.2 })],
   ['hue', (seed) => createHue({ seed, calm: 0.2 })],
   ['kindle', (seed) => createKindle({ seed, calm: 0.2 })],
+  ['kumiko', (seed) => createKumiko({ seed, calm: 0.2 })],
   ['lanterns', (seed) => createLanterns({ seed, calm: 0.2 })],
   ['nine', (seed) => createNine({ seed, calm: 0.2 })],
   ['settle', (seed) => createSettle({ seed, calm: 0.2 })],

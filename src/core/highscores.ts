@@ -28,11 +28,12 @@ export const scoreKey = (gameId: GameId, variant?: string): string => (variant ?
 export const EMPTY_HIGH_SCORES: HighScoreTable = {}
 
 /**
- * Canonical personal-best definition for all 13 games.
+ * Canonical personal-best definition for all 14 games.
  * Keeps every game's record authentic (e.g. fewer moves in 15-puzzle,
  * higher score in 2048/Breakout/Cascade, longest rally in Pong).
  */
 export const HIGH_SCORE_SPECS: Record<GameId, HighScoreSpec> = {
+  kumiko: { mode: 'higher', label: 'Knots', unit: 'knots', unitSingular: 'knot' },
   settle: { mode: 'higher', label: 'Best lines', unit: 'lines', unitSingular: 'line' },
   cascade: { mode: 'higher', label: 'Best score', unit: 'pts', unitSingular: 'pt' },
   hue: { mode: 'lower', label: 'Fewest moves', unit: 'moves', unitSingular: 'move' },
