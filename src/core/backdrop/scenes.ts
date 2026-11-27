@@ -55,12 +55,12 @@ export interface AtmosphericPalette {
 /** Colour families. Presets pick one through `Preset.scene`. */
 export const SCENE_PALETTES: Record<SoundSceneId, AtmosphericPalette> = {
   rain: { canopy: '#1E467A', mid: '#3464A2', horizon: '#1B3A63', caustic: '#A8D0FA', detail: '#D6EBFF' },
-  classical: { canopy: '#442C5E', mid: '#845988', horizon: '#5E3D2A', caustic: '#ECD09E', detail: '#FBEBC9' },
-  fire: { canopy: '#6C2B10', mid: '#D46422', horizon: '#B84B14', caustic: '#F7C278', detail: '#FFE5B4' },
+  classical: { canopy: '#35286C', mid: '#6B4AA4', horizon: '#5B3A72', caustic: '#E9D0AA', detail: '#F8ECD8' },
+  fire: { canopy: '#5E2612', mid: '#B9581F', horizon: '#A24318', caustic: '#F4C07C', detail: '#FFE5B8' },
   waves: { canopy: '#10505C', mid: '#23828A', horizon: '#165260', caustic: '#94E4E2', detail: '#D0F7F5' },
   delta: { canopy: '#30236B', mid: '#5840A8', horizon: '#221A4C', caustic: '#C7B6FA', detail: '#EFE8FF' },
   wind: { canopy: '#283E5C', mid: '#526E92', horizon: '#24354F', caustic: '#C4D6EB', detail: '#E6F1FC' },
-  reverie: { canopy: '#4E351F', mid: '#8C6639', horizon: '#352B4A', caustic: '#EDD09A', detail: '#FDF0BF' },
+  reverie: { canopy: '#46321F', mid: '#8A6A42', horizon: '#3A2A26', caustic: '#EBD3A4', detail: '#FBF0CF' },
 }
 
 export function isBackdropId(id: string | null | undefined): id is BackdropId {
