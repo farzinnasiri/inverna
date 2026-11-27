@@ -8,6 +8,9 @@ import { deviceStorage } from './storage'
 import { deviceHaptics, type HapticsAdapter } from './haptics'
 import { createPlatformSoundEngine } from './sound'
 import { clearReminders, downloadReminderCalendar, onReminderOpened, planReminders } from './notifications'
+import Constants from 'expo-constants'
+import { createStore } from './store'
+import type { Store } from './store.types'
 
 let booted = false
 
@@ -25,3 +28,8 @@ export const notifications = {
   onReminderOpened,
   downloadReminderCalendar,
 }
+
+const extra = (Constants.expoConfig?.extra ?? {}) as { variant?: string; unlockProductId?: string }
+/** Inverna Dev skips the paywall; Beta (sandbox) and the App Store app don't. */
+export const skipPaywall = extra.variant === 'development'
+export const store: Store = createStore(extra.unlockProductId ?? 'com.oooflabs.inverna.unlock')

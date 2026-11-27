@@ -239,6 +239,8 @@ export const onboarding = {
     title: '',
     tagline: 'Made for busy minds and night owls.',
     subline: 'Calm games, soft sound and warm light to help you get from your phone to sleep.',
+    /** Said up front, so the purchase after setup is never a surprise. */
+    oneTime: 'A one-time purchase after setup. No subscription.',
     button: 'See how it works',
   },
   science: {
@@ -513,6 +515,28 @@ export const reminders: readonly { title: string; named: string; body: string }[
   { title: 'An hour until bed', named: 'An hour until bed, {name}', body: 'Check in when you’re ready and I’ll set up your night.' },
   { title: 'Winding down soon', named: 'Winding down soon, {name}', body: 'No rush. Your games and sleep sound are here when you want them.' },
 ]
+
+/** After onboarding: one purchase unlocks Inverna (Version B of docs/research/PAYWALL.md). */
+export const paywall = {
+  title: 'Your evening is set up.',
+  body: 'Based on what you told me, Inverna is ready for tonight. Unlock it once and wind down your way.',
+  readyTitle: 'Ready for tonight',
+  windDown: (minutes: number) => `A ${minutes}-minute wind down, with a warm, dim screen`,
+  sounds: (name: string) => `${name} and soft chords, plus the Composer for your own`,
+  games: '13 slow games to take the place of late-night scrolling',
+  nothing: 'Works offline, with no account, no ads and no streaks',
+  trust: (price: string) => `One payment of ${price}, less than two months of most sleep apps. No subscription, ever.`,
+  trustNoPrice: 'One payment, less than two months of most sleep apps. No subscription, ever.',
+  cta: (price: string | null) => (price ? `Unlock Inverna · ${price}` : 'Unlock Inverna'),
+  restore: 'Restore Purchases',
+  privacy: 'Privacy Policy',
+  terms: 'Terms of Use',
+  small: 'A one-time purchase through your Apple Account. Made to help you relax before bed, not to diagnose or treat sleep conditions.',
+  pending: 'Your purchase is waiting for approval. Inverna opens as soon as it’s through.',
+  failed: 'That didn’t go through. Nothing was charged. Try again in a moment.',
+  nothingToRestore: 'No earlier purchase found on this Apple Account.',
+  unreachable: 'The App Store can’t be reached right now. Check your connection and try again.',
+}
 
 /** Now and then, while reminders are off: would they like one? */
 export const reminderOffer = {

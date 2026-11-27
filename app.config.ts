@@ -97,6 +97,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     themeColor: '#000000',
     favicon: './assets/images/favicon.png',
   },
+  extra: {
+    // Read at runtime (expo-constants): Dev skips the paywall; each app sells its own product.
+    variant: raw,
+    unlockProductId: `${variant.id}.unlock`,
+  },
   plugins: [
     'expo-router',
     [

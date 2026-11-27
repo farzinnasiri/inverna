@@ -59,6 +59,7 @@ import { AnswerLayer, EASE_OUT, EdgeSwipeBack, HandoffTitle, itemDelay, Rise, TI
 import { MindTangle } from './MindTangle'
 import { SleepAround } from './SleepAround'
 import { PRIVACY_URL } from '@/ui/links'
+import { skipPaywall } from '@/platform'
 import { holdPrompts } from './promptGate'
 import { planRemindersNow } from './reminders'
 import { DescentCurve, PillarIcon, ScienceLink, ScienceSheet } from './ScienceSheet'
@@ -275,6 +276,7 @@ export function Onboarding() {
                     </Text>
                     <Text style={[styles.tagline, { color: color.ink }]}>{copy.intro.tagline}</Text>
                     <Text style={[styles.subline, { color: color.ink2 }]}>{copy.intro.subline}</Text>
+                    {skipPaywall ? null : <Text style={[styles.note, styles.oneTime, { color: color.ink3 }]}>{copy.intro.oneTime}</Text>}
                   </Rise>
                 </View>
               ) : null}
@@ -924,6 +926,11 @@ const styles = StyleSheet.create({
   },
   link: {
     textDecorationLine: 'underline',
+  },
+  oneTime: {
+    marginLeft: 0,
+    marginTop: 6,
+    textAlign: 'center',
   },
   footer: {
     flexDirection: 'row',

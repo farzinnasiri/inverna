@@ -1,4 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router'
+import { useUnlock } from '@/ui/state/unlock'
 import { GAMES, type GameId } from '@/core/games/catalog'
 import { GAME_SCREENS } from '@/ui/rn/games/registry'
 
@@ -7,6 +8,8 @@ export default function GameRoute() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const validId = (GAMES.find((g) => g.id === id)?.id ?? 'settle') as GameId
   const Screen = GAME_SCREENS[validId]
+  // A link straight to a game doesn't get round the purchase.
+  const unlocked = useUnlock((s) => s.status === 'unlocked')
 
   const handleExit = () => {
     if (router.canGoBack()) {
@@ -16,5 +19,6 @@ export default function GameRoute() {
     }
   }
 
+  if (!unlocked) return <Redirect href="/" />
   return <Screen onExit={handleExit} />
 }

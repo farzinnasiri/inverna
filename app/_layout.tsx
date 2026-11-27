@@ -1,6 +1,6 @@
 import '@/platform/boot'
 import { useEffect } from 'react'
-import { Platform, StyleSheet, View } from 'react-native'
+import { AppState, Platform, StyleSheet, View } from 'react-native'
 import { router, Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
@@ -20,12 +20,23 @@ import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
+import { useUnlock } from '@/ui/state/unlock'
 
 // Initialize design tokens synchronously before first render.
 applyTokens({ warmth: 0, force: true })
 
 export default function RootLayout() {
   useReminderPlanner()
+
+  // Ask StoreKit whether Inverna is bought at launch, and again on coming
+  // back (a purchase approved meanwhile, a refund, Family Sharing).
+  useEffect(() => {
+    void useUnlock.getState().check()
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && useUnlock.getState().status !== 'unlocked') void useUnlock.getState().check()
+    })
+    return () => sub.remove()
+  }, [])
 
   // A tapped wind-down reminder opens Play with the check-in.
   useEffect(
@@ -99,6 +110,7 @@ export default function RootLayout() {
           >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+            <Stack.Screen name="paywall" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
             <Stack.Screen
               name="game/[id]"
               options={{
