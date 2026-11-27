@@ -11,3 +11,6 @@ public/canvaskit.wasm
 
 # QA screenshots from cloud test runs (large; kept locally for fixing)
 .qa/
+
+# Build downloads from `make submit-*`
+/build/

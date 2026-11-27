@@ -75,8 +75,10 @@ submit-latest:
 	@test -n "$(BUILD)" || { echo "BUILD is required: pick the build id from 'make builds' (check its commit)"; exit 1; }
 	@BUILD_ID="$(BUILD)"; \
 	rm -rf build && mkdir -p build && \
-	rnd build:download --build-id "$$BUILD_ID" --output build/inverna-$(PROFILE).ipa && \
-	rnd submit --platform ios --profile $(PROFILE) --path build/inverna-$(PROFILE).ipa
+	rnd build:download --build-id "$$BUILD_ID" --non-interactive && \
+	(cd build && unzip -o -q "$$BUILD_ID.zip") && \
+	IPA=$$(find build -name '*.ipa' | head -1) && test -n "$$IPA" && \
+	rnd submit --platform ios --profile $(PROFILE) --path "$$IPA" --non-interactive
 
 builds: ## List recent React Native Deploy builds
 	rnd build:list

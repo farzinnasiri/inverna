@@ -35,7 +35,7 @@ const VARIANTS: Record<
     icon: './assets/images/icon-beta.png',
     iosIcon: './assets/images/Inverna-Beta.icon',
     // Each App Store Connect app counts its own builds: raise before every upload.
-    buildNumber: '1',
+    buildNumber: '2',
     versionCode: 1,
   },
   production: {
@@ -108,8 +108,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       'react-native-audio-api',
       {
         iosBackgroundMode: true,
-        // No microphone permission: Inverna never records. If an upload ever
-        // flags a missing purpose string, it comes back with this wording.
+        // Inverna never records, but the library's code references the
+        // microphone, and App Store Connect refuses an upload without a purpose
+        // string (error 90683, seen on the first Inverna Beta upload). It's
+        // never shown, because nothing asks for the microphone.
+        iosMicrophonePermission:
+          'Inverna uses its audio engine only to play sleep sounds made on your phone. It never uses your microphone.',
         androidForegroundService: true,
         androidFSTypes: ['mediaPlayback'],
         androidFSStopWithTask: true,

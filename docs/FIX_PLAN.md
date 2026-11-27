@@ -135,7 +135,8 @@ disappear. Ordered so later steps build on earlier ones.
 Every fix comes with a test that fails without it.
 
 1. **App Review items:** privacy policy row in Settings and onboarding (ISS-01);
-   the copy rewrite (ISS-05); drop the unused microphone permission; turn off
+   the copy rewrite (ISS-05); keep the microphone purpose string (App Store
+   Connect refuses the upload without it, error 90683); turn off
    remote-notification entitlement; check the privacy report from a release
    archive (ISS-19.4).
    - **Copy:** surgical edits only. Lines that state an effect on the body as
