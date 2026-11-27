@@ -11,7 +11,7 @@ import { useCurrentSchedule, useSettings } from '@/ui/state/settings'
  * colour when it's on, deepened further during a wind down. Also keeps the
  * colour tokens in step. `base` is the part the Settings sliders show.
  */
-export function useNightFilterMetrics(): { warmth: number; dimOpacity: number; base: NightFilter } {
+export function useNightFilterMetrics({ owner = true }: { owner?: boolean } = {}): { warmth: number; dimOpacity: number; base: NightFilter } {
   const warmth = useSettings((s) => s.warmth)
   const brightness = useSettings((s) => s.brightness)
   const adaptive = useSettings((s) => s.adaptiveLight)
@@ -19,10 +19,14 @@ export function useNightFilterMetrics(): { warmth: number; dimOpacity: number; b
   const [now, setNow] = useState(() => Date.now())
   const schedule = useCurrentSchedule(new Date(now))
 
+  // Only what changes with time needs a clock: Adaptive light, or a wind-down.
+  // The manual sliders don't (ISS-18: every sheet ran its own 30 s timer).
   useEffect(() => {
+    if (!adaptive && !session) return
+    setNow(Date.now())
     const id = setInterval(() => setNow(Date.now()), session ? 2000 : 30_000)
     return () => clearInterval(id)
-  }, [session])
+  }, [session, adaptive])
 
   const baseFilter = adaptive ? adaptiveFilter(schedule, new Date(now)) : manualFilter(warmth, brightness)
   const sessLevels = session ? sessionLevels(session, now) : null
@@ -33,9 +37,10 @@ export function useNightFilterMetrics(): { warmth: number; dimOpacity: number; b
   // the warmth to settle (a slider being dragged); the warm layer below
   // follows the finger live, so the screen still warms as you drag.
   useEffect(() => {
+    if (!owner) return
     const id = setTimeout(() => applyTokens({ warmth: combined.warmth }), 240)
     return () => clearTimeout(id)
-  }, [combined.warmth])
+  }, [combined.warmth, owner])
 
   // Pure black dim veil (0..58%): darkens cleanly without muddy yellow/brown tint.
   const dimOpacity = Math.min(0.60, Math.max(0, combined.dim * 0.85))
@@ -64,7 +69,8 @@ export function warmVeilColor(warmth: number): string {
  * Their text still warms through the colour tokens.
  */
 export function NightFilterOverlay({ dimOnly = false }: { dimOnly?: boolean }) {
-  const { warmth, dimOpacity } = useNightFilterMetrics()
+  // Sheets' copies only dim; the main window's copy keeps the colour tokens in step.
+  const { warmth, dimOpacity } = useNightFilterMetrics({ owner: !dimOnly })
   return (
     <>
       {!dimOnly && warmth > 0.02 ? (

@@ -26,6 +26,19 @@ export interface PondColors {
   key: number
 }
 
+/**
+ * A finished stroke's points never move, so they're worked out once per
+ * stroke and screen width instead of every frame (ISS-18).
+ */
+const strokeCache = new WeakMap<object, { u: number; pts: number[] }>()
+function finishedStroke(family: object, u: number, make: () => number[]): number[] {
+  const hit = strokeCache.get(family)
+  if (hit && hit.u === u) return hit.pts
+  const pts = make()
+  strokeCache.set(family, { u, pts })
+  return pts
+}
+
 export function hexToRgb(hex: string): RGB {
   const m = /^#?([0-9a-f]{6})/i.exec(hex.trim())
   if (!m) return [1, 1, 1]
@@ -84,7 +97,8 @@ export function buildFrame(
   const strokes = s.families
     .filter((f) => f.doneAt !== null && t >= f.doneAt)
     .map((f) => ({
-      pts: flat(f.buds.map((id) => s.buds.find((b) => b.id === id)!)),
+      // Keyed by the family's bud list: the state is copied each step, that array isn't.
+      pts: finishedStroke(f.buds, u, () => flat(f.buds.map((id) => s.buds.find((b) => b.id === id)!))),
       closed: f.closed,
       p: clamp01((t - f.doneAt!) / STROKE_DRAW_MS),
       family: f.id,

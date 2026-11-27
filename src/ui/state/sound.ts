@@ -311,6 +311,8 @@ export const useSound = create<SoundState>()((set, get) => {
       const key = state.mix?.harmonicKey ?? activePreset?.harmonicKey ?? DEFAULT_HARMONIC_KEY
       const next = buildDescentSnapshot(state.presetId ?? activePreset?.id ?? DEFAULT_PRESET_ID, state.mix, now)
 
+      // Every 15 s from the root: when nothing moved, nothing re-renders or re-ramps (ISS-18).
+      if (key === state.harmonicKey && JSON.stringify(next) === JSON.stringify(state.descent)) return state.descent
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(next, rampSeconds)
 

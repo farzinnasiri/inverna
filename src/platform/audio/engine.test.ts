@@ -749,3 +749,20 @@ describe('createNeuroSoundEngine — scale-quantized harmonic game cues', () => 
     expect(contexts[0]!.oscillators.length).toBe(beforeMuted)
   })
 })
+
+describe('createNeuroSoundEngine — edits', () => {
+  // ISS-18: a fader drag re-sent every layer, the pad and the pulse a dozen times a second.
+  it('a fader moving changes only its own layer', () => {
+    const { engine, contexts } = makeTestEngine({ initialState: 'running' })
+    const base = PRESETS[0]!.mix
+    engine.setMix(base, 0.2)
+    const ctx = contexts[0]!
+    const before = ctx.gains.map((g) => g.gain.calls.length)
+    const oscBefore = ctx.oscillators.length
+    const [firstLayer] = Object.keys(base.layers) as (keyof typeof base.layers)[]
+    engine.setMix({ ...base, layers: { ...base.layers, [firstLayer!]: (base.layers[firstLayer!] ?? 0) * 0.5 } }, 0.25)
+    const touched = ctx.gains.filter((g, i) => g.gain.calls.length > (before[i] ?? 0)).length
+    expect(touched).toBeLessThanOrEqual(2)
+    expect(ctx.oscillators.length).toBe(oscBefore)
+  })
+})

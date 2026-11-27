@@ -101,11 +101,14 @@ export default function HomeScreen() {
   const ambient = useAmbientToggle()
 
   // Re-read the clock the moment a wind down starts or ends, not at the next tick.
+  // Only while Play is the tab on screen (ISS-18); coming back reads it at once.
+  const clockFocused = useIsFocused()
   useEffect(() => {
+    if (!clockFocused) return
     setNow(new Date())
     const id = setInterval(() => setNow(new Date()), session ? 10_000 : 30_000)
     return () => clearInterval(id)
-  }, [session])
+  }, [session, clockFocused])
 
   // Bedtime is the pivot: what Play says depends on where tonight stands.
   const evening = eveningState(schedule, now, session?.startedAt ?? null)

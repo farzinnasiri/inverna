@@ -605,6 +605,7 @@ export function createNeuroSoundEngine({
     const safeFade = Math.max(0, Number.isFinite(fadeSeconds) ? fadeSeconds : 1.5)
     // A change while playing is an edit: it never touches the sleep fade.
     const starting = !running
+    const prevMix = lastMix
     lastMix = mix
     if (!isSilent(mix)) lastAudibleMix = mix
     if (mix.harmonicKey) {
@@ -647,6 +648,8 @@ export function createNeuroSoundEngine({
     for (const id of ALL_LAYER_IDS) {
       const gain = clamp(mix.layers[id] ?? 0, 0, 1)
       const existing = activeLayers.get(id)
+      // An edit leaves layers whose fader didn't move alone.
+      if (!starting && prevMix && existing && clamp(prevMix.layers[id] ?? 0, 0, 1) === gain) continue
 
       if (gain > 0.001) {
         clearLayerTimer(id)
@@ -669,31 +672,50 @@ export function createNeuroSoundEngine({
       }
     }
 
-    g.pad.update({
-      keyId: mix.harmonicKey ?? activeKey,
-      gain: mix.padGain ?? 0,
-      breathPacing: mix.breathPacing !== false,
-      spatialMotion: mix.spatialMotion ?? 0.35,
-      fadeSeconds: safeFade,
-    })
+    // An edit (a fader moving) changes only what moved: every update queues
+    // events on the audio thread, and a drag sends a dozen a second (ISS-18).
+    const edit = !starting && prevMix !== null
+    const keyOf = (m: Mix) => m.harmonicKey ?? activeKey
+    const padSame =
+      edit &&
+      keyOf(prevMix) === keyOf(mix) &&
+      (prevMix.padGain ?? 0) === (mix.padGain ?? 0) &&
+      (prevMix.breathPacing !== false) === (mix.breathPacing !== false) &&
+      (prevMix.spatialMotion ?? 0.35) === (mix.spatialMotion ?? 0.35)
+    if (!padSame) {
+      g.pad.update({
+        keyId: keyOf(mix),
+        gain: mix.padGain ?? 0,
+        breathPacing: mix.breathPacing !== false,
+        spatialMotion: mix.spatialMotion ?? 0.35,
+        fadeSeconds: safeFade,
+      })
+    }
 
-    g.binaural.update({
-      band: mix.band,
-      bandGain: mix.bandGain,
-      carrier: mix.carrier,
-      fadeSeconds: safeFade,
-      overrideBeatHz: descent.autoActive ? descent.modHz : undefined,
-      scale: descent.binauralScale,
-    })
+    const pulseSame = edit && prevMix.band === mix.band && prevMix.bandGain === mix.bandGain && prevMix.carrier === mix.carrier
+    if (!pulseSame) {
+      g.binaural.update({
+        band: mix.band,
+        bandGain: mix.bandGain,
+        carrier: mix.carrier,
+        fadeSeconds: safeFade,
+        overrideBeatHz: descent.autoActive ? descent.modHz : undefined,
+        scale: descent.binauralScale,
+      })
+    }
 
-    g.classical.update({
-      style: mix.classicalMotif ?? null,
-      keyId: mix.harmonicKey ?? activeKey,
-      darkness: descent.cueDarkness,
-    })
+    if (!edit || (prevMix.classicalMotif ?? null) !== (mix.classicalMotif ?? null) || keyOf(prevMix) !== keyOf(mix)) {
+      g.classical.update({
+        style: mix.classicalMotif ?? null,
+        keyId: keyOf(mix),
+        darkness: descent.cueDarkness,
+      })
+    }
 
-    g.bank.prewarm()
-    applyDescentNodes(g, Math.min(safeFade, 0.8))
+    if (!edit) {
+      g.bank.prewarm()
+      applyDescentNodes(g, Math.min(safeFade, 0.8))
+    }
     hooks?.onNowPlayingUpdate?.(nowPlayingMeta, 'playing')
   }
 
@@ -814,8 +836,16 @@ export function createNeuroSoundEngine({
     },
 
     setNowPlayingMeta(meta) {
+      // A fader drag sends the same title many times a second: tell the lock screen only when it changes.
+      const same =
+        meta !== null &&
+        nowPlayingMeta !== null &&
+        meta.title === nowPlayingMeta.title &&
+        meta.subtitle === nowPlayingMeta.subtitle &&
+        meta.icon === nowPlayingMeta.icon &&
+        meta.scene === nowPlayingMeta.scene
       nowPlayingMeta = meta
-      if (running) {
+      if (running && !same) {
         hooks?.onNowPlayingUpdate?.(meta, 'playing')
       }
     },

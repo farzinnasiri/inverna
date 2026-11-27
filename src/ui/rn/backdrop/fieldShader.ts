@@ -334,16 +334,26 @@ float4 sceneColor(float sid, float2 p, float asp, float3 c1, float3 c2, float3 c
 half4 main(float2 fc) {
   float2 p = fc / res.x;
   float asp = res.y / res.x;
-  float4 col = sceneColor(sb, p, asp, pal[4].rgb, pal[5].rgb, pal[6].rgb, pal[7].rgb);
-  if (settled < 0.5) {
-    float2 o = float2(0.5, 0.3 * asp);
-    float d = length(p - o) + (fbm(p * 3.0 + 7.0) - 0.5) * 0.25;
-    float m = 1.0 - smoothstep(edge - 0.22, edge + 0.22, d);
-    float4 a = sceneColor(sa, p, asp, pal[0].rgb, pal[1].rgb, pal[2].rgb, pal[3].rgb);
-    col = mix(a, col, m);
-    float rd = (d - edge) / 0.05;
-    col = over(lit(mix(pal[1].rgb, pal[5].rgb, 0.5), exp(-rd * rd) * 0.045), col);
+  if (settled >= 0.5) {
+    return half4(sceneColor(sb, p, asp, pal[4].rgb, pal[5].rgb, pal[6].rgb, pal[7].rgb) * intensity);
   }
+  // Mid-change: each pixel only works out the scene(s) it actually shows.
+  // Inside the front it's all the new scene, outside all the old (ISS-18).
+  float2 o = float2(0.5, 0.3 * asp);
+  float d = length(p - o) + (fbm(p * 3.0 + 7.0) - 0.5) * 0.25;
+  float m = 1.0 - smoothstep(edge - 0.22, edge + 0.22, d);
+  float4 col;
+  if (m >= 1.0) {
+    col = sceneColor(sb, p, asp, pal[4].rgb, pal[5].rgb, pal[6].rgb, pal[7].rgb);
+  } else if (m <= 0.0) {
+    col = sceneColor(sa, p, asp, pal[0].rgb, pal[1].rgb, pal[2].rgb, pal[3].rgb);
+  } else {
+    float4 b = sceneColor(sb, p, asp, pal[4].rgb, pal[5].rgb, pal[6].rgb, pal[7].rgb);
+    float4 a = sceneColor(sa, p, asp, pal[0].rgb, pal[1].rgb, pal[2].rgb, pal[3].rgb);
+    col = mix(a, b, m);
+  }
+  float rd = (d - edge) / 0.05;
+  col = over(lit(mix(pal[1].rgb, pal[5].rgb, 0.5), exp(-rd * rd) * 0.045), col);
   return half4(col * intensity);
 }
 `

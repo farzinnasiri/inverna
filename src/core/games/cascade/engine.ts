@@ -685,9 +685,9 @@ export function tickCascade(state: CascadeState, dtMs: number, calm: number): Ca
         }
       }
 
-      if (!nextBoard) {
-        nextBoard = state.board.map((existingRow) => existingRow.slice())
-      }
+      // Copy only the rows that move: the board's other rows stay shared (ISS-10).
+      if (!nextBoard) nextBoard = state.board.slice()
+      if (nextBoard[r] === state.board[r]) nextBoard[r] = state.board[r]!.slice()
       nextBoard[r]![col] = {
         ...tile,
         x: nx,

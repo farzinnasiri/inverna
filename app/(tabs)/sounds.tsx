@@ -231,9 +231,26 @@ export default function SoundsScreen() {
 
   // The studio's mix: heard as it changes, kept as "Your mix" until saved.
   const studioMeta = studio.kind === 'saved' ? metaOf(studio.sound) : null
+  // "Your mix" is saved to disk once a drag pauses, not on every fader step
+  // (each save rewrites all the settings).
+  const mixSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingMix = useRef<Mix | null>(null)
+  const saveMixNow = () => {
+    if (mixSaveTimer.current) clearTimeout(mixSaveTimer.current)
+    mixSaveTimer.current = null
+    const mix = pendingMix.current
+    pendingMix.current = null
+    if (mix) useSettings.getState().set({ mix, hasCustomMix: true })
+  }
+  const saveMixRef = useRef(saveMixNow)
+  saveMixRef.current = saveMixNow
+  // Leaving Sounds saves whatever is still waiting.
+  useEffect(() => () => saveMixRef.current(), [])
   const changeDraft = (next: Mix) => {
     setDraft(next)
-    setSettings({ mix: next, hasCustomMix: true })
+    pendingMix.current = next
+    if (mixSaveTimer.current) clearTimeout(mixSaveTimer.current)
+    mixSaveTimer.current = setTimeout(saveMixNow, 400)
     // A saved sound keeps its name on screen while it's being changed.
     if (studio.kind !== 'saved') setSelectedId('custom')
     if (playing) updateMix(next, studioMeta)
@@ -241,6 +258,7 @@ export default function SoundsScreen() {
   }
 
   const closeStudio = () => {
+    saveMixNow()
     setMixOpen(false)
     // Changed and not saved: it carries on as "Your mix".
     if (studio.kind === 'saved' && draft && draft !== studio.sound.mix && currentId === studio.sound.id) {
