@@ -23,6 +23,7 @@ import { GlassSurface } from './Glass'
 import { useBackgroundPause, useHighScore, useReducedMotion, useResponsiveLayout } from './hooks'
 import { EdgeSwipeBack } from './motion'
 import { maybeAskForReview } from './reviewPrompt'
+import { startEvent, type OpenEvent } from '@/ui/log'
 
 export interface GameScreenProps {
   onExit: () => void
@@ -272,6 +273,13 @@ export function GameShell({
     entryOpacity.set(withTiming(1, { duration: 320, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
     entryScale.set(withTiming(1, { duration: 420, easing: EASE_OUT, reduceMotion: ReduceMotion.System }))
   }, [entryOpacity, entryScale, reducedMotion])
+
+  // One event per visit to a game: how long, how it ended, the score.
+  const visit = useRef<OpenEvent | null>(null)
+  visit.current ??= startEvent('game', { game: gameId })
+  const scoreRef = useRef(score)
+  scoreRef.current = score
+  useEffect(() => () => visit.current?.add({ score: scoreRef.current ?? null, difficulty: useSettings.getState().difficulty[gameId] ?? null }).end(), [gameId])
 
   const leaving = useRef(false)
   const stepOut = () => {

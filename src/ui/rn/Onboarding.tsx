@@ -61,6 +61,7 @@ import { SleepAround } from './SleepAround'
 import { PRIVACY_URL } from '@/ui/links'
 import { skipPaywall } from '@/platform'
 import { holdPrompts } from './promptGate'
+import { startEvent } from '@/ui/log'
 import { planRemindersNow } from './reminders'
 import { DescentCurve, PillarIcon, ScienceLink, ScienceSheet } from './ScienceSheet'
 import { SoundGlyph } from './SoundGlyph'
@@ -188,6 +189,8 @@ export function Onboarding() {
     const final = { ...profile, volume: useSound.getState().volume }
     // Play's first prompts wait until the change of screen has settled.
     holdPrompts(2500)
+    // How far they went and what they turned on; never their answers or name.
+    startEvent('onboarding', { page: index, answered, reminders: useSettings.getState().reminders, named: name.trim().length > 0 }).end()
     set({
       onboarded: true,
       onboardedNight: nightKey(new Date()),

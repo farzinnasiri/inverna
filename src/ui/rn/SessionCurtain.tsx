@@ -6,6 +6,7 @@ import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useCoverScreen } from './ambientClock'
 import { maybeAskForReview } from './reviewPrompt'
+import { startEvent } from '@/ui/log'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
@@ -60,6 +61,7 @@ export function SessionCurtain() {
           lastLightsOutNight: nightKey(d),
         })
         useSettings.getState().recordSleep('lightsOut', d)
+        startEvent('wind-down', { minutes: session.minutes, sound: session.presetId }).end()
         finish()
         stopSound(3, { hideNotification: true })
       }

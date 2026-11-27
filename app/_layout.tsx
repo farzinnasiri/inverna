@@ -22,6 +22,10 @@ import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
 import { useUnlock } from '@/ui/state/unlock'
+import { installCrashLogging } from '@/ui/log'
+
+// Uncaught errors become one event each (no sink: nothing leaves the phone).
+installCrashLogging()
 
 // Initialize design tokens synchronously before first render.
 applyTokens({ warmth: 0, force: true })

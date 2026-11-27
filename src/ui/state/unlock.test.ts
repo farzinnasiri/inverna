@@ -5,6 +5,7 @@ const fake = vi.hoisted(() => ({
   buyResult: 'bought' as 'bought' | 'cancelled' | 'pending' | 'failed',
 }))
 
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('@/platform', () => ({
   skipPaywall: false,
   store: {

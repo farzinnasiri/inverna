@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { skipPaywall, store } from '@/platform'
 import type { BuyResult } from '@/platform/store.types'
+import { startEvent } from '@/ui/log'
 
 export type UnlockStatus = 'checking' | 'locked' | 'unlocked'
 
@@ -34,13 +35,16 @@ export const useUnlock = create<UnlockState>()((set, get) => ({
   },
 
   buy: async () => {
+    const ev = startEvent('purchase', { price: get().price })
     const res = await store.buy()
+    ev.add({ result: res }).end(res === 'bought' ? 'ok' : res === 'cancelled' ? 'cancelled' : 'error')
     if (res === 'bought') set({ status: 'unlocked', unreachable: false })
     return res
   },
 
   restore: async () => {
     const owned = await store.restore()
+    startEvent('restore', { owned }).end(owned === null ? 'error' : 'ok')
     if (owned) set({ status: 'unlocked', unreachable: false })
     else set({ unreachable: owned === null })
     return owned
