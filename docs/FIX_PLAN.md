@@ -248,14 +248,14 @@ Each needs logic in the app, not only screens.
 3. **Rating prompt.** Apple's own in-app review sheet, shown rarely and only to
    people who use Inverna regularly, right after something good (a finished
    wind-down or round). Never on a first night, never twice close together.
-4. **Analytics and error reports (PostHog).** Alongside Apple's App Store
-   analytics, so we aren't limited to what Apple shows. EU cloud, anonymous
-   IDs, a short fixed list of events (onboarding steps and drop-off, features
-   used, time of day, country from IP then discarded). Every crash and every
-   caught error is logged too. On by default: a ticked box in onboarding with
-   the privacy policy link, and a switch in Settings. Nothing personal leaves
-   the phone (no name, bedtime or check-in answers). Waits for Farzin to
-   connect PostHog.
+4. **Logging, with nowhere to send it (yet).** Farzin wants Apple's "Data
+   Not Collected" label, so nothing leaves the phone. The code gets one
+   wide-event logger: each meaningful moment (a screen, onboarding steps, a
+   game round, a wind-down, a caught error, a crash) becomes one structured
+   event with its context, through a single `log` module. It has no sink and
+   is switched off, so nothing is stored or sent; a sink (PostHog or another)
+   can be plugged in later behind a setting and an updated privacy page.
+   No analytics switch or onboarding tick until then.
 
 ## Research (for Phase 5)
 
@@ -266,7 +266,6 @@ talk about it again when the plan is done.
 ## Waiting on Farzin
 
 - Contact and support email for the privacy and support pages.
-- PostHog connection (Phase 5, last).
 
 ## Done means
 
