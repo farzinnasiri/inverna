@@ -6,6 +6,19 @@ this file only sets the order. Details get decided in the code, step by step.
 
 Written 2026-11-26 against `main` at `f3a1330`.
 
+## Status (27 November 2026)
+
+Phases 0 to 5 are done on `audit-fixes` (draft PR #1), except:
+
+- **Live Activity** (Phase 5.2): not built; see that step.
+- **Device checks** this plan can't do from a Mac without Xcode: the overnight
+  locked-phone test (Phase 1.3), the battery checks (Phase 3), VoiceOver on
+  the Pause sheet and the sliders (Phase 2.5), the sheet drag (NAT-06), and
+  the Xcode privacy report from a release archive (Phase 2.1).
+- **Not done on purpose:** Cascade's falling tiles on shared values and
+  Pond's on-screen re-smoothing (Phase 3) wait for a measurement on the
+  phone, as the phase says; the web fixes stay parked.
+
 ## Scope
 
 - **iOS only.** Android is out for the coming months, so ISS-02 and the

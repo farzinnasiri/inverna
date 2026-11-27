@@ -19,6 +19,7 @@ here, and a new idea gets a row here first.
 | **Check-in** | Two questions in the evening ("How was your day?", "How do you feel right now?") that decide tonight's games and sound. | `NightCheckIn`, `src/core/tonight.ts` | survey, quiz |
 | **Tonight's pick** | A game or sound suggested for tonight from the check-in or what they like. Shown with a warm tint. | `picks`, `playLayout` | recommendation |
 | **Reminder** | The notification an hour before bedtime. | `src/ui/rn/reminders.ts` | alert, push |
+| **Reminder offer** | The sheet that now and then offers the reminder while it's off. | `ReminderOfferSheet`, `src/core/reminderOffer.ts` | nag, upsell |
 | **Bedtime nudge** | The in-game prompt at bedtime ("It's your bedtime"). | `bedtimeNudge` | reminder (that's the notification) |
 
 ## Games
@@ -60,6 +61,15 @@ here, and a new idea gets a row here first.
 | **Tinted glass** | How something selected, suggested or primary looks. | `GLASS_TINT` | highlight, outline |
 | **Ambient clock** | The one 30 fps timer every moving picture steps on. | `useAmbientTime` | frame loop |
 | **Cover** | A sheet or curtain over the screen; moving pictures behind it rest. | `useCovered` | overlay |
+
+## Buying and records
+
+| Term | What it is | In code | Don't say |
+|---|---|---|---|
+| **Purchase** | The one-time purchase that opens Inverna after onboarding. | `useUnlock`, `src/platform/store.*.ts` | subscription, premium, pro |
+| **Paywall** | The screen that asks for it ("Your evening is set up."). | `Paywall` | upgrade screen |
+| **Rating prompt** | Apple's own rating sheet, asked rarely. | `src/ui/rn/reviewPrompt.ts`, `src/core/reviewPrompt.ts` | review popup |
+| **Wide event** | One structured record of a unit of work, for debugging. Switched off; nothing leaves the phone. | `src/ui/log.ts` | analytics, tracking |
 
 ## The apps
 
