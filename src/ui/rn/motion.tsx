@@ -54,6 +54,9 @@ interface TitleLayer {
 
 const SETTLED_MS = 100_000
 
+/** Big titles grow with Dynamic Type up to here; the box under them grows to match. */
+export const TITLE_MAX_SCALE = 1.5
+
 function Word({
   word,
   index,
@@ -83,7 +86,7 @@ function Word({
   })
   return (
     <Animated.View style={style}>
-      <Text style={textStyle}>{word}</Text>
+      <Text style={textStyle} maxFontSizeMultiplier={TITLE_MAX_SCALE}>{word}</Text>
     </Animated.View>
   )
 }

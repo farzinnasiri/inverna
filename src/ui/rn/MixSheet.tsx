@@ -293,9 +293,17 @@ function Fader({ id, label, sub, value, onChange }: { id: LayerId; label: string
         onLayout={(e) => {
           heightRef.current = e.nativeEvent.layout.height
         }}
+        accessible
         accessibilityRole="adjustable"
         accessibilityLabel={label}
         accessibilityValue={{ min: 0, max: 100, now: Math.round(v * 100) }}
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+        onAccessibilityAction={(e) => {
+          // VoiceOver's swipe up and down: a tenth at a time.
+          const next = Math.min(1, Math.max(0, Math.round((v + (e.nativeEvent.actionName === 'increment' ? 0.1 : -0.1)) * 10) / 10))
+          setLocal(next)
+          onChangeRef.current(next)
+        }}
         style={styles.faderTrack}
       >
         <View pointerEvents="none" style={[styles.faderFill, { height: `${Math.round(v * 100)}%`, backgroundColor: tint, opacity: on ? 0.5 : 0 }]} />
@@ -672,7 +680,7 @@ export function MixSheet({
             value={name}
             onChangeText={setName}
             placeholder={copy.namePlaceholder}
-            placeholderTextColor={color.ink4}
+            placeholderTextColor={color.ink3}
             autoCapitalize="sentences"
             autoFocus={!saved}
             maxLength={24}
@@ -696,7 +704,7 @@ export function MixSheet({
             value={hint}
             onChangeText={setHint}
             placeholder={copy.hintPlaceholder}
-            placeholderTextColor={color.ink4}
+            placeholderTextColor={color.ink3}
             autoCapitalize="sentences"
             maxLength={34}
             returnKeyType="done"

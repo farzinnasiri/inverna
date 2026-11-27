@@ -248,8 +248,10 @@ export function PillSlider({
   const hapticsRef = useRef(hapticsOn)
   hapticsRef.current = hapticsOn
   const lastEmitMsRef = useRef(0)
-  /** When the finger last moved the slider; props arriving soon after are our own echoes. */
+  /** When the finger last moved the slider. */
   const lastTouchMsRef = useRef(0)
+  /** The last value sent out: when it comes back as `value`, it isn't news. */
+  const lastEmittedRef = useRef<number | null>(null)
   const lastHapticTickRef = useRef(Math.round(value * 10))
 
   const brightnessSV = useSharedValue(Math.min(1, Math.max(0, value)))
@@ -261,7 +263,8 @@ export function PillSlider({
   // incoming value is a delayed echo of an earlier emit: applying it would pull
   // the thumb back and then forward again.
   useEffect(() => {
-    if (draggingSV.get() !== 0 || Date.now() - lastTouchMsRef.current < 700) return
+    // Our own value coming back is skipped; anything else is an outside change (ISS-19).
+    if (draggingSV.get() !== 0 || value === lastEmittedRef.current) return
     const nextB = Math.min(1, Math.max(0, value))
     brightnessSV.set(disabled ? withTiming(nextB, { duration: 600, reduceMotion: ReduceMotion.System }) : nextB)
     setLiveBrightness(nextB)
@@ -281,7 +284,17 @@ export function PillSlider({
     if (!force && now - lastEmitMsRef.current < 90) return
     lastEmitMsRef.current = now
     setLiveBrightness(clampedB)
-    onChangeRef.current(Math.round(clampedB * 100) / 100)
+    const emitted = Math.round(clampedB * 100) / 100
+    lastEmittedRef.current = emitted
+    onChangeRef.current(emitted)
+  }
+
+  /** VoiceOver's swipe up and down: a tenth at a time. */
+  const stepBy = (delta: number) => {
+    if (disabled) return
+    const nextB = Math.min(1, Math.max(0, Math.round((brightnessSV.get() + delta) * 10) / 10))
+    brightnessSV.set(nextB)
+    emitChange(nextB, true)
   }
 
   const panGesture = useMemo(
@@ -355,9 +368,13 @@ export function PillSlider({
           onLayout={(e: LayoutChangeEvent) => {
             trackWidthSV.set(Math.max(1, e.nativeEvent.layout.width))
           }}
+          accessible
           accessibilityRole="adjustable"
           accessibilityState={{ disabled }}
-          accessibilityLabel={`${label ?? title}, ${valueLabel(liveBrightness)}`}
+          accessibilityLabel={label ?? title}
+          accessibilityValue={{ text: valueLabel(liveBrightness) }}
+          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+          onAccessibilityAction={(e) => stepBy(e.nativeEvent.actionName === 'increment' ? 0.1 : -0.1)}
           style={[
             styles.lightSlider,
             {
@@ -430,10 +447,14 @@ export function Slider({
   const widthSV = useSharedValue(240)
   const draggingSV = useSharedValue(0)
 
-  // Outside changes only: right after a drag the incoming value is our own late echo.
+  const lastEmittedRef = useRef<number | null>(null)
+  const [liveVal, setLiveVal] = useState(() => Math.min(1, Math.max(0, value)))
+
+  // Outside changes only: our own value coming back is skipped (ISS-19).
   useEffect(() => {
-    if (draggingSV.get() !== 0 || Date.now() - lastTouchMsRef.current < 700) return
+    if (draggingSV.get() !== 0 || value === lastEmittedRef.current) return
     valSV.set(Math.min(1, Math.max(0, value)))
+    setLiveVal(Math.min(1, Math.max(0, value)))
   }, [value, valSV, draggingSV])
 
   const emitVal = (next: number, force: boolean) => {
@@ -441,7 +462,17 @@ export function Slider({
     lastTouchMsRef.current = now
     if (!force && now - lastEmitMsRef.current < 60) return
     lastEmitMsRef.current = now
-    onChangeRef.current(Math.round(Math.min(1, Math.max(0, next)) * 100) / 100)
+    const emitted = Math.round(Math.min(1, Math.max(0, next)) * 100) / 100
+    lastEmittedRef.current = emitted
+    setLiveVal(emitted)
+    onChangeRef.current(emitted)
+  }
+
+  /** VoiceOver's swipe up and down: a tenth at a time. */
+  const stepBy = (delta: number) => {
+    const next = Math.min(1, Math.max(0, Math.round((valSV.get() + delta) * 10) / 10))
+    valSV.set(next)
+    emitVal(next, true)
   }
 
   const pan = useMemo(
@@ -499,8 +530,12 @@ export function Slider({
         onLayout={(e) => {
           widthSV.set(Math.max(1, e.nativeEvent.layout.width))
         }}
+        accessible
         accessibilityRole="adjustable"
         accessibilityLabel={label}
+        accessibilityValue={{ min: 0, max: 100, now: Math.round(liveVal * 100) }}
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+        onAccessibilityAction={(e) => stepBy(e.nativeEvent.actionName === 'increment' ? 0.1 : -0.1)}
         style={styles.sliderWrap}
       >
         <View pointerEvents="none" style={[styles.sliderTrack, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>

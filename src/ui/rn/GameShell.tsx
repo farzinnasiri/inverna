@@ -696,6 +696,7 @@ export function GameActionButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled: Boolean(disabled), selected: Boolean(active) }}
       style={({ pressed }) => [
         {
           opacity: disabled ? 0.35 : pressed ? 0.85 : 1,

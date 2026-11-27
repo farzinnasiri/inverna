@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { useEffect, useState, type ReactNode } from 'react'
+import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, useWindowDimensions, type StyleProp, type ViewStyle, StyleSheet, Text, TextInput, View } from 'react-native'
 import Animated, {
   ReduceMotion,
   useAnimatedStyle,
@@ -55,7 +55,7 @@ import { Button, FRAME_MAX_WIDTH, PillSlider, Slider, Toggle } from './controls'
 import { GlassLens, GlassSurface } from './Glass'
 import { useReducedMotion, useResponsiveLayout } from './hooks'
 import { InvernaMark } from './InvernaMark'
-import { AnswerLayer, EASE_OUT, EdgeSwipeBack, HandoffTitle, itemDelay, Rise } from './motion'
+import { AnswerLayer, EASE_OUT, EdgeSwipeBack, HandoffTitle, itemDelay, Rise, TITLE_MAX_SCALE } from './motion'
 import { MindTangle } from './MindTangle'
 import { SleepAround } from './SleepAround'
 import { PRIVACY_URL } from '@/ui/links'
@@ -118,6 +118,7 @@ const TITLE_BOX = 76
 export function Onboarding() {
   const { color } = useTokenColors()
   const { height, insets, sideMargin } = useResponsiveLayout()
+  const { fontScale } = useWindowDimensions()
   const reduced = useReducedMotion()
 
   const schedule = useSettings((s) => s.schedule)
@@ -527,7 +528,7 @@ export function Onboarding() {
             text={copy[page].title}
             dir={dir}
             reduced={reduced}
-            style={[styles.titleBox, { marginTop: titleTop }]}
+            style={[styles.titleBox, { marginTop: titleTop, height: TITLE_BOX * Math.min(TITLE_MAX_SCALE, Math.max(1, fontScale)) }]}
             textStyle={[styles.title, { color: color.ink }]}
           />
 
@@ -539,9 +540,12 @@ export function Onboarding() {
                 key={pg}
                 leaving={pg !== page}
                 onGone={() => setLeaving((l) => (l === pg ? null : l))}
-                style={[styles.answerLayer, pg === 'intro' ? styles.answerCentred : null]}
+                style={styles.answerLayer}
               >
-                {renderAnswers(pg)}
+                {/* Scrolls when large text or a short window (iPad Split View) needs more room. */}
+                <FitScroll contentContainerStyle={[styles.answerScroll, pg === 'intro' ? styles.answerCentred : null]}>
+                  {renderAnswers(pg)}
+                </FitScroll>
               </AnswerLayer>
             ))}
           </View>
@@ -561,6 +565,28 @@ export function Onboarding() {
       </EdgeSwipeBack>
       <ScienceSheet open={scienceOpen} onClose={() => setScienceOpen(false)} />
     </View>
+  )
+}
+
+/**
+ * Scrolls only when its content doesn't fit, so the bedtime wheel and the
+ * sliders keep their own gestures on a normal screen.
+ */
+function FitScroll({ contentContainerStyle, children }: { contentContainerStyle: StyleProp<ViewStyle>; children: ReactNode }) {
+  const [box, setBox] = useState(0)
+  const [content, setContent] = useState(0)
+  return (
+    <ScrollView
+      bounces={false}
+      scrollEnabled={content > box + 1}
+      showsVerticalScrollIndicator={content > box + 1}
+      keyboardShouldPersistTaps="handled"
+      onLayout={(e) => setBox(e.nativeEvent.layout.height)}
+      onContentSizeChange={(_, h) => setContent(h)}
+      contentContainerStyle={contentContainerStyle}
+    >
+      {children}
+    </ScrollView>
   )
 }
 
@@ -698,7 +724,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
+  },
+  answerScroll: {
+    flexGrow: 1,
     paddingTop: 28,
+    paddingBottom: 12,
     justifyContent: 'flex-start',
   },
   answerCentred: {
