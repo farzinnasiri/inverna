@@ -147,12 +147,14 @@ export default function HomeScreen() {
   // Near bedtime, ask the two check-in questions once a night (opening Play
   // in the 90 minutes before wind down, or during it).
   const nearBedtime = nearBedtimeFor(evening, now)
+  // Not over another sheet (Wind down, the Composer, the reminder offer: ISS-16.4).
+  const otherSheetOpen = useNav((s) => s.windDownOpen || s.mixOpen || s.reminderOffer)
   useEffect(() => {
-    if (!onboarded || !nearBedtime || checkInOpen) return
+    if (!onboarded || !nearBedtime || checkInOpen || otherSheetOpen) return
     if (checkInAskedNight === nightKey(now)) return
     // Not on top of a permission dialog or the end of onboarding (NAT-05).
     return openWhenQuiet(() => setCheckIn('tonight'), 600)
-  }, [onboarded, nearBedtime, checkInAskedNight, now, checkInOpen, setCheckIn])
+  }, [onboarded, nearBedtime, checkInAskedNight, now, checkInOpen, otherSheetOpen, setCheckIn])
 
   // Now and then, while reminders are off, offer one (core/reminderOffer).
   // Tonight's check-in comes first, and nothing else may be open.
