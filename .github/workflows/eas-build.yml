@@ -200,15 +200,16 @@ jobs:
             npx expo prebuild --platform "$EAS_PLATFORM" --no-install
           fi
 
-      - name: Restore pods cache
+      - name: Restore CocoaPods download cache
+        # Only what CocoaPods downloads, never ios/Pods itself: a reused Pods
+        # folder left react-native-audio-api's prebuilt Ogg/Opus libraries
+        # unlinked (run 45966982501), and pod install takes about a minute anyway.
         if: inputs.platform == 'ios' && steps.plan.outputs.cache_disabled != 'true'
         uses: actions/cache@v4
         with:
-          path: ios/Pods
-          # Podfile.lock doesn't exist yet when this runs (pod install makes it),
-          # so it hashed to nothing and every build missed: key on what decides the pods.
-          key: pods-${{ steps.plan.outputs.cache_key }}-${{ hashFiles('pnpm-lock.yaml', 'app.config.ts', 'patches/**') }}
-          restore-keys: pods-${{ steps.plan.outputs.cache_key }}-
+          path: ~/Library/Caches/CocoaPods
+          key: cocoapods-${{ hashFiles('pnpm-lock.yaml', 'patches/**') }}
+          restore-keys: cocoapods-
 
       - name: Set up ccache
         if: inputs.platform == 'ios'
