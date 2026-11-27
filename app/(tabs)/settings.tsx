@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
-import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
+import Animated, { interpolate, useAnimatedStyle } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import { Check, ChevronDown, ChevronRight, ChevronUp, ExternalLink, Flame, Lock, LockOpen, Moon, Snowflake, Sun, Trash2 } from 'lucide-react-native'
 import { canUseManualLight } from '@/core/access'
@@ -16,6 +16,7 @@ import { GLASS_TINT, GlassSurface } from '@/ui/rn/Glass'
 import { UPGRADE_INK } from '@/ui/rn/Paywall'
 import { scrollEndClearance, useResponsiveLayout } from '@/ui/rn/hooks'
 import { SleepAround } from '@/ui/rn/SleepAround'
+import { IslandBreath, useIslandBreath } from '@/ui/rn/IslandBreath'
 import { useNightFilterMetrics } from '@/ui/rn/NightFilterOverlay'
 import { ScienceSheet } from '@/ui/rn/ScienceSheet'
 import { MakerPortrait } from '@/ui/rn/portrait/MakerPortrait'
@@ -79,19 +80,18 @@ export default function SettingsScreen() {
     router.replace('/onboarding')
   }
 
+  // Pull past the top to breathe in, hold, let go (IslandBreath).
+  const pageTop = insets.top + (isCompact ? 12 : 20)
+  const breath = useIslandBreath(pageTop)
   // The status-bar scrim fades in over the first 24pt of scroll.
-  const scrollY = useSharedValue(0)
-  const onScroll = useAnimatedScrollHandler((e) => {
-    scrollY.value = e.contentOffset.y
-  })
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, 24], [0, 1], 'clamp'),
+    opacity: interpolate(breath.scrollY.get(), [0, 24], [0, 1], 'clamp'),
   }))
 
   return (
     <View style={styles.root}>
       <Animated.ScrollView
-        onScroll={onScroll}
+        onScroll={breath.onScroll}
         scrollEventThrottle={16}
         style={styles.scroll}
         // Insets are counted once, here, so the last row clears the floating tab bar.
@@ -101,7 +101,7 @@ export default function SettingsScreen() {
           styles.content,
           {
             paddingHorizontal: sideMargin,
-            paddingTop: insets.top + (isCompact ? 12 : 20),
+            paddingTop: pageTop,
             paddingBottom: scrollEndClearance(insets.bottom),
           },
         ]}
@@ -346,6 +346,7 @@ export default function SettingsScreen() {
           </Pressable>
         </View>
       </Animated.ScrollView>
+      <IslandBreath breath={breath} />
 
       {/* Content scrolling up fades out under the status bar instead of running behind the time (NAT-07).
           Only once something has scrolled there: at rest it read as a black band over the scene. */}

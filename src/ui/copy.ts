@@ -22,6 +22,8 @@ export const breath = {
   hold: 'Hold',
   letGo: 'Let go',
   out: 'Breathe out',
+  /** Play's invitation, under the island, until they've tried it. */
+  invite: 'Pull down to breathe',
 }
 
 export const play = {

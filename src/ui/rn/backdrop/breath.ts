@@ -28,9 +28,13 @@ export interface BreathSignal {
   outId: number
   /** The out-breath's strength, 0..1: a full held breath is 1. */
   strength: number
+  /** The hold's heartbeat, 0..1, once per count. */
+  beat: number
+  /** Bumped once per invitation (a pulse rising into the island). */
+  beckonId: number
 }
 
-export const breathSignal = makeMutable<BreathSignal>({ x: 0, y: 0, charge: 0, outId: 0, strength: 0 })
+export const breathSignal = makeMutable<BreathSignal>({ x: 0, y: 0, charge: 0, outId: 0, strength: 0, beat: 0, beckonId: 0 })
 
 /** True from the first pull until the wave has crossed the screen. */
 export const breathFrames = makeMutable(false)

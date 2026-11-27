@@ -106,6 +106,10 @@ export interface SettingsState {
   lastLightsOut: string | null
   /** nightKey() of the night that lastLightsOut belongs to. */
   lastLightsOutNight: string | null
+  /** They've let out a breath from the island at least once (the invitation stops). */
+  breathTried: boolean
+  /** How many times Play has invited them to try the breath. */
+  breathInvites: number
   /** Bedtime changed for one night only (tapping the time on Play). Expires at 06:00. */
   tonightBedtime: BedtimeOverride | null
   /** One moment close to falling asleep per recent night (see core/sleepRange). */
@@ -188,6 +192,8 @@ const SAVED: { [K in Exclude<keyof SettingsState, 'set' | 'setSchedule' | 'recor
   bedtimeNudgeNight: isNullable(isString),
   lastLightsOut: isNullable(isString),
   lastLightsOutNight: isNullable(isString),
+  breathTried: isBoolean,
+  breathInvites: isNumber,
   tonightBedtime: isNullable(isBedtimeOverride),
   sleepSignals: isArrayOf(isSleepSignal),
   rangeLearnedNights: isNullable(isNumber),
@@ -233,6 +239,8 @@ export const useSettings = create<SettingsState>()(
       bedtimeNudgeNight: null,
       lastLightsOut: null,
       lastLightsOutNight: null,
+      breathTried: false,
+      breathInvites: 0,
       tonightBedtime: null,
       sleepSignals: [],
       rangeLearnedNights: null,

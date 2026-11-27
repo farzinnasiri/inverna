@@ -30,6 +30,8 @@ import {
   stringDisplacement,
   stringEnds,
   stringEnergy,
+  beckonAmp,
+  echoAmp,
   waveAmp,
   waveProgress,
   type Sim,
@@ -439,7 +441,9 @@ export function fieldUniforms(s: Sim, fieldW: number, fieldH: number, edge: numb
     ink,
     chl: [ch[0], ch[1], ch[2], ch[3]],
     chlMix: ch[4],
-    breath: [s.breathX / s.W, s.breathY / s.W, s.charge, 0],
+    breath: [s.breathX / s.W, s.breathY / s.W, s.charge, Math.max(s.beat, s.glint)],
     wave: [Math.max(0, s.waveR) / s.W, waveAmp(s), Math.max(0, waveProgress(s)), 0],
+    wave2: [Math.max(0, s.echoR) / s.W, echoAmp(s), 0, 0],
+    beckon: [Math.max(0, s.beckonR) / s.W, beckonAmp(s), 0, 0],
   }
 }

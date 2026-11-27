@@ -8,6 +8,8 @@ import {
   SCENE_PARTICLES,
   TRANSITION_SECONDS,
   WAVE_SECONDS,
+  BECKON_SECONDS,
+  beckon,
   breatheIn,
   breatheOut,
   chladniAt,
@@ -264,5 +266,39 @@ describe('the breath from the island', () => {
     const mid = Math.floor(firstSounded.length / 2)
     expect(firstSounded[mid]!).toBeLessThan(firstSounded[0]!)
     expect(firstSounded[mid]!).toBeLessThan(firstSounded[firstSounded.length - 1]!)
+  })
+
+  it('lets the last wave carry on when another breath is let out', () => {
+    const s = createSim(W, H, SCENE.delta, 9)
+    breatheIn(s, OX, OY, 0)
+    breatheOut(s, 1)
+    run(s, 0.8)
+    const firstR = s.waveR
+    breatheOut(s, 0.5)
+    run(s, 0.2)
+    // The new wave starts at the island; the first is further on, still going.
+    expect(s.waveR).toBeLessThan(firstR)
+    expect(s.echoR).toBeGreaterThan(firstR)
+    assertHealthy(s)
+    run(s, WAVE_SECONDS)
+    expect(s.echoR).toBe(-1)
+    expect(s.waveR).toBe(-1)
+  })
+
+  it('invites with a pulse that rises into the island, which then brightens', () => {
+    const s = createSim(W, H, SCENE.rain, 4)
+    breatheIn(s, OX, OY, 0)
+    beckon(s)
+    run(s, 0.2)
+    const early = s.beckonR
+    run(s, BECKON_SECONDS * 0.6)
+    expect(s.beckonR).toBeLessThan(early)
+    expect(s.beckonR).toBeGreaterThan(0)
+    expect(s.glint).toBe(0)
+    run(s, BECKON_SECONDS * 0.4)
+    expect(s.beckonR).toBe(-1)
+    expect(s.glint).toBeGreaterThan(0.5)
+    run(s, 3)
+    expect(s.glint).toBeLessThan(0.01)
   })
 })

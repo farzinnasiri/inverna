@@ -39,6 +39,7 @@ import { makeMutable, useAnimatedReaction, useDerivedValue, useFrameCallback, us
 import { scheduleOnRN } from 'react-native-worklets'
 import { sceneIndex, type BackdropId } from '@/core/backdrop/scenes'
 import {
+  beckon,
   breatheIn,
   breatheOut,
   createSim,
@@ -98,8 +99,9 @@ interface RenderState {
   sim: Sim
   gfx: Gfx | null
   acc: number
-  /** The last out-breath handed to the sim. */
+  /** The last out-breath and invitation handed to the sim. */
   outId: number
+  beckonId: number
 }
 
 /** Shared by every BackdropCanvas instance (one per tab), so tab switches reuse it. */
@@ -143,10 +145,14 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
   const advance = (rs: RenderState, dt: number) => {
     'worklet'
     const b = breathSignal.get()
-    breatheIn(rs.sim, b.x, b.y, b.charge)
+    breatheIn(rs.sim, b.x, b.y, b.charge, b.beat)
     if (b.outId !== rs.outId) {
       rs.outId = b.outId
       breatheOut(rs.sim, b.strength)
+    }
+    if (b.beckonId !== rs.beckonId) {
+      rs.beckonId = b.beckonId
+      beckon(rs.sim)
     }
     simStep(rs.sim, dt, env.get(), target.get(), cue.get(), blendSV.get())
     tick.set(tick.get() + 1)
@@ -183,7 +189,7 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
         const sim = createSim(cur.d.W, cur.d.H, cur.scene, seed)
         simSnap(sim, cur.scene)
         prewarm(sim, FIRST_PREWARM)
-        state.set({ sim, gfx: rs?.gfx ?? null, acc: 0, outId: breathSignal.get().outId })
+        state.set({ sim, gfx: rs?.gfx ?? null, acc: 0, outId: breathSignal.get().outId, beckonId: breathSignal.get().beckonId })
       } else if (cur.scene !== rs.sim.sceneB) {
         simSnap(rs.sim, cur.scene)
         prewarm(rs.sim, 3)
@@ -203,7 +209,7 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
     if (!rs || rs.sim.W !== d.W || rs.sim.H !== d.H) {
       const sim = createSim(d.W, d.H, target.get(), seed)
       prewarm(sim, FIRST_PREWARM)
-      rs = { sim, gfx: rs?.gfx ?? null, acc: 0, outId: breathSignal.get().outId }
+      rs = { sim, gfx: rs?.gfx ?? null, acc: 0, outId: breathSignal.get().outId, beckonId: breathSignal.get().beckonId }
       state.set(rs)
       tick.set(tick.get() + 1)
       return

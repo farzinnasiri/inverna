@@ -51,7 +51,7 @@ here, and a new idea gets a row here first.
 | **Sleep timer** | When the sound fades out. | `sleepTimer` | timer alone |
 | **Orb** | The glass sphere on Sounds that plays and shows the sound. | `SoundField` | dial |
 | **Ribbon** | The strands of light on Play that move with the sound. | `SoundRibbon` | waveform |
-| **Breath** | Pull Play down past its top to breathe in, hold for a count of four, let go: a wave of light leaves the island and crosses the scene and the tiles, with a rolled chord in the key that's playing. | `IslandBreath`, `breatheIn` / `breatheOut` (`src/core/backdrop/sim.ts`), cue `exhale` | pull to refresh, easter egg |
+| **Breath** | Pull any tab down past its top to breathe in, hold for a count of four, let go: a wave of light leaves the island and crosses the scene (and Play's tiles), with a rolled chord in the key that's playing. Until they've tried it, Play now and then **invites** them: a pulse of light rises into the island. | `IslandBreath`, `useBreathInvite`, `breatheIn` / `breatheOut` / `beckon` (`src/core/backdrop/sim.ts`), cue `exhale` | pull to refresh, easter egg |
 
 ## Screen and look
 

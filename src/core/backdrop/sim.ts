@@ -33,6 +33,8 @@ export const ORIGIN_Y = 0.3
 export const WAVE_SECONDS = 2.8
 /** The wave's band of light, in width units: soft and wide, not a line. */
 export const WAVE_WIDTH = 0.16
+/** How long the invitation takes to rise from the bottom of the screen into the island. */
+export const BECKON_SECONDS = 1.7
 /** Seconds without a motif cue before scenes fall back to their own rhythm. */
 const CUE_SILENCE = 12
 
@@ -170,6 +172,17 @@ export interface Sim {
   waveAt: number
   waveStrength: number
   waveR: number
+  /** The wave before this one, still crossing when another breath was let out. */
+  echoAt: number
+  echoStrength: number
+  echoR: number
+  /** The invitation: a pulse of light rising up the screen into the island (pt; -1 when none). */
+  beckonAt: number
+  beckonR: number
+  /** The hold's heartbeat on the island's light, 0..1, once per count. */
+  beat: number
+  /** The island's light brightening as the invitation arrives, 0..1, fading. */
+  glint: number
 }
 
 /* Worklets below are ordered so each is defined after everything it calls:
@@ -291,11 +304,17 @@ export function waveReach(W: number, H: number, x: number, y: number): number {
   return Math.sqrt(dx * dx + dy * dy) + W * WAVE_WIDTH * 2
 }
 
+/** 0..1 through a wave's crossing that left at `at`, or -1 when it isn't out. */
+function crossing(s: Sim, at: number): number {
+  'worklet'
+  const u = (s.clock - at) / WAVE_SECONDS
+  return u >= 0 && u < 1 ? u : -1
+}
+
 /** 0..1 through the out-breath's crossing, or -1 when no wave is out. */
 export function waveProgress(s: Sim): number {
   'worklet'
-  const u = (s.clock - s.waveAt) / WAVE_SECONDS
-  return u >= 0 && u < 1 ? u : -1
+  return crossing(s, s.waveAt)
 }
 
 /** The wave's strength now: full as it leaves the island, fading as it spreads. */
@@ -306,24 +325,60 @@ export function waveAmp(s: Sim): number {
   return s.waveStrength * waveFade(u)
 }
 
-/** How lit a point is by the passing wave, 0..1: a soft band around its front. */
-export function waveBand(s: Sim, x: number, y: number): number {
+/** The earlier wave's strength, while it's still crossing. */
+export function echoAmp(s: Sim): number {
   'worklet'
-  if (s.waveR < 0) return 0
-  const amp = waveAmp(s)
-  if (amp <= 0) return 0
+  const u = crossing(s, s.echoAt)
+  if (u < 0) return 0
+  return s.echoStrength * waveFade(u)
+}
+
+/** The invitation's strength: it swells as it rises and is gone as it reaches the island. */
+export function beckonAmp(s: Sim): number {
+  'worklet'
+  const u = (s.clock - s.beckonAt) / BECKON_SECONDS
+  if (u < 0 || u >= 1) return 0
+  return 0.8 * Math.pow(Math.sin(Math.PI * u), 0.7)
+}
+
+function ringBand(s: Sim, x: number, y: number, R: number, amp: number, width: number): number {
+  'worklet'
+  if (R < 0 || amp <= 0) return 0
   const dx = x - s.breathX
   const dy = y - s.breathY
-  const k = (Math.sqrt(dx * dx + dy * dy) - s.waveR) / (s.W * WAVE_WIDTH)
+  const k = (Math.sqrt(dx * dx + dy * dy) - R) / (s.W * width)
   return amp * Math.exp(-k * k)
 }
 
-/** The in-breath: where it gathers (pt, just under the island) and how full it is, 0..1. */
-export function breatheIn(s: Sim, x: number, y: number, charge: number): void {
+/** How lit a point is by the light crossing the screen, 0..1: the waves out, and the invitation in. */
+export function waveBand(s: Sim, x: number, y: number): number {
+  'worklet'
+  if (s.waveR < 0 && s.echoR < 0 && s.beckonR < 0) return 0
+  return Math.min(
+    1,
+    ringBand(s, x, y, s.waveR, waveAmp(s), WAVE_WIDTH) +
+      ringBand(s, x, y, s.echoR, echoAmp(s), WAVE_WIDTH) +
+      0.7 * ringBand(s, x, y, s.beckonR, beckonAmp(s), WAVE_WIDTH * 0.6),
+  )
+}
+
+/**
+ * The in-breath: where it gathers (pt, just under the island), how full it is
+ * (0..1), and the hold's heartbeat (0..1, once per count).
+ */
+export function breatheIn(s: Sim, x: number, y: number, charge: number, beat = 0): void {
   'worklet'
   s.breathX = x
   s.breathY = y
   s.chargeTarget = Math.min(1, Math.max(0, charge))
+  s.beat = Math.min(1, Math.max(0, beat))
+}
+
+/** The invitation to breathe: a pulse of light rises up the screen into the island. */
+export function beckon(s: Sim): void {
+  'worklet'
+  s.beckonAt = s.clock
+  s.beckonR = waveReach(s.W, s.H, s.breathX, s.breathY)
 }
 
 function rainWobble(seed: number, y: number): number {
@@ -708,6 +763,13 @@ export function createSim(W: number, H: number, scene: number, seed: number): Si
     waveAt: -NEVER,
     waveStrength: 0,
     waveR: -1,
+    echoAt: -NEVER,
+    echoStrength: 0,
+    echoR: -1,
+    beckonAt: -NEVER,
+    beckonR: -1,
+    beat: 0,
+    glint: 0,
   }
   for (let i = 0; i < N; i++) {
     s.seed[i] = rand(s)
@@ -782,6 +844,11 @@ function pluck(s: Sim, k: number, amp: number, decay: number): void {
 /** The out-breath: a wave of light leaves the island. `strength` 0..1 (a full held breath is 1). */
 export function breatheOut(s: Sim, strength: number): void {
   'worklet'
+  // Another breath while the last wave is still out: that one carries on.
+  if (waveProgress(s) >= 0) {
+    s.echoAt = s.waveAt
+    s.echoStrength = s.waveStrength
+  }
   s.chargeTarget = 0
   s.waveAt = s.clock
   s.waveStrength = Math.min(1, Math.max(0, strength))
@@ -797,13 +864,25 @@ function stepBreath(s: Sim, dtReal: number): void {
   'worklet'
   s.charge = approach(s.charge, s.chargeTarget, dtReal, s.chargeTarget > s.charge ? 0.35 : 0.6)
   if (s.charge < 0.002 && s.chargeTarget === 0) s.charge = 0
+  const reach = waveReach(s.W, s.H, s.breathX, s.breathY)
+  // The invitation rises slowly, then is drawn quickly into the island, which brightens.
+  const ub = (s.clock - s.beckonAt) / BECKON_SECONDS
+  if (ub >= 0 && ub < 1) {
+    s.beckonR = reach * (1 - Math.pow(ub, 1.8))
+  } else if (s.beckonR >= 0) {
+    s.beckonR = -1
+    s.glint = 1
+  }
+  s.glint = s.glint > 0.002 ? s.glint * Math.exp(-dtReal * 2.2) : 0
+  const ue = crossing(s, s.echoAt)
+  s.echoR = ue < 0 ? -1 : reach * waveFront(ue)
   const u = waveProgress(s)
   if (u < 0) {
     s.waveR = -1
     return
   }
   const prevR = s.waveR
-  s.waveR = waveReach(s.W, s.H, s.breathX, s.breathY) * waveFront(u)
+  s.waveR = reach * waveFront(u)
   if (!sceneActive(s, S_NOCTURNE)) return
   const amp = waveAmp(s)
   for (let k = 0; k < STRING_COUNT; k++) {
@@ -1108,7 +1187,7 @@ function convert(s: Sim, i: number, to: number): void {
  */
 function breathNudge(s: Sim, i: number, dt: number): void {
   'worklet'
-  if (s.charge <= 0 && s.waveR < 0) return
+  if (s.charge <= 0 && s.waveR < 0 && s.echoR < 0) return
   const dx = s.x[i]! - s.breathX
   const dy = s.y[i]! - s.breathY
   const d = Math.sqrt(dx * dx + dy * dy) + 1e-3
@@ -1119,7 +1198,9 @@ function breathNudge(s: Sim, i: number, dt: number): void {
     s.x[i] = s.x[i]! - ux * v * dt
     s.y[i] = s.y[i]! - uy * v * dt
   }
-  const b = waveBand(s, s.x[i]!, s.y[i]!)
+  // Only the waves going out push; the invitation coming in only lights.
+  const b =
+    ringBand(s, s.x[i]!, s.y[i]!, s.waveR, waveAmp(s), WAVE_WIDTH) + ringBand(s, s.x[i]!, s.y[i]!, s.echoR, echoAmp(s), WAVE_WIDTH)
   if (b > 0.001) {
     const kick = b * 640 * dt
     s.vx[i] = s.vx[i]! + ux * kick
@@ -1389,7 +1470,7 @@ export function particleLook(s: Sim, i: number, out: number[], o: number): boole
   const dieAt = s.dieAt[i]!
   if (dieAt < NEVER) a *= Math.min(1, Math.max(0, (dieAt - s.age[i]!) / 0.8))
   if (s.prog < 1 && own === s.sceneB && m >= 1) a *= coverAt(s, s.x[i]!, s.y[i]!, (s.seed[i]! - 0.5) * 0.2)
-  if (s.charge > 0 || s.waveR >= 0) {
+  if (s.charge > 0 || s.waveR >= 0 || s.echoR >= 0 || s.beckonR >= 0) {
     // Lit by the wave as it passes, and a little by the in-breath's light near the island.
     const b = waveBand(s, s.x[i]!, s.y[i]!)
     const dx = s.x[i]! - s.breathX

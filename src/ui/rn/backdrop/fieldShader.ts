@@ -32,10 +32,14 @@ uniform float4 strings[4];
 uniform float4 ink[4];
 uniform float4 chl;
 uniform float chlMix;
-// x, y (width units), charge 0..1
+// x, y (width units), charge 0..1, flare 0..1 (the hold's heartbeat, the invitation arriving)
 uniform float4 breath;
 // front radius (width units), strength, progress 0..1
 uniform float4 wave;
+// the wave before it, still crossing: radius, strength
+uniform float4 wave2;
+// the invitation rising into the island: radius, strength
+uniform float4 beckon;
 
 const float PI = 3.14159265;
 
@@ -330,14 +334,42 @@ float4 glow(float4 base, float3 c, float a) {
   return float4(base.rgb + c * k, min(1.0, base.a + k));
 }
 
+// One ring of light around the island: a soft band, a bright rim, a little ragged.
+float ring(float2 p, float d, float R, float bandW, float rimW) {
+  float dw = d + (fbm(p * 3.2 + float2(R * 1.5, t * 0.1)) - 0.5) * 0.08;
+  float kb = (dw - R) / bandW;
+  float kr = (dw - R) / rimW;
+  return 0.42 * exp(-kb * kb) + 0.55 * exp(-kr * kr);
+}
+
 float4 breathLight(float2 p, float3 warm, float3 pale, float4 col) {
-  float d = length(p - breath.xy);
+  float2 q = p - breath.xy;
+  float d = length(q);
   float ch = breath.z;
-  if (ch > 0.001) {
-    float core = exp(-d * d / (0.0012 + 0.005 * ch));
-    float halo = exp(-d * d / (0.015 + 0.08 * ch));
-    float breathe = 0.93 + 0.07 * sin(t * 1.7 + d * 24.0);
-    col = glow(col, mix(warm, float3(1.0), 0.4), (0.6 * core + 0.2 * halo) * ch * breathe);
+  float fl = breath.w;
+  if (ch > 0.001 || fl > 0.001) {
+    // Warm and small at first; fuller, whiter and shining as the breath fills.
+    float e = max(ch, 0.45 * fl);
+    float beat = 1.0 + 0.6 * fl;
+    float core = exp(-d * d / (0.0015 + 0.007 * e));
+    float halo = exp(-d * d / (0.02 + 0.12 * e));
+    float3 c = mix(mix(warm, pale, e), float3(1.0), 0.25 + 0.5 * e * e);
+    float a = (1.0 * core + 0.42 * halo) * e * beat;
+    // Slow rays, and a thin streak across like light on a lens, once it's well filled.
+    float shine = smoothstep(0.25, 1.0, e);
+    float ang = atan(q.y, q.x);
+    float rays = pow(0.5 + 0.5 * cos(ang * 6.0 + t * 0.35), 14.0) * exp(-d / (0.06 + 0.22 * e));
+    float streak = exp(-q.y * q.y / 0.00006) * exp(-abs(q.x) / (0.12 + 0.3 * e));
+    a += shine * beat * (0.35 * rays + 0.5 * streak);
+    col = glow(col, c, a);
+  }
+  // The invitation: a fainter ring drawn up the screen into the island.
+  if (beckon.y > 0.001) {
+    col = glow(col, mix(mix(warm, float3(1.0), 0.3), pale, 0.4), ring(p, d, beckon.x, 0.1, 0.022) * beckon.y);
+  }
+  // A wave let out earlier, still on its way.
+  if (wave2.y > 0.001) {
+    col = glow(col, mix(mix(warm, float3(1.0), 0.3), pale, smoothstep(0.0, 1.4, d)), ring(p, d, wave2.x, 0.16, 0.03) * wave2.y);
   }
   float amp = wave.y;
   if (amp > 0.001) {

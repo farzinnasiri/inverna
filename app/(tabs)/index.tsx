@@ -23,7 +23,7 @@ import { SoundGlyph } from '@/ui/rn/SoundGlyph'
 import { useCovered } from '@/ui/rn/ambientClock'
 import { GLASS_TINT, GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { Horizon } from '@/ui/rn/Horizon'
-import { IslandBreath, useIslandBreath, WaveLift } from '@/ui/rn/IslandBreath'
+import { IslandBreath, useBreathInvite, useIslandBreath, WaveLift } from '@/ui/rn/IslandBreath'
 import { tabBarClearance, useAppActive, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
 import { UPGRADE_INK } from '@/ui/rn/Paywall'
 import { SoundRibbon } from '@/ui/rn/sound/SoundRibbon'
@@ -269,6 +269,7 @@ export default function HomeScreen() {
   const bigSize = isCompact ? 44 : 54
   // Pull past the top to breathe in, hold, let go (IslandBreath).
   const breath = useIslandBreath(insets.top)
+  useBreathInvite(breath, clockFocused)
   const gridX = gridW > 0 ? (width - gridW) / 2 : sideMargin
 
   return (

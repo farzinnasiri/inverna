@@ -9,6 +9,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
+import Animated from 'react-native-reanimated'
 import { Compass, Lock, PenLine, Plus, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
 import { FREE_CUSTOM_SOUND_LIMIT, canUseSavedSound, canCreateCustomSound, canPlayPreset, fallbackFreePreset } from '@/core/access'
 import { soundsHelp, soundTimer, studioCopy } from '@/ui/copy'
@@ -28,6 +29,7 @@ import {
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { FRAME_MAX_WIDTH, Slider } from '@/ui/rn/controls'
 import { TimerSheet } from '@/ui/rn/TimerSheet'
+import { IslandBreath, useIslandBreath } from '@/ui/rn/IslandBreath'
 import { GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { scrollEndClearance, tabBarClearance, useResponsiveLayout } from '@/ui/rn/hooks'
 import { describeMix, MixSheet, type SoundMeta, type StudioTarget } from '@/ui/rn/MixSheet'
@@ -382,10 +384,14 @@ export default function SoundsScreen() {
   const padBottom = viewportH > 0 ? Math.max(12, viewportH - pageEnd) : scrollEndClearance(insets.bottom)
   const sectionGap = isCompact ? 10 : 12
   const rowH = isCompact ? 62 : 66
+  // Pull past the top to breathe in, hold, let go (IslandBreath).
+  const breath = useIslandBreath(padTop)
 
   return (
     <View style={styles.root}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={breath.onScroll}
+        scrollEventThrottle={16}
         onLayout={(e: LayoutChangeEvent) => {
           const h = Math.round(e.nativeEvent.layout.height)
           if (h > 0 && Math.abs(h - viewportH) > 1) setViewportH(h)
@@ -639,7 +645,8 @@ export default function SoundsScreen() {
             </Pressable>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+      <IslandBreath breath={breath} />
 
       <TimerSheet
         open={timerOpen}
