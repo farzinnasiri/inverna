@@ -1,6 +1,7 @@
 {
   // Inverna's privacy, support and home pages: static files on a Worker at
-  // inverna.farzin.space. Deploy from this folder: `npx wrangler deploy`.
+  // inverna.app (and www). inverna.farzin.space stays as an old address.
+  // Deploy from this folder: `npx wrangler deploy` (or `make deploy-site`).
   "name": "inverna-site",
   "compatibility_date": "2026-11-01",
   "assets": {
@@ -8,5 +9,9 @@
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "404-page"
   },
-  "routes": [{ "pattern": "inverna.farzin.space", "custom_domain": true }]
+  "routes": [
+    { "pattern": "inverna.app", "custom_domain": true },
+    { "pattern": "www.inverna.app", "custom_domain": true },
+    { "pattern": "inverna.farzin.space", "custom_domain": true }
+  ]
 }

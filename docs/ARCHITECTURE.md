@@ -29,7 +29,7 @@ src/
     rn/                 React Native screens, sheets and controls
     rn/games/<id>/      One screen per game (renders engine state)
 app/                    expo-router: tabs (Play, Sounds, Settings), onboarding, game
-site/                   inverna.farzin.space: privacy, support (make deploy-site)
+site/                   inverna.app: privacy, support (make deploy-site)
 ```
 
 ## Platforms
@@ -138,4 +138,4 @@ is switched off.
 - The app: cloud builds through `rnd` on GitHub Actions (`make build-ios-*`,
   `docs/RELEASES.md`). `make check` runs on every pull request (`check.yml`).
 - The privacy and support pages: `make deploy-site` (Cloudflare Worker,
-  `site/wrangler.jsonc`, inverna.farzin.space).
+  `site/wrangler.jsonc`, inverna.app).

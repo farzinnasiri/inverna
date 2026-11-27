@@ -105,7 +105,7 @@ doctor: ## Check Expo SDK & dependency health
 sounds: ## Regenerate procedural bundled WAV loops & cues for native iOS/Android
 	pnpm run sounds
 
-deploy-site: ## Deploy the privacy, support and home pages to inverna.farzin.space
+deploy-site: ## Deploy the privacy, support and home pages to inverna.app
 	cd site && npx wrangler deploy
 
 build-web: ## Export Expo web bundle + offline PWA service worker into dist/

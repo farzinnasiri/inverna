@@ -151,7 +151,7 @@ Every fix comes with a test that fails without it.
      start off, and the app offers them later with a short sheet that says
      what they're for (at most once every few days, never twice in a night,
      and never again after "Not now" twice).
-2. **Privacy and support pages** on `inverna.farzin.space` (Cloudflare, in the
+2. **Privacy and support pages** on `inverna.app` (Cloudflare, in the
    app's own look): `/privacy` and `/support`. Plain and short, nothing about
    how the app works, no link to the code, and a line that Inverna helps but
    promises no result. Contact email to come from Farzin.
@@ -277,7 +277,8 @@ talk about it again when the plan is done.
 
 ## Waiting on Farzin
 
-- Contact and support email for the privacy and support pages.
+- Click Cloudflare's verification email at farzinnasiri+inverna@protonmail.com,
+  so support@inverna.app can forward there (the rule is created after).
 
 ## Done means
 

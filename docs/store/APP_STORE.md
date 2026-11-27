@@ -1,7 +1,7 @@
 # App Store listing and review (draft for Farzin)
 
 What's already set in App Store Connect (app 6839721977, version 1.0):
-support URL, marketing URL and privacy policy URL (inverna.farzin.space),
+support URL, marketing URL and privacy policy URL (inverna.app),
 and the in-app purchase `com.oooflabs.inverna.unlock` (non-consumable,
 $9.99 US, Family Sharing on). Beta has `com.oooflabs.inverna.beta.unlock`.
 
