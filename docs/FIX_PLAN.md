@@ -10,7 +10,6 @@ Written 2026-11-26 against `main` at `f3a1330`.
 
 Phases 0 to 5 are done on `audit-fixes` (draft PR #1), except:
 
-- **Live Activity** (Phase 5.2): not built; see that step.
 - **Device checks** this plan can't do from a Mac without Xcode: the overnight
   locked-phone test (Phase 1.3), the battery checks (Phase 3), VoiceOver on
   the Pause sheet and the sliders (Phase 2.5), the sheet drag (NAT-06), and
@@ -252,11 +251,11 @@ Each needs logic in the app, not only screens.
      Family Sharing on, attached to the first submission, and review notes
      that explain how to test buying and restoring. The first two lines of
      the App Store description say it's a one-time purchase.
-2. **Live Activity for a wind-down.** Not built in this run. It's a widget
-   extension (`expo-widgets`), and the build signs only the main app today:
-   it needs a bundle id and an app group per variant, a provisioning
-   profile per extension in both signing steps, and the export mapping both.
-   A separate piece of work, then the reminder offer gains a second switch.
+2. **Sound in the background** (what "Live Activity" meant in the request):
+   already there. Background audio is on, Lock Screen and Control Center
+   controls work, and the deadline stops the sound with the phone locked.
+   iOS asks no permission for it, so the reminder offer asks only for
+   notifications. No Live Activity.
 3. **Rating prompt.** Apple's own in-app review sheet, shown rarely and only to
    people who use Inverna regularly, right after something good (a finished
    wind-down or round). Never on a first night, never twice close together.
