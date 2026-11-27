@@ -239,12 +239,11 @@ Each needs logic in the app, not only screens.
      Family Sharing on, attached to the first submission, and review notes
      that explain how to test buying and restoring. The first two lines of
      the App Store description say it's a one-time purchase.
-2. **Live Activity for a wind-down.** The time left until lights out on the
-   Lock Screen and in the Dynamic Island while a wind-down runs (Farzin wants
-   the reminder offer to offer it too). It's new: a widget extension through
-   `expo-widgets`, its own bundle id and signing for each of Dev, Beta and
-   the App Store app, and a cloud build to check it. Once it works, the
-   reminder offer gains a second switch for it.
+2. **Live Activity for a wind-down.** Not built in this run. It's a widget
+   extension (`expo-widgets`), and the build signs only the main app today:
+   it needs a bundle id and an app group per variant, a provisioning
+   profile per extension in both signing steps, and the export mapping both.
+   A separate piece of work, then the reminder offer gains a second switch.
 3. **Rating prompt.** Apple's own in-app review sheet, shown rarely and only to
    people who use Inverna regularly, right after something good (a finished
    wind-down or round). Never on a first night, never twice close together.
