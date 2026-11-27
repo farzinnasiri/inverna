@@ -10,6 +10,7 @@ import { applyTokens } from '@/design/tokens'
 import { notifications, skipPaywall, sound, store } from '@/platform'
 import { NightCheckIn } from '@/ui/rn/NightCheckIn'
 import { PaywallSheet } from '@/ui/rn/Paywall'
+import { DeviceInsetsProvider } from '@/ui/rn/insets'
 import { ReminderOfferSheet } from '@/ui/rn/ReminderOfferSheet'
 import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
 import { LaunchVeil } from '@/ui/rn/LaunchVeil'
@@ -124,38 +125,40 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       {/* Real insets from the first frame, so no screen lays out once with zero insets. */}
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <StatusBar style="light" />
-        <View style={styles.root}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: '#000000' },
-              animation: 'fade',
-            }}
-          >
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
-            <Stack.Screen name="paywall" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
-            <Stack.Screen
-              name="game/[id]"
-              options={{
+        <DeviceInsetsProvider>
+          <StatusBar style="light" />
+          <View style={styles.root}>
+            <Stack
+              screenOptions={{
                 headerShown: false,
-                gestureEnabled: false,
-                // The game itself steps in (GameShell scales it toward you); the route just fades.
+                contentStyle: { backgroundColor: '#000000' },
                 animation: 'fade',
-                animationDuration: 260,
               }}
-            />
-          </Stack>
+            >
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+              <Stack.Screen name="paywall" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+              <Stack.Screen
+                name="game/[id]"
+                options={{
+                  headerShown: false,
+                  gestureEnabled: false,
+                  // The game itself steps in (GameShell scales it toward you); the route just fades.
+                  animation: 'fade',
+                  animationDuration: 260,
+                }}
+              />
+            </Stack>
 
-          <WindDownSheet />
-          <NightCheckIn />
-          <ReminderOfferSheet />
-          <PaywallSheet />
-          <SessionCurtain />
-          <NightFilterOverlay />
-          <LaunchVeil />
-        </View>
+            <WindDownSheet />
+            <NightCheckIn />
+            <ReminderOfferSheet />
+            <PaywallSheet />
+            <SessionCurtain />
+            <NightFilterOverlay />
+            <LaunchVeil />
+          </View>
+        </DeviceInsetsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )

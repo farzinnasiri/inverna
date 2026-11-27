@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import Animated, { interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import { Check, ChevronDown, ChevronRight, ChevronUp, ExternalLink, Flame, Lock, LockOpen, Moon, Snowflake, Sun, Trash2 } from 'lucide-react-native'
 import { canUseManualLight } from '@/core/access'
@@ -78,9 +79,20 @@ export default function SettingsScreen() {
     router.replace('/onboarding')
   }
 
+  // The status-bar scrim fades in over the first 24pt of scroll.
+  const scrollY = useSharedValue(0)
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y
+  })
+  const scrimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 24], [0, 1], 'clamp'),
+  }))
+
   return (
     <View style={styles.root}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         style={styles.scroll}
         // Insets are counted once, here, so the last row clears the floating tab bar.
         contentInsetAdjustmentBehavior="never"
@@ -333,19 +345,22 @@ export default function SettingsScreen() {
             <Text style={[styles.creditText, { color: color.ink3 }]}>{about.credit}</Text>
           </Pressable>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
-      {/* Content scrolling up fades out under the status bar instead of running behind the time (NAT-07). */}
-      <Svg pointerEvents="none" width="100%" height={insets.top + 24} style={styles.topScrim}>
+      {/* Content scrolling up fades out under the status bar instead of running behind the time (NAT-07).
+          Only once something has scrolled there: at rest it read as a black band over the scene. */}
+      <Animated.View pointerEvents="none" style={[styles.topScrim, scrimStyle]}>
+      <Svg width="100%" height={insets.top + 24}>
         <Defs>
           <LinearGradient id="settingsTopScrim" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#000000" stopOpacity={0.92} />
-            <Stop offset={String(insets.top / (insets.top + 24))} stopColor="#000000" stopOpacity={0.7} />
+            <Stop offset="0" stopColor="#000000" stopOpacity={0.85} />
+            <Stop offset={String(insets.top / (insets.top + 24))} stopColor="#000000" stopOpacity={0.55} />
             <Stop offset="1" stopColor="#000000" stopOpacity={0} />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="100%" height="100%" fill="url(#settingsTopScrim)" />
       </Svg>
+      </Animated.View>
 
       <ScienceSheet open={scienceOpen} onClose={() => setScienceOpen(false)} />
 
@@ -374,6 +389,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
+    right: 0,
   },
   credit: {
     alignSelf: 'center',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, AppState, Platform, useWindowDimensions } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useDeviceInsets } from '@/ui/rn/insets'
 import type { GameId } from '@/core/games/catalog'
 import { bestFor, formatScoreValue } from '@/core/highscores'
 import { loadSaved, writeJSON } from '@/core/storage'
@@ -176,7 +176,7 @@ export function useFeedback() {
  */
 export function useResponsiveLayout() {
   const { width, height } = useWindowDimensions()
-  const insets = useSafeAreaInsets()
+  const insets = useDeviceInsets()
   const usableHeight = Math.max(480, height - insets.top - insets.bottom)
   const isCompactHeight = usableHeight < 690
   const isCompactWidth = width < 385

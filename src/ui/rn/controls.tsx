@@ -26,7 +26,7 @@ import Reanimated, {
   withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useDeviceInsets } from './insets'
 import { haptics } from '@/platform'
 import { feel } from '@/ui/feel'
 import { useCoverScreen } from './ambientClock'
@@ -704,7 +704,7 @@ export function Sheet({
   /** Pinned under the content (a "Got it" button): always in reach, the content scrolls behind it. */
   footer?: ReactNode
 }) {
-  const insets = useSafeAreaInsets()
+  const insets = useDeviceInsets()
   // While open, the moving scene behind it rests (it's dimmed under the sheet anyway).
   useCoverScreen(open)
   const [scrollLocked, setScrollLocked] = useState(false)
