@@ -1,14 +1,14 @@
 # Design language — "Low Light"
 
 **A phone that is already half asleep.** True black ground, quiet warm greys,
-one muted sand accent used sparingly, flat matte surfaces, one typeface, and
+one antique brass accent used sparingly, flat matte surfaces, one typeface, and
 every primary screen fits in one viewport with zero scroll.
 
 ## Principles
 
 1. **Darkness is the material.** True `#000000` ground (OLED pixels off). Light
    only where there is information, dimmer than you think.
-2. **One accent, rarely.** Muted sand (`#C4A57C`) marks at most one element per
+2. **One accent, rarely.** Antique brass (`#C2A15F`) marks at most one element per
    screen at rest. Most screens use no accent at all.
 3. **Flat and precise.** Surfaces step by value (`bg → surface1 → surface2 →
    surface3`), edges are 1px hairlines. Zero UI gradients, zero bevels, zero
@@ -31,7 +31,7 @@ every primary screen fits in one viewport with zero scroll.
 | `--c-ink-2` | `#A8A198` | Secondary text, icons |
 | `--c-ink-3` | `#7A746D` | Labels (≥13px/500) |
 | `--c-ink-4` | `#4A4642` | Disabled, inactive strokes, grid dots |
-| `--c-accent` | `#C4A57C` | Muted sand (at most one per screen) |
+| `--c-accent` | `#C2A15F` | Antique brass (at most one per screen) |
 | `--c-accent-ink` | `#14110D` | Text on accent |
 | `--c-accent-dim` | `#7D6A51` | Horizon disc, session rim arc |
 | `--c-accent-wash` | `rgb(196 165 124 / 0.12)` | Hold-to-confirm fill |

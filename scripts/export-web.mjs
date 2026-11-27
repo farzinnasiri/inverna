@@ -20,8 +20,10 @@ const headInject = `<style>html,body{background:#000000;margin:0;color-scheme:da
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Inverna" />
 <link rel="manifest" href="/manifest.webmanifest" />
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-<script>if('serviceWorker'in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));}</script>`
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />`
+// The service worker is registered in one place: app/_layout.tsx. The head
+// here mirrors app/+html.tsx, which Expo uses only for its dev server with
+// web.output 'single'; change both together.
 
 if (!html.includes('manifest.webmanifest')) {
   html = html.replace('</head>', `${headInject}\n</head>`)

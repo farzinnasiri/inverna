@@ -2,41 +2,66 @@
 
 ```
 src/
-  core/                 Pure TS. Zero DOM, zero React. Ports to Expo as-is.
-    storage.ts          KeyValueStore contract (sync; web=localStorage, native=MMKV)
-    rng.ts              Seeded RNG — engines never call Math.random
-    night.ts            Bedtime schedule + night-filter maths
-    session.ts          Wind-down session curve (warmth, dim, volume, calm, fade)
-    sound/catalog.ts    Layers, binaural bands, presets (pure data)
-    sound/engine.ts     SoundEngine contract
-    games/catalog.ts    The ten games (metadata)
+  core/                 Pure TS. Zero DOM, zero React (tsconfig.core.json).
+    storage.ts          KeyValueStore contract (sync; expo-sqlite localStorage
+                        on iOS, localStorage on web) and loadSaved()
+    decode.ts           Checks for data read back from storage
+    rng.ts              Seeded RNG: engines never call Math.random or Date.now
+    night.ts            Bedtime schedule, nightKey, night-filter maths
+    session.ts          Wind-down curve (warmth, dim, volume, calm, fade, end)
+    reminderOffer.ts    When to offer the bedtime reminder
+    sound/              Presets and layers (catalog), the descent arc, the
+                        SoundEngine contract
+    games/catalog.ts    The 13 games (metadata, difficulty kind)
+    games/shell.ts      The game lifecycle GameShell runs on (door, sheets, pause)
     games/<id>/         One engine per game + tests
+    backdrop/           The scene simulation (worklets)
   platform/             The only place that touches device APIs
-    index.ts            bootPlatform(), sound, haptics — swap this for native
-    web/                localStorage, Web Audio, navigator.vibrate
-  design/tokens.ts      Colours, type, radii, motion — shared with native
-  ui/                   React DOM rendering
-    components/         Design-system pieces + GameShell
-    hooks/game.ts       Loop, save, calm, feedback, gestures, keys
-    state/              zustand stores (zustand runs on React Native too)
-    screens/            Home, Sounds, Night, wind-down session
-    games/<id>/         One screen per game (renders engine state)
+    index.ts            bootPlatform(), sound, haptics, notifications
+    audio/              The synthesis engine (Web Audio API shape)
+    sound.native.ts     react-native-audio-api, audio session, Now Playing
+    notifications.ts    Reminders (one serialized writer)
+  design/tokens.ts      Colours, type, radii, motion
+  ui/
+    copy.ts             Every word the app says
+    links.ts            The privacy and support pages
+    state/              zustand stores: settings, sound, session, high scores
+    rn/                 React Native screens, sheets and controls
+    rn/games/<id>/      One screen per game (renders engine state)
+app/                    expo-router: tabs (Play, Sounds, Settings), onboarding, game
+site/                   inverna.farzin.space: privacy, support (make deploy-site)
 ```
 
-## Migration path to Expo / React Native
+## Platforms
 
-| Layer | Web today | Native later | Change needed |
-|---|---|---|---|
-| Game engines, rules, session curve, schedule | `src/core` | same files | none |
-| Tokens | `src/design/tokens.ts` | same file | none |
-| State | zustand + persist | zustand + persist | storage adapter only |
-| Storage | localStorage | react-native-mmkv | one adapter |
-| Audio | Web Audio API | react-native-audio-api (Web Audio–compatible) | near line-for-line |
-| Haptics | navigator.vibrate | expo-haptics | one adapter |
-| Game loop | rAF (`useGameLoop`) | Reanimated `useFrameCallback` | one hook |
-| Rendering | DOM/CSS/SVG/canvas | RN views / Skia | rewrite screens only |
-| Navigation | `ui/state/nav.ts` | expo-router tabs + stack | thin |
-| Bedtime reminder | .ics calendar file | expo-notifications | one adapter |
+iOS is the product (Inverna Dev, Beta and the App Store app; see
+`docs/RELEASES.md`). The web build still compiles because it's a quick way to
+look at screens, but nobody uses it; Android is parked.
+
+| Layer | iOS | Web |
+|---|---|---|
+| Storage | `expo-sqlite/localStorage/install` | localStorage |
+| Audio | react-native-audio-api (patched: see `patches/`) | Web Audio API |
+| Haptics | expo-haptics | none |
+| Rendering | React Native, Skia, react-native-svg | react-native-web, CanvasKit |
+| Reminders | expo-notifications (local only) | .ics file |
+
+## Saved data
+
+Everything stored is `unknown` until a check accepts it: settings, high scores
+and the wind-down session check each field and keep the default for one that
+doesn't fit (`pickValid`), and every game passes its own save check to
+`useGameSave(id, fallback, isSave)`. A new settings field needs a check in
+`SAVED` (`ui/state/settings.ts`) or it isn't loaded.
+
+## Sound
+
+`ui/state/sound.ts` is the one owner of playback. It keeps one deadline
+(`stopAt`: the sleep timer or the end of a wind-down, whichever is first) and
+keeps start, edit, interruption and stop apart: an edit never touches the
+sleep fade, a call keeps the deadline, and the deadline stops everything from
+the audio thread (a silent source that ends with the fade) even when JS is
+asleep on a locked phone. Textures are worked out by one background queue.
 
 ## Engine contract (every game)
 
@@ -74,7 +99,7 @@ on water, Chladni sand, ...). `AmbientBackdrop` stacks two layers:
 - **Web** loads CanvasKit (`public/canvaskit.wasm`, copied on `pnpm install`)
   before the Skia chunk; the rest of the app does not wait for it.
 - Worklets must be defined above their callers (the worklet compiler captures
-  dependencies at definition time). `backdrop/worklets.test.ts` enforces it.
+  dependencies at definition time). `ui/rn/worklets.test.ts` enforces it.
 
 ## Evening, check-in and voice
 
@@ -102,9 +127,15 @@ on water, Chladni sand, ...). `AmbientBackdrop` stacks two layers:
 
 ## Data
 
-All data is on-device under the `inverna:` key prefix. Clearing site data resets
-everything. There is no server, account or analytics.
+All data is on the device under the `inverna:` key prefix. Settings → Erase
+all data clears it, along with reminders and anything on the lock screen.
+There is no server, account or analytics: the App Store label is "Data Not
+Collected". `ui/log.ts` records wide events for debugging but has no sink and
+is switched off.
 
 ## Deploy
 
-Static assets on Cloudflare Workers: `pnpm deploy` (see `wrangler.jsonc`).
+- The app: cloud builds through `rnd` on GitHub Actions (`make build-ios-*`,
+  `docs/RELEASES.md`). `make check` runs on every pull request (`check.yml`).
+- The privacy and support pages: `make deploy-site` (Cloudflare Worker,
+  `site/wrangler.jsonc`, inverna.farzin.space).
