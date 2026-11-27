@@ -99,7 +99,8 @@ function inferIconFromMix(mix: Mix | null): SoundIconId {
   return ranked[0]![1] > 0.05 ? ranked[0]![0] : 'rain'
 }
 
-function buildDescentSnapshot(presetId: string | null, now = new Date()): DescentSnapshot {
+/** The descent for what's loaded: `mix` is the sound's own (its pulse band). */
+function buildDescentSnapshot(presetId: string | null, mix: Mix | null, now = new Date()): DescentSnapshot {
   const settings = useSettings.getState()
   const session = useSession.getState().session
   const preset = presetById(presetId ?? settings.sessionPreset ?? DEFAULT_PRESET_ID)
@@ -110,6 +111,7 @@ function buildDescentSnapshot(presetId: string | null, now = new Date()): Descen
     preset,
     depth: settings.modulationDepth,
     followBedtime: settings.autoDescent,
+    band: (mix ?? preset?.mix)?.band ?? null,
   })
 }
 
@@ -188,7 +190,7 @@ export const useSound = create<SoundState>()((set, get) => {
 
   const initialPreset = presetById(useSettings.getState().sessionPreset ?? DEFAULT_PRESET_ID)
   const initialKey = initialPreset?.harmonicKey ?? DEFAULT_HARMONIC_KEY
-  const initialDescent = buildDescentSnapshot(initialPreset?.id ?? DEFAULT_PRESET_ID)
+  const initialDescent = buildDescentSnapshot(initialPreset?.id ?? DEFAULT_PRESET_ID, initialPreset?.mix ?? null)
   sound.setHarmonicKey?.(initialKey)
   sound.setDescent?.(initialDescent, 0.1)
   // Only tonight's sound is worked out ahead; the rest wait until something plays.
@@ -213,12 +215,14 @@ export const useSound = create<SoundState>()((set, get) => {
       const choice = timerMinutes ?? useSettings.getState().sleepTimer
       const now = Date.now()
       const stopAt = deadlineFor(choice, now)
-      const descent = buildDescentSnapshot(preset.id)
+      const descent = buildDescentSnapshot(preset.id, preset.mix)
       sound.setHarmonicKey?.(preset.harmonicKey)
       sound.setDescent?.(descent, 0.6)
       sound.setNowPlayingMeta?.(nowPlayingFor(preset.id, preset.mix, null, choice))
       sound.setMaster(get().volume, 0.5)
       sound.setMix(preset.mix, 1.4)
+      // Playing only if the engine really started (no audio context: stays stopped).
+      if (!sound.isRunning) return
       armDeadline(stopAt, now)
       set({
         playing: true,
@@ -246,12 +250,13 @@ export const useSound = create<SoundState>()((set, get) => {
       const stopAt = deadlineFor(choice, now)
       const key = mix.harmonicKey ?? get().harmonicKey ?? DEFAULT_HARMONIC_KEY
       const keyed = { ...mix, harmonicKey: key }
-      const descent = buildDescentSnapshot(null)
+      const descent = buildDescentSnapshot(null, mix)
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(descent, 0.6)
       sound.setNowPlayingMeta?.(nowPlayingFor(null, keyed, meta, choice))
       sound.setMaster(get().volume, 0.5)
       sound.setMix(keyed, 1.2)
+      if (!sound.isRunning) return
       armDeadline(stopAt, now)
       set({ playing: true, presetId: null, mix: keyed, harmonicKey: key, descent, stopAt, mixMeta: meta, interrupted: false, timer: choice })
     },
@@ -265,6 +270,12 @@ export const useSound = create<SoundState>()((set, get) => {
       if (get().playing) {
         sound.setNowPlayingMeta?.(nowPlayingFor(null, nextMix, mixMeta, get().timer))
         sound.setMix(nextMix, 0.25)
+      }
+      // A new pulse band moves the rate (and what the Sounds chip says).
+      if (nextMix.band !== get().mix?.band) {
+        const descent = buildDescentSnapshot(null, nextMix)
+        sound.setDescent?.(descent, 0.6)
+        set({ descent })
       }
       // Turning every layer down stops the sound in the engine; say so here too,
       // or Play shows a sound that isn't playing and the sleep timer keeps running.
@@ -298,7 +309,7 @@ export const useSound = create<SoundState>()((set, get) => {
       const settings = useSettings.getState()
       const activePreset = presetById(state.presetId ?? settings.sessionPreset ?? DEFAULT_PRESET_ID)
       const key = state.mix?.harmonicKey ?? activePreset?.harmonicKey ?? DEFAULT_HARMONIC_KEY
-      const next = buildDescentSnapshot(state.presetId ?? activePreset?.id ?? DEFAULT_PRESET_ID, now)
+      const next = buildDescentSnapshot(state.presetId ?? activePreset?.id ?? DEFAULT_PRESET_ID, state.mix, now)
 
       sound.setHarmonicKey?.(key)
       sound.setDescent?.(next, rampSeconds)

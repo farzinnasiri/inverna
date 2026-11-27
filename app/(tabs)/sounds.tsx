@@ -35,6 +35,7 @@ import { SoundGlyph } from '@/ui/rn/SoundGlyph'
 import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
 import { resolveTimer, UNTIL_LIGHTS_OUT, useSound, type MixMeta } from '@/ui/state/sound'
+import { pulseRate } from '@/core/sound/arc'
 
 /** One tile in the sound grid: a preset, or a sound they made. */
 interface SoundItem {
@@ -211,6 +212,17 @@ export default function SoundsScreen() {
     selectSound(next.id, playing)
   }
 
+  // The pages open where the sound on screen is, and follow it when it
+  // changes from anywhere (NAT-04: they opened on page 1 with the dot elsewhere).
+  // ("Your mix" isn't on a page: the pages stay where they are.)
+  const shownPage = pages.findIndex((pg) => pg.some((it) => it.id === currentId))
+  useEffect(() => {
+    if (shownPage < 0) return
+    setPageIdx(shownPage)
+    if (pagerWidth > 0) pagerRef.current?.scrollTo({ x: shownPage * pagerWidth, animated: false })
+    // Only when the sound on screen moves to another page, or the pager first gets its width.
+  }, [shownPage, pagerWidth])
+
   const onPagerScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (pagerWidth <= 0) return
     const idx = Math.min(pages.length - 1, Math.max(0, Math.round(e.nativeEvent.contentOffset.x / pagerWidth)))
@@ -274,8 +286,10 @@ export default function SoundsScreen() {
 
   // The Mix chip shows the live rhythm: the letter and rate of the band the
   // pulse is in right now (both from the descent, so they always agree).
-  const rhythmGreek = descent.modHz >= 7.2 ? 'α' : descent.modHz >= 3.6 ? 'θ' : 'δ'
-  const rhythmChip = descent.depth === 'off' ? null : `${rhythmGreek} ${descent.modHz.toFixed(1)} Hz`
+  // The rate actually playing, as the Composer shows it (NAT-03).
+  const pulseHz = pulseRate(displayMix.band, descent)
+  const rhythmGreek = pulseHz === null ? '' : pulseHz >= 7.2 ? 'α' : pulseHz >= 3.6 ? 'θ' : 'δ'
+  const rhythmChip = pulseHz === null ? null : `${rhythmGreek} ${pulseHz.toFixed(1)} Hz`
 
   // The chip says what the timer does: the clock time it stops, a length, or all night.
   const endClock = clockIn(resolveTimer(UNTIL_LIGHTS_OUT))
@@ -352,7 +366,7 @@ export default function SoundsScreen() {
             <Pressable
               onPress={() => openStudio(currentCustom ? { kind: 'saved', sound: currentCustom } : { kind: 'current' })}
               accessibilityRole="button"
-              accessibilityLabel={rhythmChip ? `Composer, pulse ${descent.bandLabel} ${descent.modHz.toFixed(1)} hertz` : 'Composer'}
+              accessibilityLabel={rhythmChip && pulseHz !== null ? `Composer, pulse ${pulseHz.toFixed(1)} hertz` : 'Composer'}
               style={({ pressed }) => [{ opacity: pressed ? 0.78 : 1 }]}
             >
               <GlassSurface variant="pill" radius={999} interactive style={styles.topChip}>

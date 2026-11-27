@@ -4,6 +4,7 @@ import { PRESETS, SILENT_MIX, type Mix } from '@/core/sound/catalog'
 // The store talks to the sound engine through `@/platform`; record what it asks for.
 const engine = vi.hoisted(() => {
   const calls: { name: string; args: unknown[] }[] = []
+  const running = { on: false }
   const pause: (() => void)[] = []
   const play: ((mix: unknown) => void)[] = []
   const interruption: ((event: unknown) => void)[] = []
@@ -25,13 +26,20 @@ const engine = vi.hoisted(() => {
         return () => {}
       },
       unlock: async () => {},
-      setMix: rec('setMix'),
+      setMix: (...args: unknown[]) => {
+        calls.push({ name: 'setMix', args })
+        const mix = args[0] as { layers: Record<string, number> }
+        running.on = Object.values(mix.layers).some((g) => g > 0.001)
+      },
       setDescent: rec('setDescent'),
       setHarmonicKey: rec('setHarmonicKey'),
       setMaster: rec('setMaster'),
       scheduleSleepFade: rec('scheduleSleepFade'),
       cancelSleepFade: rec('cancelSleepFade'),
-      stop: rec('stop'),
+      stop: (...args: unknown[]) => {
+        calls.push({ name: 'stop', args })
+        running.on = false
+      },
       cue: rec('cue'),
       setCuesEnabled: rec('setCuesEnabled'),
       setNowPlayingMeta: rec('setNowPlayingMeta'),
@@ -43,7 +51,9 @@ const engine = vi.hoisted(() => {
         play.push(fn)
         return () => {}
       },
-      isRunning: false,
+      get isRunning() {
+        return running.on
+      },
     },
   }
 })
@@ -185,6 +195,20 @@ describe('sound store: the lock screen and interruptions', () => {
     useSound.getState().playMix(RAIN, undefined, { title: 'Mine', hint: 'Rain', icon: 'rain' })
     useSound.getState().setTimer(60)
     expect((last('setNowPlayingMeta')?.args[0] as { title: string }).title).toBe('Mine')
+  })
+})
+
+describe("sound store: when the engine can't start", () => {
+  // ISS-15.5: no audio context meant "playing" with nothing heard.
+  it('stays stopped', () => {
+    const real = Object.getOwnPropertyDescriptor(engine.sound, 'isRunning')!
+    Object.defineProperty(engine.sound, 'isRunning', { get: () => false, configurable: true })
+    try {
+      useSound.getState().playPreset(preset.id)
+      expect(useSound.getState().playing).toBe(false)
+    } finally {
+      Object.defineProperty(engine.sound, 'isRunning', real)
+    }
   })
 })
 

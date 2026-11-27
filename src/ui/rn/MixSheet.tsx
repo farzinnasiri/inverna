@@ -2,9 +2,8 @@ import { useEffect, useRef, useState, type ComponentRef } from 'react'
 import { PanResponder, Pressable, StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
 import { ArrowDown, ArrowUp, ChevronLeft, Info, Pause, Play, RotateCcw } from 'lucide-react-native'
-import type { ModulationDepth } from '@/core/sound/arc'
+import { pulseRate, type ModulationDepth } from '@/core/sound/arc'
 import {
-  BANDS,
   CUSTOM_ICONS,
   LAYERS,
   normalizeBand,
@@ -372,9 +371,8 @@ export function MixSheet({
   const pulseChoice: SleepBandId | 'off' = pulseOn && activeBand ? activeBand : 'off'
   const padGain = mix.padGain ?? 0
   const activeKey: HarmonicKeyId = mix.harmonicKey ?? DEFAULT_HARMONIC_KEY
-  const bandHz = BANDS.find((b) => b.id === activeBand)?.hz ?? 0
-  // Near bedtime the pulse follows the slow-down, so show the rate it's really at.
-  const pulseHz = pulseOn ? (descent.autoActive ? descent.modHz : bandHz) : 0
+  // The rate really playing (the slow-down's near bedtime), the same as the Sounds chip.
+  const pulseHz = pulseOn ? (pulseRate(activeBand, descent) ?? 0) : 0
   const strength: 'subtle' | 'deep' = modulationDepth === 'deep' ? 'deep' : 'subtle'
 
   const layerValue = (id: LayerId) => mix.layers[id] ?? 0

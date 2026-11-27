@@ -1,6 +1,6 @@
 import { bedtimeAround, type Schedule } from '../night'
 import { sessionProgress, type Session } from '../session'
-import type { Preset } from './catalog'
+import { bandHz, type BandId, type Preset } from './catalog'
 
 /**
  * The 60-minute Neuroacoustic Iso-Descent model.
@@ -128,6 +128,8 @@ export interface ComputeDescentOptions {
   followBedtime: boolean
   /** Optional explicit override 0..1 (useful for testing or previewing). */
   overrideProgress?: number
+  /** The pulse the sound was made with; outside the slow-down it plays at this band's rate. */
+  band?: BandId | null
 }
 
 const DEFAULT_DESCENT_RANGE: readonly [number, number, number] = [7.8, 5.0, 2.4]
@@ -136,7 +138,7 @@ const DEFAULT_DESCENT_RANGE: readonly [number, number, number] = [7.8, 5.0, 2.4]
  * Computes the complete live psychoacoustic parameter state for the current instant.
  */
 export function computeDescent(opts: ComputeDescentOptions): DescentSnapshot {
-  const { schedule, now, session, preset, depth, followBedtime, overrideProgress } = opts
+  const { schedule, now, session, preset, depth, followBedtime, overrideProgress, band } = opts
   const range = preset?.descentRange ?? DEFAULT_DESCENT_RANGE
 
   const bed = bedtimeDescentProgress(schedule, now)
@@ -163,7 +165,9 @@ export function computeDescent(opts: ComputeDescentOptions): DescentSnapshot {
   }
 
   const t = smooth(progress)
-  const modHz = Math.round(interpolateTriplet(range, progress) * 10) / 10
+  // Outside the slow-down the sound keeps its own pulse, so that's the rate (NAT-03).
+  const ownHz = !autoActive && band ? bandHz(band) : null
+  const modHz = ownHz ?? Math.round(interpolateTriplet(range, progress) * 10) / 10
   const mult = depthMultiplier(depth)
   const { phase, phaseLabel } = phaseForProgress(progress)
 
@@ -186,6 +190,16 @@ export function computeDescent(opts: ComputeDescentOptions): DescentSnapshot {
     depth,
     autoActive,
   }
+}
+
+/**
+ * The pulse rate actually playing for a sound with this band: the slow-down's
+ * rate while it runs, else the band's own; null when the pulse is off. The
+ * Sounds chip and the Composer both show this.
+ */
+export function pulseRate(band: BandId | null | undefined, descent: DescentSnapshot): number | null {
+  if (!band || descent.depth === 'off') return null
+  return descent.autoActive ? descent.modHz : bandHz(band)
 }
 
 export interface DescentCurvePoint {

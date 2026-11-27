@@ -128,6 +128,11 @@ export const BANDS: readonly BandMeta[] = [
   { id: 'alpha', name: 'Alpha', greek: 'α', hz: 8.5, hint: 'Gentle pulse, for relaxing', restful: true },
 ]
 
+/** A band's pulse rate in Hz (0 if unknown). */
+export function bandHz(band: BandId): number {
+  return BANDS.find((b) => b.id === band)?.hz ?? 0
+}
+
 export function normalizeBand(band: BandId | null | undefined): SleepBandId | null {
   if (band === 'delta' || band === 'theta' || band === 'alpha') return band
   return null

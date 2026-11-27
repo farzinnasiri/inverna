@@ -61,7 +61,6 @@ export function createPlatformSoundEngine(): SoundEngine {
   const prepareSession = async () => {
     try {
       if (!sessionConfigured) {
-        sessionConfigured = true
         AudioManager.setSystemOptions({
           ios: {
             category: 'playback',
@@ -72,6 +71,8 @@ export function createPlatformSoundEngine(): SoundEngine {
           },
         })
         AudioManager.observeAudioInterruptions(true)
+        // Only once it worked: a failure is tried again next time (it used to stick).
+        sessionConfigured = true
       }
       if (!sessionActive) {
         await AudioManager.setAudioSessionActivity(true)
@@ -110,7 +111,10 @@ export function createPlatformSoundEngine(): SoundEngine {
             await PlaybackNotificationManager.enableControl('skipBackward', false)
             await PlaybackNotificationManager.enableControl('seekTo', false)
           })
-          .catch(() => {})
+          .catch(() => {
+            // Try again with the next update.
+            controlsConfigured = false
+          })
       } else {
         void showPromise.catch(() => {})
       }
@@ -149,7 +153,7 @@ export function createPlatformSoundEngine(): SoundEngine {
         sessionActive = false
         void AudioManager.setAudioSessionActivity(false).catch(() => {})
       },
-      bindRemoteControls: ({ onPause, onPlay, onInterruption }) => {
+      bindRemoteControls: ({ onPause, onPlay, onInterruption, isPlaying }) => {
         const subs: ({ remove?: () => void } | undefined)[] = []
         try {
           subs.push(
@@ -160,6 +164,13 @@ export function createPlatformSoundEngine(): SoundEngine {
           )
           subs.push(
             PlaybackNotificationManager.addEventListener('playbackNotificationPlay', () => onPlay()),
+          )
+          subs.push(
+            // Headphones or a speaker went away: pause, as Music does, instead
+            // of carrying on out loud from the phone (ISS-15.4).
+            AudioManager.addSystemEventListener('routeChange', (ev) => {
+              if (ev.reason === 'OldDeviceUnavailable' && isPlaying()) onPause()
+            }),
           )
           subs.push(
             AudioManager.addSystemEventListener('interruption', (ev) => {
