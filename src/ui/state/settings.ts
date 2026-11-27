@@ -81,6 +81,10 @@ export interface SettingsState {
   reminderOfferAt: number | null
   /** Times they said "Not now" to it. */
   reminderOfferDeclines: number
+  /** nightKey()s of nights Inverna was opened, the last 30 (for the rating prompt). */
+  nightsUsed: string[]
+  /** When the rating prompt was last asked for (ms). */
+  reviewAskedAt: number | null
   /** Chosen difficulty per game (games without their own difficulty use it through `useCalm`). */
   difficulty: Partial<Record<GameId, Difficulty>>
   /** Difficulty for games not set one by one; from onboarding. */
@@ -169,6 +173,8 @@ const SAVED: { [K in Exclude<keyof SettingsState, 'set' | 'setSchedule' | 'recor
   onboardedNight: isNullable(isString),
   reminderOfferAt: isNullable(isNumber),
   reminderOfferDeclines: isNumber,
+  nightsUsed: isArrayOf(isString),
+  reviewAskedAt: isNullable(isNumber),
   difficulty: (v) => isRecord(v) && Object.entries(v).every(([k, d]) => isGameId(k) && isDifficulty(d)),
   defaultDifficulty: isDifficulty,
   profile: isNullable(isProfile),
@@ -212,6 +218,8 @@ export const useSettings = create<SettingsState>()(
       onboardedNight: null,
       reminderOfferAt: null,
       reminderOfferDeclines: 0,
+      nightsUsed: [],
+      reviewAskedAt: null,
       difficulty: {},
       defaultDifficulty: 'medium',
       profile: null,

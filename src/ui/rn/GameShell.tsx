@@ -22,6 +22,7 @@ import { Button, FRAME_MAX_WIDTH, IconButton, Segmented, Sheet } from './control
 import { GlassSurface } from './Glass'
 import { useBackgroundPause, useHighScore, useReducedMotion, useResponsiveLayout } from './hooks'
 import { EdgeSwipeBack } from './motion'
+import { maybeAskForReview } from './reviewPrompt'
 
 export interface GameScreenProps {
   onExit: () => void
@@ -731,6 +732,10 @@ export function Completion({
 }) {
   const { color } = useTokenColors()
   const best = useHighScores((s) => (gameId ? s.bestOf(gameId) : null))
+  // A solved round is a good moment to ask, now and then, for a rating.
+  useEffect(() => {
+    if (open) maybeAskForReview()
+  }, [open])
   if (!open) return null
   const bestText = gameId && best !== null ? formatScoreValue(gameId, best) : null
 

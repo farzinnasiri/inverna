@@ -14,6 +14,7 @@ import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
 import { LaunchVeil } from '@/ui/rn/LaunchVeil'
 import { useReminderPlanner } from '@/ui/rn/reminders'
 import { SessionCurtain } from '@/ui/rn/SessionCurtain'
+import { noteNightUsedNow } from '@/ui/rn/reviewPrompt'
 import { WindDownSheet } from '@/ui/rn/WindDownSheet'
 import { notifications } from '@/platform'
 import { useNav } from '@/ui/state/nav'
@@ -32,8 +33,11 @@ export default function RootLayout() {
   // back (a purchase approved meanwhile, a refund, Family Sharing).
   useEffect(() => {
     void useUnlock.getState().check()
+    noteNightUsedNow()
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && useUnlock.getState().status !== 'unlocked') void useUnlock.getState().check()
+      if (state !== 'active') return
+      noteNightUsedNow()
+      if (useUnlock.getState().status !== 'unlocked') void useUnlock.getState().check()
     })
     return () => sub.remove()
   }, [])

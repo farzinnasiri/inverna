@@ -5,6 +5,7 @@ import { sessionDone, sessionEnd, sessionLevels } from '@/core/session'
 import { sound } from '@/platform'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useCoverScreen } from './ambientClock'
+import { maybeAskForReview } from './reviewPrompt'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
@@ -82,7 +83,15 @@ export function SessionCurtain() {
   return (
     <Pressable
       pointerEvents={ended ? 'auto' : 'none'}
-      onPress={ended ? dismiss : undefined}
+      onPress={
+        ended
+          ? () => {
+              dismiss()
+              // Back from a finished wind-down: a good moment, now and then, to ask for a rating.
+              maybeAskForReview(2200)
+            }
+          : undefined
+      }
       style={[
         StyleSheet.absoluteFill,
         styles.curtain,
