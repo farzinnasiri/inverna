@@ -27,7 +27,6 @@ import Reanimated, {
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Check } from 'lucide-react-native'
 import { haptics } from '@/platform'
 import { feel } from '@/ui/feel'
 import { useCoverScreen } from './ambientClock'
@@ -661,54 +660,6 @@ export function Toggle({
         ]}
       />
     </Pressable>
-  )
-}
-
-/* --- PopoverMenu (sheet-hosted picker for native reliability) ------------ */
-
-export function PopoverMenu<T extends string | number | null>({
-  open,
-  onClose,
-  options,
-  value,
-  onSelect,
-  label,
-}: {
-  open: boolean
-  onClose: () => void
-  options: readonly { value: T; label: string }[]
-  value: T
-  onSelect: (v: T) => void
-  label: string
-}) {
-  const { color } = useTokenColors()
-  return (
-    <Sheet open={open} onClose={onClose} label={label}>
-      <Text style={[styles.menuTitle, { color: color.ink }]}>{label}</Text>
-      <View style={styles.menuList}>
-        {options.map((o) => {
-          const selected = o.value === value
-          return (
-            <Pressable
-              key={String(o.value)}
-              onPress={() => {
-                onSelect(o.value)
-                onClose()
-              }}
-              style={({ pressed }) => [
-                styles.menuRow,
-                {
-                  backgroundColor: selected ? color.surface3 : pressed ? color.surface2 : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.menuLabel, { color: selected ? color.ink : color.ink2 }]}>{o.label}</Text>
-              {selected && <Check size={17} strokeWidth={1.75} color={color.accent} />}
-            </Pressable>
-          )
-        })}
-      </View>
-    </Sheet>
   )
 }
 

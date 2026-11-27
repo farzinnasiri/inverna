@@ -106,94 +106,99 @@ function playQuantizedNote(
 ): void {
   if (activeCueVoices >= MAX_ACTIVE_CUE_VOICES) return
   activeCueVoices += 1
+  // The count goes back down in cleanup; if building the voice fails first, here (ISS-20).
+  try {
 
-  const start = ctx.currentTime + note.delay
-  const dur = note.attack + note.decay
-  const stopAt = start + dur + 0.04
+    const start = ctx.currentTime + note.delay
+    const dur = note.attack + note.decay
+    const stopAt = start + dur + 0.04
 
-  const filter = ctx.createBiquadFilter()
-  filter.type = 'lowpass'
-  setParam(filter.frequency, clamp(note.cutoff, 320, 4200))
-  setParam(filter.Q, BUTTERWORTH_Q_DB)
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'lowpass'
+    setParam(filter.frequency, clamp(note.cutoff, 320, 4200))
+    setParam(filter.Q, BUTTERWORTH_Q_DB)
 
-  const env = ctx.createGain()
-  const peak = Math.max(0.0002, note.gain * vol)
-  setParam(env.gain, 0.0001)
-  env.gain.setValueAtTime(0.0001, start)
-  env.gain.linearRampToValueAtTime(peak, start + note.attack)
-  env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
+    const env = ctx.createGain()
+    const peak = Math.max(0.0002, note.gain * vol)
+    setParam(env.gain, 0.0001)
+    env.gain.setValueAtTime(0.0001, start)
+    env.gain.linearRampToValueAtTime(peak, start + note.attack)
+    env.gain.exponentialRampToValueAtTime(0.0001, start + dur)
 
-  const fundamental = ctx.createOscillator()
-  fundamental.type = 'sine'
-  fundamental.frequency.setValueAtTime(note.freq, start)
-  if (note.endFreq && note.endFreq !== note.freq) {
-    fundamental.frequency.exponentialRampToValueAtTime(note.endFreq, start + note.attack + note.decay * 0.7)
-  }
-  fundamental.connect(filter)
+    const fundamental = ctx.createOscillator()
+    fundamental.type = 'sine'
+    fundamental.frequency.setValueAtTime(note.freq, start)
+    if (note.endFreq && note.endFreq !== note.freq) {
+      fundamental.frequency.exponentialRampToValueAtTime(note.endFreq, start + note.attack + note.decay * 0.7)
+    }
+    fundamental.connect(filter)
 
-  let overtone: OscillatorNodeLike | null = null
-  let overtoneGainNode: GainNodeLike | null = null
-  if (note.overtoneGain > 0.005) {
-    overtone = ctx.createOscillator()
-    overtone.type = 'triangle'
-    overtone.frequency.setValueAtTime(note.freq * 2, start)
-    overtoneGainNode = ctx.createGain()
-    setParam(overtoneGainNode.gain, note.overtoneGain)
-    overtone.connect(overtoneGainNode)
-    overtoneGainNode.connect(filter)
-  }
+    let overtone: OscillatorNodeLike | null = null
+    let overtoneGainNode: GainNodeLike | null = null
+    if (note.overtoneGain > 0.005) {
+      overtone = ctx.createOscillator()
+      overtone.type = 'triangle'
+      overtone.frequency.setValueAtTime(note.freq * 2, start)
+      overtoneGainNode = ctx.createGain()
+      setParam(overtoneGainNode.gain, note.overtoneGain)
+      overtone.connect(overtoneGainNode)
+      overtoneGainNode.connect(filter)
+    }
 
-  let panner: AudioNodeLike | null = null
-  filter.connect(env)
-  if (typeof ctx.createStereoPanner === 'function' && Math.abs(note.pan) > 0.02) {
-    try {
-      const p = ctx.createStereoPanner()
-      setParam(p.pan, clamp(note.pan, -0.7, 0.7))
-      env.connect(p)
-      p.connect(destination)
-      panner = p
-    } catch {
+    let panner: AudioNodeLike | null = null
+    filter.connect(env)
+    if (typeof ctx.createStereoPanner === 'function' && Math.abs(note.pan) > 0.02) {
+      try {
+        const p = ctx.createStereoPanner()
+        setParam(p.pan, clamp(note.pan, -0.7, 0.7))
+        env.connect(p)
+        p.connect(destination)
+        panner = p
+      } catch {
+        env.connect(destination)
+      }
+    } else {
       env.connect(destination)
     }
-  } else {
-    env.connect(destination)
-  }
 
-  let cleaned = false
-  let fallbackTimer: ReturnType<typeof setTimeout> | null = null
-  const cleanup = () => {
-    if (cleaned) return
-    cleaned = true
+    let cleaned = false
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      activeCueVoices = Math.max(0, activeCueVoices - 1)
+      if (fallbackTimer !== null) {
+        clearTimeout(fallbackTimer)
+        fallbackTimer = null
+      }
+      // CRITICAL for react-native-audio-api: clear `onended = null` so the native
+      // AudioEventEmitter unsubscribes and releases the C++ node from its registry!
+      try {
+        fundamental.onended = null
+      } catch {
+        /* ignore */
+      }
+      safeStop(fundamental)
+      safeStop(overtone)
+      safeDisconnect(fundamental)
+      safeDisconnect(overtone)
+      safeDisconnect(overtoneGainNode)
+      safeDisconnect(filter)
+      safeDisconnect(env)
+      safeDisconnect(panner)
+    }
+
+    fundamental.onended = cleanup
+    fallbackTimer = setTimeout(cleanup, Math.ceil((note.delay + dur + 0.35) * 1000))
+
+    fundamental.start(start)
+    fundamental.stop(stopAt)
+    if (overtone) {
+      overtone.start(start)
+      overtone.stop(stopAt)
+    }
+  } catch {
     activeCueVoices = Math.max(0, activeCueVoices - 1)
-    if (fallbackTimer !== null) {
-      clearTimeout(fallbackTimer)
-      fallbackTimer = null
-    }
-    // CRITICAL for react-native-audio-api: clear `onended = null` so the native
-    // AudioEventEmitter unsubscribes and releases the C++ node from its registry!
-    try {
-      fundamental.onended = null
-    } catch {
-      /* ignore */
-    }
-    safeStop(fundamental)
-    safeStop(overtone)
-    safeDisconnect(fundamental)
-    safeDisconnect(overtone)
-    safeDisconnect(overtoneGainNode)
-    safeDisconnect(filter)
-    safeDisconnect(env)
-    safeDisconnect(panner)
-  }
-
-  fundamental.onended = cleanup
-  fallbackTimer = setTimeout(cleanup, Math.ceil((note.delay + dur + 0.35) * 1000))
-
-  fundamental.start(start)
-  fundamental.stop(stopAt)
-  if (overtone) {
-    overtone.start(start)
-    overtone.stop(stopAt)
   }
 }
 

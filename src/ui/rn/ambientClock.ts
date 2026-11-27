@@ -5,7 +5,7 @@
  * Why not a frame callback or a repeating animation each: those run at the
  * display's full rate (120 Hz on ProMotion iPhones) and keep the screen there,
  * even if they only draw every fourth frame. And every Liquid Glass surface
- * over a moving scene redraws its glass each time the scene changes. Lull's
+ * over a moving scene redraws its glass each time the scene changes. Inverna's
  * ambient motion is slow, so 30 steps a second looks the same and costs a
  * fraction: one timer, one wake-up per step, all pictures updated together.
  *

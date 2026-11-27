@@ -16,7 +16,7 @@ describe('arrangeGames', () => {
 })
 
 describe('tonightPicks', () => {
-  it('marks nothing when Lull knows nothing', () => {
+  it('marks nothing when Inverna knows nothing', () => {
     expect(tonightPicks({ tonight: null, usual: null, plays: {} })).toEqual([])
   })
 

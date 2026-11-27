@@ -142,6 +142,8 @@ export function createClassicalMotifController(
   let darkness = 0.4
   let phraseIdx = 0
   let timer: ReturnType<typeof setTimeout> | null = null
+  /** Bumped on every switch, so a phrase timed for the old motif never plays in the new one (ISS-20). */
+  let generation = 0
 
   const clearTimer = () => {
     if (timer !== null) {
@@ -241,9 +243,10 @@ export function createClassicalMotifController(
         : activeStyle === 'nocturne'
           ? 4800
           : 4400
+    const mine = generation
     timer = setTimeout(() => {
       timer = null
-      if (!activeStyle) return
+      if (!activeStyle || mine !== generation) return
       playPhrase()
       scheduleNext(false)
     }, waitMs)
@@ -252,6 +255,11 @@ export function createClassicalMotifController(
   return {
     update({ style, keyId, darkness: nextDark }) {
       const styleChanged = style !== activeStyle
+      if (styleChanged) {
+        generation++
+        // A new motif starts from its first phrase.
+        phraseIdx = 0
+      }
       activeStyle = style
       activeKey = keyId
       darkness = nextDark
@@ -266,6 +274,7 @@ export function createClassicalMotifController(
 
     stop() {
       activeStyle = null
+      generation++
       clearTimer()
     },
 
