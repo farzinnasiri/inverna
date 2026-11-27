@@ -216,18 +216,16 @@ jobs:
         run: |
           set -euo pipefail
           brew install ccache >/dev/null
-          echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
-          echo "CCACHE_COMPILERCHECK=content" >> "$GITHUB_ENV"
-          echo "CCACHE_SLOPPINESS=clang_index_store,file_stat_matches,include_file_ctime,include_file_mtime,ivfsoverlay,pch_defines,modules,system_headers,time_macros" >> "$GITHUB_ENV"
-          echo "CCACHE_FILECLONE=true" >> "$GITHUB_ENV"
-          echo "CCACHE_DEPEND=true" >> "$GITHUB_ENV"
-          echo "CCACHE_INODECACHE=true" >> "$GITHUB_ENV"
+          # Xcode doesn't hand CCACHE_* variables to the compiler, and React
+          # Native's wrapper brings its own config (sloppiness, depend mode),
+          # so ccache uses its default folder: that's the one to cache.
+          ccache --zero-stats >/dev/null
 
       - name: Restore ccache
         if: inputs.platform == 'ios'
         uses: actions/cache@v4
         with:
-          path: ~/.ccache
+          path: ~/Library/Caches/ccache
           key: ccache-${{ inputs.profile }}-${{ github.sha }}
           restore-keys: ccache-${{ inputs.profile }}-
 
@@ -781,6 +779,15 @@ jobs:
           # Tar it: a .app is a directory, and upload-artifact would flatten the
           # bundle's symlinks, leaving something the simulator refuses to install.
           tar -czf "build/$(basename "$APP" .app)-simulator.tar.gz" -C "$(dirname "$APP")" "$(basename "$APP")"
+
+      - name: ccache stats
+        # Hit rate in the log, and the cache trimmed before it's saved, so
+        # three profiles' caches fit in GitHub's 10 GB alongside pods and pnpm.
+        if: always() && inputs.platform == 'ios'
+        shell: bash
+        run: |
+          ccache --show-stats || true
+          ccache --max-size=2G >/dev/null && ccache --cleanup >/dev/null || true
 
       - name: Build (Android)
         if: inputs.platform == 'android'
