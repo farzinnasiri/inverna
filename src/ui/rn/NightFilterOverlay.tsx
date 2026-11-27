@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { canUseManualLight } from '@/core/access'
 import { adaptiveFilter, combineFilters, manualFilter, type NightFilter } from '@/core/night'
 import { sessionLevels } from '@/core/session'
 import { applyTokens } from '@/design/tokens'
 import { useSession } from '@/ui/state/session'
 import { useCurrentSchedule, useSettings } from '@/ui/state/settings'
+import { useIsUnlocked } from '@/ui/state/unlock'
 
 /**
  * The screen's warmth and dimming now: the sliders, or Adaptive light &
@@ -12,9 +14,12 @@ import { useCurrentSchedule, useSettings } from '@/ui/state/settings'
  * colour tokens in step. `base` is the part the Settings sliders show.
  */
 export function useNightFilterMetrics({ owner = true }: { owner?: boolean } = {}): { warmth: number; dimOpacity: number; base: NightFilter } {
+  const unlocked = useIsUnlocked()
   const warmth = useSettings((s) => s.warmth)
   const brightness = useSettings((s) => s.brightness)
   const adaptive = useSettings((s) => s.adaptiveLight)
+  // Manual warmth & brightness require Full Unlock; free tier always uses Adaptive.
+  const effectiveAdaptive = canUseManualLight(unlocked) ? adaptive : true
   const session = useSession((s) => s.session)
   const [now, setNow] = useState(() => Date.now())
   const schedule = useCurrentSchedule(new Date(now))
@@ -22,13 +27,13 @@ export function useNightFilterMetrics({ owner = true }: { owner?: boolean } = {}
   // Only what changes with time needs a clock: Adaptive light, or a wind-down.
   // The manual sliders don't (ISS-18: every sheet ran its own 30 s timer).
   useEffect(() => {
-    if (!adaptive && !session) return
+    if (!effectiveAdaptive && !session) return
     setNow(Date.now())
     const id = setInterval(() => setNow(Date.now()), session ? 2000 : 30_000)
     return () => clearInterval(id)
-  }, [session, adaptive])
+  }, [session, effectiveAdaptive])
 
-  const baseFilter = adaptive ? adaptiveFilter(schedule, new Date(now)) : manualFilter(warmth, brightness)
+  const baseFilter = effectiveAdaptive ? adaptiveFilter(schedule, new Date(now)) : manualFilter(warmth, brightness)
   const sessLevels = session ? sessionLevels(session, now) : null
   const sessFilter = sessLevels ? { warmth: sessLevels.warmth, dim: sessLevels.dim } : { warmth: 0, dim: 0 }
   const combined = combineFilters(baseFilter, sessFilter)

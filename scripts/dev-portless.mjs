@@ -78,12 +78,15 @@ aliasRegistered = true
 
 const url = portless(['get', ROUTE_NAME], true)
 const useDevClient = process.env.EXPO_DEV_CLIENT === '1'
+const appVariant = process.env.APP_VARIANT || 'development'
 const expoArgs = ['exec', 'expo', 'start', ...(useDevClient ? ['--dev-client'] : []), '--lan', '--port', metroPort]
-console.log(`\n› Portless: ${url}  ->  Metro :${metroPort} (${useDevClient ? '--dev-client ' : ''}--lan)\n`)
+console.log(
+  `\n› Portless: ${url}  ->  Metro :${metroPort} (${useDevClient ? '--dev-client ' : ''}--lan, APP_VARIANT=${appVariant})\n`,
+)
 
 metro = spawn('pnpm', expoArgs, {
   cwd,
-  env: { ...process.env },
+  env: { ...process.env, APP_VARIANT: appVariant },
   stdio: 'inherit',
 })
 

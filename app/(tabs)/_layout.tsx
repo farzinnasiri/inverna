@@ -1,10 +1,10 @@
-import { StyleSheet, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { Redirect } from 'expo-router'
 import { NativeTabs } from 'expo-router/native-tabs'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { AmbientBackdrop } from '@/ui/rn/AmbientBackdrop'
-import { useSettings } from '@/ui/state/settings'
 import { useUnlock } from '@/ui/state/unlock'
+import { useSettings } from '@/ui/state/settings'
 
 /**
  * See-through tabs: one backdrop lives behind all three tabs, so switching tabs
@@ -25,13 +25,12 @@ const CLEAR_CONTENT = { backgroundColor: 'transparent' } as const
  */
 export default function TabsLayout() {
   const { color } = useTokenColors()
+  const checking = useUnlock((s) => s.status === 'checking')
   const onboarded = useSettings((s) => s.onboarded)
-  const unlock = useUnlock((s) => s.status)
-  // First run (or after "Clear data"): meet Inverna first.
+  // First run (or after "Clear data"): meet Inverna first, then enter Play directly (freemium).
   if (!onboarded) return <Redirect href="/onboarding" />
-  // Then the one purchase. While StoreKit answers, nothing shows (the launch veil covers it).
-  if (unlock === 'checking') return <View style={styles.root} />
-  if (unlock === 'locked') return <Redirect href="/paywall" />
+
+  if (checking) return <ActivityIndicator style={styles.root} color={color.accent} accessibilityLabel="Checking purchases" />
 
   return (
     <View style={styles.root}>

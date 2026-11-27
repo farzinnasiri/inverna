@@ -237,10 +237,10 @@ export const onboarding = {
     name: 'Inverna',
     /** The intro has no question; the lens and the name lead. */
     title: '',
-    tagline: 'Made for busy minds and night owls.',
-    subline: 'Calm games, soft sound and warm light to help you get from your phone to sleep.',
-    /** Said up front, so the purchase after setup is never a surprise. */
-    oneTime: 'A one-time purchase after setup. No subscription.',
+    tagline: 'Doomscrolling in bed again?',
+    subline: 'Swap the feed for quiet games, soft sounds and warm light that slow down toward bedtime.',
+    /** Said up front: generous free start, optional one-time unlock. */
+    oneTime: 'Start free. One-time unlock, no subscription.',
     button: 'See how it works',
   },
   science: {
@@ -315,6 +315,13 @@ export const onboarding = {
     privacy: 'Privacy policy',
     button: 'All set',
   },
+  ready: {
+    title: 'Your quiet nights are ready.',
+    freeHeading: 'Ready free right now',
+    freeSummary: '4 quiet games · 4 sleep sounds · Adaptive night light',
+    unlockHeading: 'Or unlock everything forever',
+    startFree: 'Start free',
+  },
 }
 
 /** The sound's sleep timer on Sounds: when the sound fades out. */
@@ -368,6 +375,13 @@ export const settingsCopy = {
   howItWorksNote: 'The three-pillar system and science behind it',
   erase: 'Erase all data',
   eraseHold: 'Hold to erase everything',
+  unlockTitle: 'Unlock all of Inverna',
+  unlockNote: 'All 13 games, 12 sounds, unlimited mixes & manual light',
+  unlockedTitle: 'Full Inverna unlocked',
+  unlockedNote: 'Thank you for supporting quiet, offline software',
+  manualLightLocked: 'Adaptive light is free. Manual brightness & warmth are part of Full Unlock.',
+  devPreviewFree: 'Preview free tier',
+  devPreviewFreeNote: 'Dev only — test locked games, sounds, custom mix limit & paywall without paying.',
 }
 
 export type WaveBandKey = 'beta' | 'alpha' | 'theta' | 'delta'
@@ -516,26 +530,40 @@ export const reminders: readonly { title: string; named: string; body: string }[
   { title: 'Winding down soon', named: 'Winding down soon, {name}', body: 'No rush. Your games and sleep sound are here when you want them.' },
 ]
 
-/** After onboarding: one purchase unlocks Inverna (Version B of docs/research/PAYWALL.md). */
+/** Contextual Full Unlock sheet & onboarding tier explainer. */
 export const paywall = {
-  title: 'Your evening is set up.',
-  body: 'Based on what you told me, Inverna is ready for tonight. Unlock it once and wind down your way.',
-  readyTitle: 'Ready for tonight',
-  windDown: (minutes: number) => `A ${minutes}-minute wind down, with a warm, dim screen`,
-  sounds: (name: string) => `${name} and soft chords, plus the Composer for your own`,
-  games: '13 slow games to take the place of late-night scrolling',
-  nothing: 'Works offline, with no account, no ads and no streaks',
-  trust: (price: string) => `One payment of ${price}, less than two months of most sleep apps. No subscription, ever.`,
-  trustNoPrice: 'One payment, less than two months of most sleep apps. No subscription, ever.',
-  cta: (price: string | null) => (price ? `Unlock Inverna · ${price}` : 'Unlock Inverna'),
+  title: 'All of Inverna, yours to keep.',
+  titleForGame: (name?: string) => (name ? `Unlock ${name} & every game.` : 'Unlock all 13 quiet games.'),
+  titleForSound: (name?: string) => (name ? `Unlock ${name} & every sound.` : 'Unlock all 12 sleep sounds.'),
+  titleForCustomSound: 'Save unlimited custom mixes.',
+  titleForManualLight: 'Tune brightness & warmth by hand.',
+  body: 'One purchase unlocks all of Inverna, forever.',
+  bodyForCustomSound: 'Your first saved sound is free. Unlock once to save as many mixes as you like.',
+  bodyForManualLight: 'Adaptive night light is always free. Unlock once to fine-tune light by hand.',
+  features: {
+    games: { title: 'All 13 quiet games', detail: 'Every bedtime puzzle, endless & classic' },
+    sounds: { title: '12 sleep sounds & unlimited mixes', detail: 'Every soundscape + save as many mixes as you like' },
+    light: { title: 'Manual night light', detail: 'Fine-tune brightness & warmth anytime' },
+  },
+  pills: {
+    offline: 'Play Offline',
+    once: 'Pay Once',
+    noAds: 'Zero Ads',
+    private: 'No Data Collected',
+  },
+  familySharing: 'Includes Apple Family Sharing',
+  devPreviewNote: 'Dev preview — tapping unlock simulates a purchase without charging.',
+  cta: (price: string | null) => (price ? `Unlock Forever · ${price}` : 'Unlock Forever'),
+  loadingPrice: 'Loading price…',
+  retry: 'Try again',
+  notNow: 'Not now',
+  startFree: 'Start free',
   restore: 'Restore Purchases',
   privacy: 'Privacy Policy',
-  terms: 'Terms of Use',
-  small: 'A one-time purchase through your Apple Account. Made to help you relax before bed, not to diagnose or treat sleep conditions.',
-  pending: 'Your purchase is waiting for approval. Inverna opens as soon as it’s through.',
-  failed: 'That didn’t go through. Nothing was charged. Try again in a moment.',
+  pending: 'Your purchase is waiting for approval. Inverna unlocks as soon as it’s through.',
+  failed: 'The purchase couldn’t be confirmed. If you already paid, tap Restore Purchases.',
   nothingToRestore: 'No earlier purchase found on this Apple Account.',
-  unreachable: 'The App Store can’t be reached right now. Check your connection and try again.',
+  unreachable: 'Unable to load pricing from the App Store right now.',
 }
 
 /** Now and then, while reminders are off: would they like one? */

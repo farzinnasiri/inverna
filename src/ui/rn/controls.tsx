@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Children, createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Animated,
   Easing,
@@ -32,14 +32,14 @@ import { feel } from '@/ui/feel'
 import { useCoverScreen } from './ambientClock'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { useSettings } from '@/ui/state/settings'
-import { GLASS_TINT, GlassSurface } from './Glass'
+import { GlassSurface } from './Glass'
 import { Layer } from './Layer'
 
 export const FRAME_MAX_WIDTH = 440
 
 /* --- Buttons ------------------------------------------------------------- */
 
-type BtnVariant = 'primary' | 'quiet' | 'ghost'
+type BtnVariant = 'primary' | 'upgrade' | 'quiet' | 'ghost'
 
 export function Button({
   variant = 'quiet',
@@ -62,21 +62,20 @@ export function Button({
 }) {
   const { color } = useTokenColors()
   const isSm = size === 'sm'
-  const fg = variant === 'primary' ? color.accent : color.ink
+  const isSolid = variant === 'primary' || variant === 'upgrade'
+  const fg = variant === 'primary' ? color.accentInk : variant === 'upgrade' ? '#FFFFFF' : color.ink
   const height = isSm ? 40 : 50
   const radius = isSm ? 20 : 16
-  const label =
-    typeof children === 'string' ? (
-      <Text style={[styles.btnText, { color: fg, fontSize: isSm ? 15 : 16 }, variant === 'primary' ? styles.btnTextPrimary : null]}>
-        {children}
-      </Text>
-    ) : (
-      children
-    )
+  const textStyle = [styles.btnText, { color: fg, fontSize: isSm ? 15 : 16 }, isSolid ? styles.btnTextPrimary : null]
+  // Words go in a Text wherever they are, so an icon beside a label works too
+  // (a bare string inside the glass View crashes on native).
+  const label = Children.map(children, (child) =>
+    typeof child === 'string' || typeof child === 'number' ? <Text style={textStyle}>{child}</Text> : child,
+  )
 
-  // Primary and quiet buttons are glass: primary is the glass tinted warm (the
-  // app's one treatment for "this is the one"), quiet is plain glass. Ghost
-  // buttons are just text.
+  // Primary is solid antique brass with crisp dark ink (unmistakably active on
+  // any living scene). Upgrade uses twilight indigo + white ink so Full Unlock
+  // never collides with brass selections. Quiet is plain glass; ghost is text.
   return (
     <Pressable
       disabled={disabled}
@@ -86,19 +85,36 @@ export function Button({
       style={({ pressed }) => [
         {
           width: block ? '100%' : undefined,
-          opacity: disabled ? 0.35 : pressed ? 0.86 : 1,
-          transform: [{ scale: pressed && !disabled ? 0.97 : 1 }],
+          opacity: disabled ? 0.38 : pressed ? 0.88 : 1,
+          transform: [{ scale: pressed && !disabled ? 0.975 : 1 }],
         },
         variant === 'ghost' ? [styles.btn, { height, paddingHorizontal: isSm ? 16 : 22 }, style] : null,
       ]}
     >
       {variant === 'ghost' ? (
         label
+      ) : isSolid ? (
+        <View
+          style={[
+            styles.btn,
+            {
+              height,
+              borderRadius: radius,
+              borderCurve: 'continuous',
+              paddingHorizontal: isSm ? 16 : 22,
+              backgroundColor: variant === 'upgrade' ? '#7B6CF0' : color.accent,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: variant === 'upgrade' ? 'rgba(220, 212, 255, 0.42)' : 'rgba(255, 244, 216, 0.36)',
+            },
+            style,
+          ]}
+        >
+          {label}
+        </View>
       ) : (
         <GlassSurface
           variant="pill"
           radius={radius}
-          tint={variant === 'primary' ? GLASS_TINT.primary : undefined}
           interactive
           style={[styles.btn, { height, paddingHorizontal: isSm ? 16 : 22 }, style]}
         >

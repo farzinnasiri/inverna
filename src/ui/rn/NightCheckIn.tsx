@@ -11,6 +11,7 @@ import {
   Eye,
   Frown,
   Leaf,
+  Lock,
   Moon,
   Pause,
   Play,
@@ -18,6 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native'
 import Animated from 'react-native-reanimated'
+import { canPlayPreset, fallbackFreePreset } from '@/core/access'
 import { nightKey } from '@/core/night'
 import { feel } from '@/ui/feel'
 import { presetById } from '@/core/sound/catalog'
@@ -27,6 +29,7 @@ import { checkIn as copy, soundsHelp } from '@/ui/copy'
 import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
+import { useIsUnlocked } from '@/ui/state/unlock'
 import { Button, Sheet } from './controls'
 import { GlassSurface } from './Glass'
 import { useReducedMotion } from './hooks'
@@ -70,6 +73,7 @@ export function NightCheckIn() {
   const presetId = useSound((s) => s.presetId)
   const playPreset = useSound((s) => s.playPreset)
   const stopSound = useSound((s) => s.stop)
+  const unlocked = useIsUnlocked()
 
   const [step, setStep] = useState<Step>('day')
   const [day, setDay] = useState<DayAnswer | null>(null)
@@ -101,6 +105,7 @@ export function NightCheckIn() {
   const pickNow = (n: NowAnswer) => {
     tap()
     const plan = planTonight(day ?? 'calm', n)
+    const playablePick = plan.sounds.find((id) => canPlayPreset(id, unlocked)) ?? fallbackFreePreset(plan.sounds[0], unlocked)
     setNow(n)
     set({
       tonightDay: day ?? 'calm',
@@ -108,8 +113,8 @@ export function NightCheckIn() {
       tonightIntent: plan.intent,
       checkInAskedNight: nightKey(new Date()),
       checkInAnsweredNight: nightKey(new Date()),
-      // Tonight's sound, unless one is already playing.
-      ...(useSound.getState().playing ? null : { sessionPreset: plan.sounds[0] }),
+      // Tonight's sound, unless one is already playing (always a playable preset when locked).
+      ...(useSound.getState().playing ? null : { sessionPreset: playablePick }),
     })
     setSuggested(plan.sounds)
     setStep('result')
@@ -117,6 +122,11 @@ export function NightCheckIn() {
 
   const toggleSound = (id: string) => {
     tap()
+    if (!canPlayPreset(id, unlocked)) {
+      setMode(null)
+      useNav.getState().openPaywall('sound', presetById(id)?.name)
+      return
+    }
     if (playing && presetId === id) {
       stopSound(0.6)
       return
@@ -169,21 +179,24 @@ export function NightCheckIn() {
               {suggested.map((id, i) => {
                 const p = presetById(id)
                 if (!p) return null
-                const live = playing && presetId === id
+                const locked = !canPlayPreset(id, unlocked)
+                const live = !locked && playing && presetId === id
                 return (
                   <Rise key={id} delay={itemDelay(i)} reduced={reduced} style={styles.soundCell}>
                   <Pressable
                     onPress={() => toggleSound(id)}
                     accessibilityRole="button"
-                    accessibilityLabel={live ? `Stop ${p.name}` : `Play ${p.name}`}
+                    accessibilityLabel={locked ? `${p.name}, locked` : live ? `Stop ${p.name}` : `Play ${p.name}`}
                     style={({ pressed }) => [{ transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                   >
                     <GlassSurface variant="card" radius={18} accent={live} interactive style={styles.soundTile}>
                       <View style={styles.soundTop}>
                         <SoundGlyph icon={p.icon} size={22} color={live ? color.accent : color.ink2} />
-                        {/* Shows it plays on tap. */}
-                        <View style={[styles.playDot, { borderColor: live ? color.accent : 'rgba(255,255,255,0.18)' }]}>
-                          {live ? (
+                        {/* Shows it plays on tap, or unlocks on tap. */}
+                        <View style={[styles.playDot, { borderColor: live || locked ? color.accent : 'rgba(255,255,255,0.18)' }]}>
+                          {locked ? (
+                            <Lock size={12} strokeWidth={1.9} color={color.accent} />
+                          ) : live ? (
                             <Pause size={13} strokeWidth={2} color={color.accent} fill={color.accent} />
                           ) : (
                             <Play size={13} strokeWidth={2} color={color.ink} fill={color.ink} style={{ marginLeft: 2 }} />

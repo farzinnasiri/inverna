@@ -9,7 +9,8 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native'
-import { Compass, PenLine, Plus, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
+import { Compass, Lock, PenLine, Plus, SlidersHorizontal, Timer, Volume2 } from 'lucide-react-native'
+import { FREE_CUSTOM_SOUND_LIMIT, canUseSavedSound, canCreateCustomSound, canPlayPreset, fallbackFreePreset } from '@/core/access'
 import { soundsHelp, soundTimer, studioCopy } from '@/ui/copy'
 import { feel } from '@/ui/feel'
 import { formatBedtime12h, formatHHMM } from '@/core/night'
@@ -32,9 +33,11 @@ import { scrollEndClearance, tabBarClearance, useResponsiveLayout } from '@/ui/r
 import { describeMix, MixSheet, type SoundMeta, type StudioTarget } from '@/ui/rn/MixSheet'
 import { SoundField } from '@/ui/rn/SoundField'
 import { SoundGlyph } from '@/ui/rn/SoundGlyph'
+import { UPGRADE_INK } from '@/ui/rn/Paywall'
 import { useNav } from '@/ui/state/nav'
-import { useSettings } from '@/ui/state/settings'
+import { saveCustomSound, useSettings } from '@/ui/state/settings'
 import { resolveTimer, UNTIL_LIGHTS_OUT, useSound, type MixMeta } from '@/ui/state/sound'
+import { isAppUnlocked, useIsUnlocked } from '@/ui/state/unlock'
 import { pulseRate } from '@/core/sound/arc'
 
 /** One tile in the sound grid: a preset, or a sound they made. */
@@ -97,20 +100,32 @@ export default function SoundsScreen() {
   const setSoundTimer = useSound((s) => s.setTimer)
 
   const customMix = useSettings((s) => s.mix)
-  const customSounds = useSettings((s) => s.customSounds)
+  const savedLibrary = useSettings((s) => s.customSounds)
   const savedPreset = useSettings((s) => s.sessionPreset)
   const sleepTimer = useSettings((s) => s.sleepTimer)
   const setSettings = useSettings((s) => s.set)
 
   const mixOpen = useNav((s) => s.mixOpen)
   const setMixOpen = useNav((s) => s.setMixOpen)
+  const unlocked = useIsUnlocked()
 
-  const [selectedId, setSelectedId] = useState<string>(
-    () => activePresetId ?? presetById(savedPreset)?.id ?? DEFAULT_PRESET_ID,
+  const customSounds = useMemo(
+    () => unlocked ? savedLibrary : savedLibrary.slice(0, FREE_CUSTOM_SOUND_LIMIT),
+    [savedLibrary, unlocked],
+  )
+  const [selectedId, setSelectedId] = useState<string>(() =>
+    fallbackFreePreset(activePresetId ?? presetById(savedPreset)?.id ?? DEFAULT_PRESET_ID, unlocked),
   )
   const [studio, setStudio] = useState<StudioTarget>({ kind: 'current' })
   // What the studio is changing; it becomes "Your mix" until it's saved.
   const [draft, setDraft] = useState<Mix | null>(null)
+  useEffect(() => {
+    if (studio.kind === 'saved' && !canUseSavedSound(studio.sound.id, savedLibrary, unlocked)) {
+      setMixOpen(false)
+      setStudio({ kind: 'current' })
+      setDraft(null)
+    }
+  }, [studio, savedLibrary, unlocked, setMixOpen])
   const [timerOpen, setTimerOpen] = useState(false)
   const [viewportH, setViewportH] = useState(0)
   const [pageIdx, setPageIdx] = useState<number>(() => presetById(activePresetId ?? savedPreset)?.page ?? 0)
@@ -123,20 +138,36 @@ export default function SoundsScreen() {
   useEffect(() => {
     if (playing) setSelectedId(playingId)
   }, [playing, playingId])
+  // If access drops back to free tier while a locked preset was selected, fall back cleanly.
+  useEffect(() => {
+    if (unlocked) return
+    const isCustom = selectedId === 'custom' || customSounds.some((c) => c.id === selectedId)
+    if (!isCustom && !canPlayPreset(selectedId, false)) {
+      setSelectedId(DEFAULT_PRESET_ID)
+    }
+  }, [unlocked, selectedId, customSounds])
   const currentId = playing ? playingId : selectedId
-  // What they liked in onboarding comes first on each page.
+  // What they liked in onboarding comes first on each page; on the free tier,
+  // playable free presets always sit first at the top of Page 1.
   const profile = useSettings((s) => s.profile)
-  const orderedPresets = useMemo(
-    () => (profile ? soundOrder(profile).map((id) => presetById(id)!).filter(Boolean) : PRESETS),
-    [profile],
-  )
+  const orderedPresets = useMemo(() => {
+    const base = profile ? soundOrder(profile).map((id) => presetById(id)!).filter(Boolean) : PRESETS
+    if (unlocked) return base
+    return [...base.filter((p) => canPlayPreset(p.id, false)), ...base.filter((p) => !canPlayPreset(p.id, false))]
+  }, [profile, unlocked])
   // The presets' pages, then pages of their own sounds, six to a page.
   const pages = useMemo(() => {
-    const out: SoundItem[][] = PRESET_PAGES.map((pg) =>
-      orderedPresets
-        .filter((p) => p.page === pg.id)
-        .map((p) => ({ id: p.id, name: p.name, hint: p.hint, icon: p.icon, custom: null })),
-    )
+    const out: SoundItem[][] = unlocked
+      ? PRESET_PAGES.map((pg) =>
+          orderedPresets
+            .filter((p) => p.page === pg.id)
+            .map((p) => ({ id: p.id, name: p.name, hint: p.hint, icon: p.icon, custom: null })),
+        )
+      : Array.from({ length: Math.ceil(orderedPresets.length / PAGE_SIZE) }, (_, i) =>
+          orderedPresets
+            .slice(i * PAGE_SIZE, (i + 1) * PAGE_SIZE)
+            .map((p) => ({ id: p.id, name: p.name, hint: p.hint, icon: p.icon, custom: null })),
+        )
     for (let i = 0; i < customSounds.length; i += PAGE_SIZE) {
       out.push(
         customSounds.slice(i, i + PAGE_SIZE).map((c) => ({
@@ -149,7 +180,7 @@ export default function SoundsScreen() {
       )
     }
     return out
-  }, [orderedPresets, customSounds])
+  }, [orderedPresets, customSounds, unlocked])
   const pageOf = (id: string) => Math.max(0, pages.findIndex((pg) => pg.some((it) => it.id === id)))
 
   const currentCustom = customSounds.find((c) => c.id === currentId) ?? null
@@ -175,13 +206,18 @@ export default function SoundsScreen() {
   }
 
   const selectSound = (id: string, autoPlay = true) => {
+    const mine = customSounds.find((c) => c.id === id)
+    if (!mine && !canPlayPreset(id, unlocked)) {
+      feel('tick')
+      useNav.getState().openPaywall('sound', presetById(id)?.name)
+      return
+    }
     feel('tick')
     if (playing && id === currentId) {
       stopSound(0.9)
       return
     }
     setSelectedId(id)
-    const mine = customSounds.find((c) => c.id === id)
     if (mine) {
       if (autoPlay) playMix(mine.mix, sleepTimer, metaOf(mine))
       return
@@ -199,12 +235,18 @@ export default function SoundsScreen() {
     } else if (currentId === 'custom') {
       playMix(customMix, sleepTimer)
     } else {
-      playPreset(currentPreset?.id ?? DEFAULT_PRESET_ID, sleepTimer)
+      const targetId = currentPreset?.id ?? DEFAULT_PRESET_ID
+      if (!canPlayPreset(targetId, unlocked)) {
+        useNav.getState().openPaywall('sound', presetById(targetId)?.name)
+        return
+      }
+      playPreset(targetId, sleepTimer)
     }
   }
 
   const swipePreset = (dir: -1 | 1) => {
-    const all = pages.flat()
+    const all = pages.flat().filter((it) => it.custom !== null || canPlayPreset(it.id, unlocked))
+    if (all.length === 0) return
     const idx = Math.max(0, all.findIndex((it) => it.id === currentId))
     const next = all[(idx + dir + all.length) % all.length]!
     const page = pageOf(next.id)
@@ -269,29 +311,26 @@ export default function SoundsScreen() {
 
   const saveSound = (meta: SoundMeta, asNew: boolean) => {
     const mix = draft ?? displayMix
-    let id: string
-    let list: CustomSound[]
-    if (studio.kind === 'saved' && !asNew) {
-      id = studio.sound.id
-      list = customSounds.map((c) => (c.id === id ? { ...c, ...meta, mix } : c))
-    } else {
-      id = `mine-${Date.now().toString(36)}`
-      list = [...customSounds, { id, ...meta, mix, createdAt: Date.now() }]
+    const editingId = studio.kind === 'saved' && !asNew ? studio.sound.id : null
+    const saved = saveCustomSound({ ...meta, mix }, editingId, isAppUnlocked())
+    if (!saved) {
+      setMixOpen(false)
+      useNav.getState().openPaywall('custom-sound')
+      return
     }
-    setSettings({ customSounds: list })
-    setSelectedId(id)
-    if (playing) playMix(mix, sleepTimer, { title: meta.name, hint: meta.hint, icon: meta.icon })
+    setSelectedId(saved.id)
+    if (playing) playMix(mix, sleepTimer, metaOf(saved))
     setMixOpen(false)
     feel('complete')
     // Show its tile.
-    const index = list.findIndex((c) => c.id === id)
+    const index = useSettings.getState().customSounds.findIndex((c) => c.id === saved.id)
     const page = PRESET_PAGES.length + Math.floor(index / PAGE_SIZE)
     setTimeout(() => goToPage(page), 320)
   }
 
   const deleteSound = (id: string) => {
     const gone = customSounds.find((c) => c.id === id)
-    const list = customSounds.filter((c) => c.id !== id)
+    const list = useSettings.getState().customSounds.filter((c) => c.id !== id)
     setSettings(gone && currentId === id ? { customSounds: list, mix: gone.mix, hasCustomMix: true } : { customSounds: list })
     if (currentId === id) {
       setSelectedId('custom')
@@ -317,20 +356,27 @@ export default function SoundsScreen() {
     sleepTimer === UNTIL_LIGHTS_OUT ? soundTimer.untilEnd(endClock) : sleepTimer > 0 ? soundTimer.after(sleepTimer) : soundTimer.allNight
 
   // Everything fits one screen on any phone: the orb takes whatever height
-  // the rest leaves. The page should end a fixed gap above the floating tab
-  // bar; we measure where it really ends on screen and grow or shrink the orb
-  // by the difference (one correction; the rest of the page doesn't depend on
-  // the orb). Very short phones scroll a little rather than go below 160.
-  const frameRef = useRef<ComponentRef<typeof View>>(null)
-  const [orbSize, setOrbSize] = useState(isCompact ? 176 : 210)
+  // the rest of the page leaves. The page should end a fixed gap above the
+  // floating tab bar. Worked out from heights only (the scroll view's, and the
+  // page's without its orb), all in the page's own coordinates.
+  //
+  // Not from where the page sits on screen: that was measured once, and the
+  // first time the tab is built (right after onboarding, before it's shown)
+  // the position is wrong, the orb shrank to its smallest, and nothing
+  // measured again once the tab appeared. Heights don't depend on whether
+  // the tab is visible or mid-transition, and any change re-runs this.
+  // Very short phones scroll a little rather than go below 160.
+  const [restH, setRestH] = useState(0)
   const padTop = insets.top + (isCompact ? 6 : 10)
-  const pageEnd = height - tabBarClearance(insets.bottom) - 8
-  const fitOrb = () => {
-    frameRef.current?.measureInWindow((_x, y, _w, h) => {
-      if (!h) return
-      const next = Math.round(Math.max(160, Math.min(280, orbSize + (pageEnd - (y + h)))))
-      if (Math.abs(next - orbSize) > 2) setOrbSize(next)
-    })
+  const pageEnd = (viewportH > 0 ? viewportH : height) - tabBarClearance(insets.bottom) - 8
+  const orbSize =
+    restH > 0 ? Math.round(Math.max(160, Math.min(280, pageEnd - padTop - restH))) : isCompact ? 176 : 210
+  const orbRendered = useRef(orbSize)
+  orbRendered.current = orbSize
+  const measureRest = (e: LayoutChangeEvent) => {
+    // The frame is the orb plus everything else; everything else doesn't depend on the orb.
+    const rest = Math.round(e.nativeEvent.layout.height - orbRendered.current)
+    if (rest > 0 && Math.abs(rest - restH) > 1) setRestH(rest)
   }
   // Below the page: what's left of the scroll view, so it doesn't scroll for nothing.
   const padBottom = viewportH > 0 ? Math.max(12, viewportH - pageEnd) : scrollEndClearance(insets.bottom)
@@ -358,7 +404,7 @@ export default function SoundsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View ref={frameRef} style={[styles.frame, { gap: sectionGap }]} onLayout={fitOrb}>
+        <View style={[styles.frame, { gap: sectionGap }]} onLayout={measureRest}>
           {/* Top Watchmaker utility bar: Timer | Title | Mix */}
           {/* Equal sides, so the name sits in the true centre whatever each chip says. */}
           <View style={styles.topBar}>
@@ -447,8 +493,9 @@ export default function SoundsScreen() {
                       style={[styles.gridPage, { width: pagerWidth || '100%', gap: isCompact ? 9 : 10 }]}
                     >
                       {pageItems.map((item) => {
-                        const selected = item.id === currentId
-                        const live = playing && selected
+                        const locked = !item.custom && !canPlayPreset(item.id, unlocked)
+                        const selected = !locked && item.id === currentId
+                        const live = !locked && playing && selected
                         return (
                           <Pressable
                             key={item.id}
@@ -461,6 +508,8 @@ export default function SoundsScreen() {
                                   }
                                 : undefined
                             }
+                            accessibilityRole="button"
+                            accessibilityLabel={`${item.name}${locked ? ', locked' : ''}`}
                             accessibilityHint={item.custom ? studioCopy.editHint : undefined}
                             style={({ pressed }) => [
                               styles.cardWrap,
@@ -479,7 +528,7 @@ export default function SoundsScreen() {
                               style={[styles.presetCard, { height: rowH }]}
                             >
                               <View style={styles.presetTop}>
-                                <View style={styles.presetTitleRow}>
+                                <View style={[styles.presetTitleRow, locked ? { opacity: 0.72 } : null]}>
                                   <SoundGlyph
                                     icon={item.icon}
                                     size={15}
@@ -492,7 +541,11 @@ export default function SoundsScreen() {
                                     {item.name}
                                   </Text>
                                 </View>
-                                {live ? <View style={[styles.liveDot, { backgroundColor: color.accent }]} /> : null}
+                                {locked ? (
+                                  <Lock size={12} strokeWidth={1.9} color={UPGRADE_INK} />
+                                ) : live ? (
+                                  <View style={[styles.liveDot, { backgroundColor: color.accent }]} />
+                                ) : null}
                                 {/* Made by them: a small pen, quiet but there. */}
                                 {item.custom ? (
                                   <PenLine size={12} strokeWidth={1.7} color={live || selected ? color.accent : color.ink3} />
@@ -559,13 +612,26 @@ export default function SoundsScreen() {
               </GlassSurface>
             </Pressable>
             <Pressable
-              onPress={() => openStudio({ kind: 'new', from: currentName })}
+              onPress={() => {
+                if (!canCreateCustomSound(customSounds.length, unlocked)) {
+                  feel('tick')
+                  useNav.getState().openPaywall('custom-sound')
+                  return
+                }
+                openStudio({ kind: 'new', from: currentName })
+              }}
               accessibilityRole="button"
-              accessibilityLabel={soundsHelp.create}
+              accessibilityLabel={
+                canCreateCustomSound(customSounds.length, unlocked) ? soundsHelp.create : `${soundsHelp.create}, locked`
+              }
               style={({ pressed }) => [styles.createCell, { transform: [{ scale: pressed ? 0.98 : 1 }] }]}
             >
               <GlassSurface variant="card" radius={20} interactive style={[styles.helpRow, styles.createRow]}>
-                <Plus size={18} strokeWidth={2} color={color.accent} />
+                {canCreateCustomSound(customSounds.length, unlocked) ? (
+                  <Plus size={18} strokeWidth={2} color={color.accent} />
+                ) : (
+                  <Lock size={15} strokeWidth={1.9} color={color.accent} />
+                )}
                 <Text style={[styles.helpText, styles.createText, { color: color.ink }]} numberOfLines={1}>
                   {soundsHelp.create}
                 </Text>

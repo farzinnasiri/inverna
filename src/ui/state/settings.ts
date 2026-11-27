@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { canCreateCustomSound, canUseSavedSound } from '@/core/access'
 import { persist } from 'zustand/middleware'
 import { isArrayOf, isBoolean, isNullable, isNumber, isOneOf, isRecord, isRecordOf, isString, pickValid } from '@/core/decode'
 import { GAMES, type GameId, type NightIntent } from '@/core/games/catalog'
@@ -28,6 +29,8 @@ export interface PlayLayout {
   night: string
   /** The usual intent it was made for; a new one (onboarding again) remakes it. */
   usual: NightIntent | null
+  /** Whether Full Unlock was active when this layout was built (free tier keeps free games on top). */
+  unlocked?: boolean
   order: GameId[]
   wide: GameId[]
   /** Games marked for tonight before any check-in (a check-in tonight replaces them). */
@@ -133,6 +136,7 @@ const isPlayLayout = (v: unknown): v is PlayLayout =>
   isRecord(v) &&
   isString(v.night) &&
   (v.usual === null || isIntent(v.usual)) &&
+  (v.unlocked === undefined || isBoolean(v.unlocked)) &&
   isArrayOf(isGameId)(v.order) &&
   isArrayOf(isGameId)(v.wide) &&
   isArrayOf(isGameId)(v.picks)
@@ -365,4 +369,28 @@ export function useCurrentSchedule(now: Date): Schedule {
   const schedule = useSettings((s) => s.schedule)
   const tonight = useSettings((s) => s.tonightBedtime)
   return effectiveSchedule(schedule, tonight, now)
+}
+
+/** Read the current library at commit time, including a save from the previous tap. */
+export function saveCustomSound(
+  fields: Pick<CustomSound, 'name' | 'hint' | 'icon' | 'mix'>,
+  editingId: string | null,
+  unlocked: boolean,
+): CustomSound | null {
+  const { customSounds, set } = useSettings.getState()
+  if (editingId !== null) {
+    if (!canUseSavedSound(editingId, customSounds, unlocked)) return null
+    const original = customSounds.find((sound) => sound.id === editingId)!
+    const edited = { ...original, ...fields }
+    set({ customSounds: customSounds.map((sound) => sound.id === editingId ? edited : sound) })
+    return edited
+  }
+  if (!canCreateCustomSound(customSounds.length, unlocked)) return null
+  const createdAt = Date.now()
+  const prefix = `mine-${createdAt.toString(36)}`
+  let id = prefix
+  for (let suffix = 1; customSounds.some((sound) => sound.id === id); suffix++) id = `${prefix}-${suffix}`
+  const added = { id, ...fields, createdAt }
+  set({ customSounds: [...customSounds, added] })
+  return added
 }

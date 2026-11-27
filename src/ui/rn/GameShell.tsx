@@ -2,6 +2,7 @@ import { createContext, Fragment, useContext, useEffect, useRef, useState, type 
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated'
 import { Award, Bell, BellOff, ChevronLeft, CircleHelp, Pause, Play, RotateCcw, Volume2, VolumeX } from 'lucide-react-native'
+import { fallbackFreePreset } from '@/core/access'
 import { feel } from '@/ui/feel'
 import { gameMeta, type GameId } from '@/core/games/catalog'
 import { bedtimeNudgeDue, SHELL_START, shellPause, shellReducer, type ShellEvent } from '@/core/games/shell'
@@ -16,6 +17,7 @@ import { currentSchedule, useSettings, type Difficulty } from '@/ui/state/settin
 import { bedtimeNudge as nudgeCopy, gameDoor as doorCopy } from '@/ui/copy'
 import { sound as soundEngine } from '@/platform'
 import { useAmbientToggle, useSound } from '@/ui/state/sound'
+import { isAppUnlocked } from '@/ui/state/unlock'
 import { GameAudioSheet } from './GameAudioSheet'
 import { AmbientBackdrop } from './AmbientBackdrop'
 import { Button, FRAME_MAX_WIDTH, IconButton, Segmented, Sheet } from './controls'
@@ -230,7 +232,7 @@ export function GameShell({
       const st = useSettings.getState()
       st.set({ lastLightsOutNight: nightKey(now) })
       st.recordSleep('lightsOut', now)
-      useSound.getState().playPreset(st.sessionPreset ?? 'theta-rain', 45)
+      useSound.getState().playPreset(fallbackFreePreset(st.sessionPreset ?? 'theta-rain', isAppUnlocked()), 45)
     }
     stepOut()
   }
@@ -545,8 +547,8 @@ export function GameShell({
           {hadSave ? (
             <>
               <Button variant="primary" block onPress={() => enter(false)}>
-                <Play size={15} strokeWidth={2} color={color.accent} />
-                <Text style={[styles.readyBtnText, { color: color.accent }]}>{doorCopy.continue}</Text>
+                <Play size={15} strokeWidth={2} color={color.accentInk} fill={color.accentInk} />
+                <Text style={[styles.readyBtnText, { color: color.accentInk }]}>{doorCopy.continue}</Text>
               </Button>
               <Button variant="quiet" block onPress={() => enter(true)}>
                 {doorCopy.newGame}
@@ -554,8 +556,8 @@ export function GameShell({
             </>
           ) : (
             <Button variant="primary" block onPress={() => enter(false)}>
-              <Play size={15} strokeWidth={2} color={color.accent} />
-              <Text style={[styles.readyBtnText, { color: color.accent }]}>{doorCopy.newGame}</Text>
+              <Play size={15} strokeWidth={2} color={color.accentInk} fill={color.accentInk} />
+              <Text style={[styles.readyBtnText, { color: color.accentInk }]}>{doorCopy.newGame}</Text>
             </Button>
           )}
           <Button variant="ghost" size="sm" block onPress={() => openSheet('help')}>
@@ -576,8 +578,8 @@ export function GameShell({
         {readyExtra ? <View style={styles.doorPicker}>{readyExtra}</View> : null}
         <View style={styles.sheetActions}>
           <Button variant="primary" block onPress={() => startOver(false)}>
-            <Play size={15} strokeWidth={2} color={color.accent} />
-            <Text style={[styles.readyBtnText, { color: color.accent }]}>{doorCopy.start}</Text>
+            <Play size={15} strokeWidth={2} color={color.accentInk} fill={color.accentInk} />
+            <Text style={[styles.readyBtnText, { color: color.accentInk }]}>{doorCopy.start}</Text>
           </Button>
           {onNewGame && onRestart ? (
             <Button variant="quiet" block onPress={() => startOver(true)}>
@@ -626,8 +628,8 @@ export function GameShell({
 
         <View style={styles.sheetActions}>
           <Button variant="primary" block onPress={() => onPauseChange(false)}>
-            <Play size={15} strokeWidth={2} color={color.accent} />
-            <Text style={[styles.readyBtnText, { color: color.accent }]}>Resume</Text>
+            <Play size={15} strokeWidth={2} color={color.accentInk} fill={color.accentInk} />
+            <Text style={[styles.readyBtnText, { color: color.accentInk }]}>Resume</Text>
           </Button>
 
           <View style={styles.doorRow}>

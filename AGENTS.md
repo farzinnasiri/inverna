@@ -6,6 +6,8 @@ Read `docs/ARCHITECTURE.md`, `docs/DESIGN.md`, and `docs/REDESIGN_V2.md` before 
 
 Names: [`GLOSSARY.md`](GLOSSARY.md) has one name for each thing in Inverna. Use it in code, copy and docs.
 
+Product direction & distribution: read [`VISION.md`](VISION.md) and [`DISTRIBUTION.md`](DISTRIBUTION.md) before changing positioning, onboarding copy, paywall/entitlements, App Store metadata, icons, or screenshots.
+
 Three iOS apps install side by side: Inverna Dev, Inverna Beta (TestFlight) and Inverna (App Store), picked by `APP_VARIANT`. See `docs/RELEASES.md` before building, submitting or changing app IDs, icons or build numbers.
 
 Haptics follow the Haptics section of `docs/DESIGN.md`: five named events (`tick`, `settle`, `reward`, `complete`, `commit`), silent buttons and navigation, nothing felt for events the person didn't cause. Read it before adding or changing any haptic.

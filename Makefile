@@ -29,7 +29,7 @@ web: ## Start Expo web dev server directly on PORT (default 8081)
 	pnpm exec expo start --web --lan --port $(PORT)
 
 start: ## Start Metro directly for Expo Go / phone over LAN
-	pnpm exec expo start --lan --port $(PORT)
+	APP_VARIANT=$${APP_VARIANT:-development} pnpm exec expo start --lan --port $(PORT)
 
 expo: start ## Alias for make start
 

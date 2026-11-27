@@ -5,10 +5,11 @@ import { router, Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context'
 import { applyTokens } from '@/design/tokens'
-import { sound } from '@/platform'
+import { notifications, skipPaywall, sound, store } from '@/platform'
 import { NightCheckIn } from '@/ui/rn/NightCheckIn'
+import { PaywallSheet } from '@/ui/rn/Paywall'
 import { ReminderOfferSheet } from '@/ui/rn/ReminderOfferSheet'
 import { NightFilterOverlay } from '@/ui/rn/NightFilterOverlay'
 import { LaunchVeil } from '@/ui/rn/LaunchVeil'
@@ -16,7 +17,6 @@ import { useReminderPlanner } from '@/ui/rn/reminders'
 import { SessionCurtain } from '@/ui/rn/SessionCurtain'
 import { noteNightUsedNow } from '@/ui/rn/reviewPrompt'
 import { WindDownSheet } from '@/ui/rn/WindDownSheet'
-import { notifications } from '@/platform'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
@@ -33,17 +33,33 @@ applyTokens({ warmth: 0, force: true })
 export default function RootLayout() {
   useReminderPlanner()
 
-  // Ask StoreKit whether Inverna is bought at launch, and again on coming
-  // back (a purchase approved meanwhile, a refund, Family Sharing).
+  // Ask StoreKit whether Full Unlock is owned at launch, on every foreground
+  // resume (catching refunds, Ask-to-Buy approvals & Family Sharing changes),
+  // and whenever StoreKit emits an out-of-band transaction update.
   useEffect(() => {
-    void useUnlock.getState().check()
+    const check = async () => {
+      await useUnlock.getState().check()
+      const { status, unreachable } = useUnlock.getState()
+      return status === 'unlocked' && !unreachable
+    }
+    const unsubStore = skipPaywall ? undefined : store.subscribe(check)
+    void check()
     noteNightUsedNow()
+    // OpenIAP 4.2.1 drops revoked Transaction.updates. Reconcile a long
+    // foreground session too, without prompting for an App Store sync.
+    const reconcile = !skipPaywall && Platform.OS === 'ios' ? setInterval(() => {
+      if (AppState.currentState === 'active' && useUnlock.getState().status === 'unlocked') void check()
+    }, 60_000) : undefined
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return
       noteNightUsedNow()
-      if (useUnlock.getState().status !== 'unlocked') void useUnlock.getState().check()
+      void useUnlock.getState().check()
     })
-    return () => sub.remove()
+    return () => {
+      clearInterval(reconcile)
+      unsubStore?.()
+      sub.remove()
+    }
   }, [])
 
   // A tapped wind-down reminder opens Play with the check-in.
@@ -106,7 +122,8 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <SafeAreaProvider>
+      {/* Real insets from the first frame, so no screen lays out once with zero insets. */}
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <StatusBar style="light" />
         <View style={styles.root}>
           <Stack
@@ -134,6 +151,7 @@ export default function RootLayout() {
           <WindDownSheet />
           <NightCheckIn />
           <ReminderOfferSheet />
+          <PaywallSheet />
           <SessionCurtain />
           <NightFilterOverlay />
           <LaunchVeil />

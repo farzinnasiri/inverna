@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FREE_GAMES } from '../access'
 import { arrangeGames, favourites, PICKS, tonightPicks } from './arrange'
 import { GAMES, GAMES_BY_INTENT } from './catalog'
 
@@ -25,6 +26,23 @@ describe('arranging the games on Play', () => {
     expect(order[0]).toBe('nine')
     expect(wide).toEqual(['nine', 'pond'])
   })
+
+  it('keeps all free unlocked games at the top on the free tier regardless of intent or locked plays', () => {
+    for (const usual of ['melt', 'focus', 'light', null] as const) {
+      const { order, wide } = arrangeGames({ usual, plays: { weave: 12, rally: 8 }, unlocked: false })
+      expect(new Set(order.slice(0, FREE_GAMES.length))).toEqual(new Set(FREE_GAMES))
+      expect(new Set(order).size).toBe(GAMES.length)
+      expect(FREE_GAMES).toContain(wide[0])
+      expect(wide).toHaveLength(2)
+    }
+  })
+
+  it('puts a favourite free game first in the free tier', () => {
+    const { order, wide } = arrangeGames({ usual: 'melt', plays: { nine: 7, settle: 4 }, unlocked: false })
+    expect(order[0]).toBe('nine')
+    expect(wide[0]).toBe('nine')
+    expect(new Set(order.slice(0, FREE_GAMES.length))).toEqual(new Set(FREE_GAMES))
+  })
 })
 
 describe("tonight's picks", () => {
@@ -45,5 +63,13 @@ describe("tonight's picks", () => {
   it("ignores a favourite that doesn't suit the intent", () => {
     const picks = tonightPicks({ tonight: null, usual: 'melt', plays: { rally: 12 } })
     expect(picks).toEqual(GAMES_BY_INTENT.melt.slice(0, PICKS))
+  })
+
+  it('only recommends playable free games on the free tier', () => {
+    for (const intent of ['melt', 'focus', 'light'] as const) {
+      const picks = tonightPicks({ tonight: intent, usual: null, plays: { lanterns: 10 }, unlocked: false })
+      expect(picks).toHaveLength(PICKS)
+      for (const id of picks) expect(FREE_GAMES).toContain(id)
+    }
   })
 })

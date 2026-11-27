@@ -197,6 +197,7 @@ export function Rise({
   delay = 0,
   distance = 6,
   duration = 220,
+  scaleFrom = 1,
   reduced,
   style,
   children,
@@ -204,6 +205,7 @@ export function Rise({
   delay?: number
   distance?: number
   duration?: number
+  scaleFrom?: number
   reduced: boolean
   style?: StyleProp<ViewStyle>
   children: ReactNode
@@ -215,10 +217,16 @@ export function Rise({
     // Mount only: re-renders must not restart the entrance.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const animated = useAnimatedStyle(() => ({
-    opacity: p.get(),
-    transform: [{ translateY: distance * (1 - p.get()) }],
-  }))
+  const animated = useAnimatedStyle(() => {
+    const v = p.get()
+    return {
+      opacity: v,
+      transform: [
+        { translateY: distance * (1 - v) },
+        ...(scaleFrom !== 1 ? [{ scale: scaleFrom + (1 - scaleFrom) * v }] : []),
+      ],
+    }
+  })
   return <Animated.View style={[style, animated]}>{children}</Animated.View>
 }
 

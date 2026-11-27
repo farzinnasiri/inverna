@@ -1,10 +1,15 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Lock } from 'lucide-react-native'
+import { canPlayPreset } from '@/core/access'
 import { PRESETS } from '@/core/sound/catalog'
 import { harmonicKeyMeta } from '@/core/sound/harmonics'
 import { sound } from '@/platform'
+import { feel } from '@/ui/feel'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
 import { useAmbientToggle, useSound } from '@/ui/state/sound'
+import { useIsUnlocked } from '@/ui/state/unlock'
 import { Sheet, Slider, Toggle } from './controls'
 
 export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -24,6 +29,7 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
   const keyLabel = harmonicKeyMeta(harmonicKey).moodName
 
   const ambient = useAmbientToggle()
+  const unlocked = useIsUnlocked()
   const toggleAmbient = (on: boolean) => {
     if (on !== playing) ambient.toggle()
   }
@@ -47,21 +53,35 @@ export function GameAudioSheet({ open, onClose }: { open: boolean; onClose: () =
 
       <View style={styles.chips}>
         {PRESETS.filter((p) => p.page === 0).map((p) => {
-          const active = playing && presetId === p.id
+          const locked = !canPlayPreset(p.id, unlocked)
+          const active = !locked && playing && presetId === p.id
           return (
             <Pressable
               key={p.id}
-              onPress={() => (active ? stop(0.8) : playPreset(p.id, sleepTimer))}
+              onPress={() => {
+                if (locked) {
+                  feel('tick')
+                  onClose()
+                  useNav.getState().openPaywall('sound', p.name)
+                  return
+                }
+                if (active) stop(0.8)
+                else playPreset(p.id, sleepTimer)
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`${p.name}${locked ? ', locked' : ''}`}
               style={[
                 styles.chip,
                 {
                   // Selected: warm, not outlined (the app's selection treatment).
                   backgroundColor: active ? 'rgba(194, 161, 95, 0.2)' : color.surface2,
                   borderColor: active ? 'rgba(255, 236, 200, 0.2)' : color.line,
+                  opacity: locked ? 0.72 : 1,
                 },
               ]}
             >
               <Text style={[styles.chipText, { color: active ? color.ink : color.ink2 }]}>{p.name}</Text>
+              {locked ? <Lock size={11} strokeWidth={1.9} color={color.accent} /> : null}
             </Pressable>
           )
         })}
@@ -137,6 +157,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   chip: {
+    flexDirection: 'row',
+    gap: 5,
     height: 36,
     paddingHorizontal: 13,
     borderRadius: 999,

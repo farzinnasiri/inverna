@@ -13,6 +13,7 @@
  *
  * Pure: no React, no time.
  */
+import { canPlayGame } from '../access'
 import { GAMES, GAMES_BY_INTENT, type GameId, type NightIntent } from './catalog'
 
 /** Plays in total before favourites count, and plays of one game before it can be one. */
@@ -36,17 +37,33 @@ export function arrangeGames({
   tonight = null,
   usual,
   plays,
+  unlocked = true,
 }: {
   /** From tonight's check-in; null when not answered tonight. Play leaves it out (see tonightPicks). */
   tonight?: NightIntent | null
   /** From onboarding; null if skipped. */
   usual: NightIntent | null
   plays: Partial<Record<GameId, number>>
+  /** When false (free tier), playable free games always lead at the top of the grid. */
+  unlocked?: boolean
 }): { order: GameId[]; wide: GameId[] } {
   const base = [...GAMES_BY_INTENT[tonight ?? usual ?? 'melt']]
   const known = new Set(GAMES.map((g) => g.id))
   const order = base.filter((id) => known.has(id))
   const favs = favourites(plays)
+
+  if (!unlocked) {
+    const freeBase = order.filter((id) => canPlayGame(id, false))
+    const lockedBase = order.filter((id) => !canPlayGame(id, false))
+    const freeFavs = favs.filter((id) => canPlayGame(id, false))
+    // Keep playable free games first: top tonight/favourite free game takes wide slot 0.
+    const freeLead = tonight ? [freeBase[0]!, ...freeFavs.filter((f) => f !== freeBase[0])] : freeFavs
+    const freeHead = freeLead.slice(0, 1)
+    const freeOrdered = [...freeHead, ...freeBase.filter((id) => !freeHead.includes(id))]
+    const result = [...freeOrdered, ...lockedBase]
+    const wide = WIDE_SLOTS.map((slot) => result[slot]!).filter(Boolean)
+    return { order: result, wide }
+  }
 
   // Tonight's pick leads for one night; favourites fill the remaining wide slot(s).
   const pinned: GameId[] = tonight ? [order[0]!, ...favs.filter((f) => f !== order[0])] : favs
@@ -74,15 +91,21 @@ export function tonightPicks({
   tonight,
   usual,
   plays,
+  unlocked = true,
 }: {
   tonight: NightIntent | null
   usual: NightIntent | null
   plays: Partial<Record<GameId, number>>
+  unlocked?: boolean
 }): GameId[] {
   const intent = tonight ?? usual
   if (!intent) return []
-  const forIntent = GAMES_BY_INTENT[intent]
+  const forIntent = GAMES_BY_INTENT[intent].filter((id) => canPlayGame(id, unlocked))
   // Tonight's answer decides alone; on a usual night their favourite leads if it suits the intent.
-  const fav = tonight ? [] : favourites(plays).filter((id) => forIntent.slice(0, 6).includes(id)).slice(0, 1)
+  const fav = tonight
+    ? []
+    : favourites(plays)
+        .filter((id) => canPlayGame(id, unlocked) && forIntent.slice(0, 6).includes(id))
+        .slice(0, 1)
   return [...fav, ...forIntent.filter((id) => !fav.includes(id))].slice(0, PICKS)
 }

@@ -36,7 +36,6 @@ function strandPath(w: number, h: number, busy: number, clock: number, strand: n
   'worklet'
   const TAU = Math.PI * 2
   const mid = h / 2
-  const span = w - 16
   let d = ''
   for (let i = 0; i <= POINTS; i++) {
     const t = i / POINTS
@@ -45,7 +44,7 @@ function strandPath(w: number, h: number, busy: number, clock: number, strand: n
     const turns = 5 + strand * 2
     const ang = t * TAU * turns + clock * TAU * (strand + 1) + strand * 2.1
     const wave = Math.sin(t * TAU * 1.5 + clock * TAU + strand * 1.3) * h * (0.07 + busy * 0.1)
-    const x = 8 + t * span + r * Math.cos(ang)
+    const x = t * w + r * Math.cos(ang) * taper
     const y = mid + wave + r * Math.sin(ang * (1 + strand * 0.5)) * taper
     d += `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`
   }

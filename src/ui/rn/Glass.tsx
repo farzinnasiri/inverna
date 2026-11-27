@@ -132,6 +132,8 @@ export const GLASS_TINT = {
   primary: 'rgba(194, 161, 95, 0.26)',
   /** Tonight's suggestion on Play: a touch quieter than a selection. */
   suggested: 'rgba(194, 161, 95, 0.2)',
+  /** Full Unlock / upgrade surfaces: twilight indigo so brass stays reserved for selections. */
+  upgrade: 'rgba(130, 114, 245, 0.18)',
 } as const
 const SELECTED_WEB_BG = 'rgba(70, 58, 34, 0.62)'
 

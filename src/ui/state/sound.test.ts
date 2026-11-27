@@ -58,10 +58,11 @@ const engine = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/platform', () => ({ sound: engine.sound, bootPlatform: () => {} }))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+vi.mock('@/platform', () => ({ sound: engine.sound, bootPlatform: () => {}, skipPaywall: false, canPreviewFreeTier: false }))
 
 const { useSound } = await import('./sound')
-const { useSettings } = await import('./settings')
+const { saveCustomSound, useSettings } = await import('./settings')
 const { useSession } = await import('./session')
 
 const RAIN: Mix = { ...SILENT_MIX, layers: { rain: 0.6 } }
@@ -231,9 +232,47 @@ describe('sound store: one deadline', () => {
 
   // ISS-04: Erase all data leaves nothing to show or resume on the lock screen.
   it('reset forgets what was loaded', () => {
+    useSettings.setState({ customSounds: [{ id: 'mine-1', name: 'Mine', hint: '', icon: 'rain', mix: RAIN, createdAt: 1 }] })
     useSound.getState().playMix(RAIN, undefined, { id: 'mine-1', title: 'Mine', hint: '', icon: 'rain' })
+    expect(useSound.getState().playing).toBe(true)
     useSound.getState().reset()
     expect(useSound.getState()).toMatchObject({ playing: false, presetId: null, mix: null, mixMeta: null, stopAt: null })
     expect(last('reset')).toBeDefined()
   })
+})
+
+it('stops a revoked preset and prevents restarting it from a stale selection', async () => {
+  const { useUnlock } = await import('./unlock')
+  useUnlock.setState({ status: 'unlocked' })
+  useSound.getState().playPreset('hearth')
+  expect(useSound.getState().playing).toBe(true)
+  useUnlock.setState({ status: 'locked' })
+  expect(last('reset')).toBeDefined()
+  useSound.getState().playPreset('hearth')
+  expect(useSound.getState()).toMatchObject({ playing: false, presetId: null, mix: null })
+})
+
+it('keeps the first saved sound playable after a downgrade and preserves the rest for restore', async () => {
+  const { useUnlock } = await import('./unlock')
+  const library = ['mine-first', 'mine-second'].map((id) => ({ id, name: id, hint: '', icon: 'rain' as const, mix: RAIN, createdAt: 1 }))
+  useSettings.setState({ customSounds: library })
+  const play = (id: string) => useSound.getState().playMix(RAIN, 0, { id, title: id, hint: '', icon: 'rain' })
+  useUnlock.setState({ status: 'unlocked' })
+  play('mine-second')
+  expect(useSound.getState().playing).toBe(true)
+  useUnlock.setState({ status: 'locked' })
+  play('mine-second')
+  expect(useSound.getState().playing).toBe(false)
+  play('mine-first')
+  expect(useSound.getState().playing).toBe(true)
+  expect(useSettings.getState().customSounds).toEqual(library)
+})
+
+it('rejects a second simultaneous save or duplicate while still allowing the free sound to be edited', () => {
+  useSettings.setState({ customSounds: [] })
+  const fields = { mix: RAIN, name: 'First', hint: '', icon: 'rain' as const }
+  const first = saveCustomSound(fields, null, false)!
+  expect(saveCustomSound(fields, null, false)).toBeNull()
+  expect(saveCustomSound({ ...fields, name: 'Edited' }, first.id, false)?.id).toBe(first.id)
+  expect(useSettings.getState().customSounds.map((sound) => sound.name)).toEqual(['Edited'])
 })

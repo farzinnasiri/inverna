@@ -1,72 +1,20 @@
-# App Store listing and review (draft for Farzin)
+# App Store listing and review (operational checklist)
 
-What's already set in App Store Connect (app 6839721977, version 1.0):
-support URL, marketing URL and privacy policy URL (inverna.app),
-and the in-app purchase `com.oooflabs.inverna.unlock` (non-consumable,
-$9.99 US, Family Sharing on). Beta has `com.oooflabs.inverna.beta.unlock`.
+Canonical positioning, Title, Subtitle, Keywords, full Description, Screenshots, Hero Banner, and Copy Bank live in [`../../DISTRIBUTION.md`](../../DISTRIBUTION.md). This file tracks what is configured in App Store Connect vs. what still needs Farzin's manual action.
 
-Still to do by hand (each needs your say or your details):
+## Already configured in App Store Connect (app `6839721977`, version `1.0`)
+- Support URL, Marketing URL, and Privacy Policy URL (`inverna.app`, `support@inverna.app`).
+- Non-consumable IAP `com.oooflabs.inverna.unlock` (Production) and `com.oooflabs.inverna.beta.unlock` (Beta, app `6839721993`) — Family Sharing **ON**.
 
-1. **App Privacy:** choose "Data Not Collected". Inverna sends nothing: no
-   analytics, no crash reporting of its own, no account. (`src/ui/log.ts`
-   has no sink.)
-2. **Description:** the first two lines say it's a one-time purchase, so the
-   paywall is never a surprise (App Review 2.3.1 and the research's top
-   risk). Draft below; change the voice where it isn't yours.
-3. **Review notes and contact:** the draft below, plus your name, email and
-   phone in App Review Information.
-4. **Attach the in-app purchase** to the 1.0 submission (it needs a review
-   screenshot of the paywall: take one from a Beta build).
-5. **Regional prices** (the research suggests about 75%, 50% and 35–40% of
-   the US price by region): part of the pricing talk we're having later.
-
-## Description (draft)
-
-> Inverna is a one-time purchase after a short setup. No subscription.
->
-> Made for busy minds and night owls. Inverna gives the hour before bed
-> something gentler than scrolling: calm games, soft sound and warm light
-> that slow down as bedtime gets closer.
->
-> QUIET GAMES
-> Thirteen slow games with nothing to lose: no timers, no streaks, no
-> leaderboards. A koi pond, colour gradients, a quiet sudoku, falling blocks
-> that never rush you, and more. As bedtime nears, they get gentler.
->
-> SOUND FOR SLEEP
-> Rain, waves, fire, wind and soft noise, with held chords underneath, all
-> made on your phone. Make your own in the Composer. A sleep timer fades it
-> out at the end of your usual sleep time.
->
-> WIND DOWN
-> Start a wind down and the screen warms and dims, the sound slows, and
-> everything fades out at your bedtime. An optional reminder an hour before
-> bed asks how your day was and sets up your night.
->
-> NOTHING ELSE
-> Works offline. No account, no ads, and nothing you do leaves your phone.
->
-> Inverna is made to help you relax before bed. It isn't a medical device
-> and doesn't diagnose or treat sleep problems.
-
-## Review notes (draft)
-
-> Inverna is an offline wind-down app: 13 quiet games, sound generated on the
-> device, and a warm night palette. No account or network is needed.
->
-> It's a free download with one non-consumable in-app purchase
-> (com.oooflabs.inverna.unlock) after onboarding. To reach it, tap "See how
-> it works" and then Skip on the onboarding pages; the purchase screen
-> follows. It shows the price from StoreKit, Restore Purchases, the Privacy
-> Policy and Terms of Use (Apple's standard EULA). Buying with a sandbox
-> account opens the app; Restore Purchases on a second device unlocks it too.
->
-> To hear background audio: Sounds tab, tap the orb, then lock the phone.
-> The sound keeps playing with Lock Screen controls and fades out with the
-> sleep timer. Inverna never records audio and has no microphone permission.
->
-> Bedtime reminders are local notifications, off until turned on, and every
-> feature works without them. Settings has the reminder switch, the privacy
-> policy, help and support, and Erase all data.
->
-> Inverna is a relaxation app, not a medical device.
+## Still to update by hand before 1.0 submission
+1. **Update IAP Price to `$6.99` US + 4-tier PPP:** Lower `com.oooflabs.inverna.unlock` from `$9.99` → `$6.99` US and set regional PPP overrides (~75%, ~50%, ~35–40% tiers). Keep Family Sharing ON.
+2. **App Privacy:** Select **"Data Not Collected"**. Inverna sends nothing off-device (`src/ui/log.ts` has no sink).
+3. **Metadata (copy verbatim from `DISTRIBUTION.md` §4):**
+   - **Name:** `Inverna: Sleep Games & Sounds` (29/30)
+   - **Subtitle:** `Quiet Puzzles & Brown Noise` (27/30)
+   - **Primary Category:** `Health & Fitness` · **Secondary:** `Games → Puzzle`
+   - **Keywords (100/100):** `bedtime,wind,down,calm,relax,cozy,night,light,dim,rain,pink,white,ambient,sudoku,2048,offline,scroll`
+   - **Promotional Text, Description, and Review Notes:** Copy from `DISTRIBUTION.md` §4.
+4. **Attach the In-App Purchase** (`com.oooflabs.inverna.unlock`) to the 1.0 submission with a review screenshot of the unlock sheet captured from an `Inverna Beta` build.
+5. **Upload final App Store Screenshots (iPhone 6.9" + iPad 13") & Hero Banner** per `DISTRIBUTION.md` §6.
+6. **Review Contact Info:** Confirm Farzin's name, email, and phone in App Review Information.

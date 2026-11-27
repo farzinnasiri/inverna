@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ComponentRef } from 'react'
 import { PanResponder, Pressable, StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native'
 import Svg, { Path } from 'react-native-svg'
-import { ArrowDown, ArrowUp, ChevronLeft, Info, Pause, Play, RotateCcw } from 'lucide-react-native'
+import { ArrowDown, ArrowUp, ChevronLeft, Info, Lock, Pause, Play, RotateCcw } from 'lucide-react-native'
+import { canCreateCustomSound } from '@/core/access'
 import { pulseRate, type ModulationDepth } from '@/core/sound/arc'
 import {
   CUSTOM_ICONS,
@@ -18,8 +19,10 @@ import { sound } from '@/platform'
 import { studioCopy as copy, studioGuides, type GuideRow } from '@/ui/copy'
 import { feel } from '@/ui/feel'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
+import { useNav } from '@/ui/state/nav'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
+import { useIsUnlocked } from '@/ui/state/unlock'
 import { Button, HoldButton, PillSlider, Sheet, useSheetScrollLock } from './controls'
 import { GLASS_TINT, GlassSurface } from './Glass'
 import { useAppActive, useReducedMotion } from './hooks'
@@ -352,7 +355,10 @@ export function MixSheet({
   const appActive = useAppActive()
   const descent = useSound((s) => s.descent)
   const modulationDepth = useSettings((s) => s.modulationDepth)
+  const customSoundsCount = useSettings((s) => s.customSounds.length)
   const setSettings = useSettings((s) => s.set)
+  const unlocked = useIsUnlocked()
+  const canCreateNew = canCreateCustomSound(customSoundsCount, unlocked)
 
   const [step, setStep] = useState<'mix' | 'name'>('mix')
   const [guide, setGuide] = useState<GuideTopic | null>(null)
@@ -485,12 +491,18 @@ export function MixSheet({
         </Pressable>
         <Button
           size="sm"
-          variant="primary"
+          variant={!saved && !canCreateNew ? 'upgrade' : 'primary'}
           onPress={() => {
             feel('tick')
+            if (!saved && !canCreateNew) {
+              onClose()
+              useNav.getState().openPaywall('custom-sound')
+              return
+            }
             setStep('name')
           }}
         >
+          {!saved && !canCreateNew ? <Lock size={13} strokeWidth={2} color="#FFFFFF" /> : null}
           {saved ? copy.save : copy.saveNew}
         </Button>
       </View>
@@ -759,7 +771,20 @@ export function MixSheet({
 
       {saved ? (
         <>
-          <Button variant="quiet" block disabled={!canSave} onPress={() => save(true)}>
+          <Button
+            variant="quiet"
+            block
+            disabled={!canSave}
+            onPress={() => {
+              if (!canCreateNew) {
+                onClose()
+                useNav.getState().openPaywall('custom-sound')
+                return
+              }
+              save(true)
+            }}
+          >
+            {!canCreateNew ? <Lock size={14} strokeWidth={2} color={color.accent} /> : null}
             {copy.saveAsNew}
           </Button>
           <HoldButton label={copy.deleteHold} onConfirm={() => onDelete(saved.id)} />

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { canUseSavedSound, canPlayPreset, fallbackFreePreset } from '@/core/access'
 import { computeDescent, type DescentSnapshot } from '@/core/sound/arc'
 import { minutesUntilRangeEnd } from '@/core/night'
 import { sessionEnd } from '@/core/session'
@@ -7,6 +8,7 @@ import { DEFAULT_HARMONIC_KEY, type HarmonicKeyId } from '@/core/sound/harmonics
 import { sound } from '@/platform'
 import { useSession } from './session'
 import { currentSchedule, useSettings } from './settings'
+import { isAppUnlocked, useUnlock, useIsUnlocked } from './unlock'
 
 interface SoundState {
   playing: boolean
@@ -188,6 +190,13 @@ export const useSound = create<SoundState>()((set, get) => {
     set({ stopAt })
   })
 
+  useUnlock.subscribe((access) => {
+    const { presetId, mixMeta, reset } = get()
+    const unlocked = isAppUnlocked(access)
+    if ((presetId && !canPlayPreset(presetId, unlocked)) ||
+        (mixMeta?.id && !canUseSavedSound(mixMeta.id, useSettings.getState().customSounds, unlocked))) reset()
+  })
+
   const initialPreset = presetById(useSettings.getState().sessionPreset ?? DEFAULT_PRESET_ID)
   const initialKey = initialPreset?.harmonicKey ?? DEFAULT_HARMONIC_KEY
   const initialDescent = buildDescentSnapshot(initialPreset?.id ?? DEFAULT_PRESET_ID, initialPreset?.mix ?? null)
@@ -210,7 +219,7 @@ export const useSound = create<SoundState>()((set, get) => {
 
     playPreset: (id, timerMinutes) => {
       const preset = presetById(id)
-      if (!preset) return
+      if (!preset || !canPlayPreset(preset.id, isAppUnlocked())) return
       void sound.unlock()
       const choice = timerMinutes ?? useSettings.getState().sleepTimer
       const now = Date.now()
@@ -238,6 +247,7 @@ export const useSound = create<SoundState>()((set, get) => {
     },
 
     playMix: (mix, timerMinutes, meta = null) => {
+      if (meta?.id && !canUseSavedSound(meta.id, useSettings.getState().customSounds, isAppUnlocked())) return
       // Nothing to hear: stopped, not "playing" silence.
       if (isSilent(mix)) {
         get().stop()
@@ -264,6 +274,7 @@ export const useSound = create<SoundState>()((set, get) => {
     // An edit: what's heard changes, the deadline and its fade don't.
     updateMix: (mix, meta) => {
       const mixMeta = meta === undefined ? get().mixMeta : meta
+      if (mixMeta?.id && !canUseSavedSound(mixMeta.id, useSettings.getState().customSounds, isAppUnlocked())) return
       const key = mix.harmonicKey ?? get().harmonicKey ?? DEFAULT_HARMONIC_KEY
       const nextMix = { ...mix, harmonicKey: key }
       sound.setHarmonicKey?.(key)
@@ -345,8 +356,10 @@ export function useAmbientToggle(): { playing: boolean; name: string; icon: Soun
   const mix = useSound((s) => s.mix)
   const mixMeta = useSound((s) => s.mixMeta)
   const sessionPreset = useSettings((s) => s.sessionPreset)
+  const unlocked = useIsUnlocked()
   const lastIsMix = presetId === null && mix !== null && !isSilent(mix)
-  const preset = presetById(presetId ?? sessionPreset ?? DEFAULT_PRESET_ID)
+  const safeId = fallbackFreePreset(presetId ?? sessionPreset ?? DEFAULT_PRESET_ID, unlocked)
+  const preset = presetById(safeId)
   const name = lastIsMix ? (mixMeta?.title ?? 'Your mix') : (preset?.name ?? 'Sound')
   const icon: SoundIconId = lastIsMix ? (mixMeta?.icon ?? inferIconFromMix(mix)) : (preset?.icon ?? 'rain')
   const toggle = () => {
@@ -354,7 +367,7 @@ export function useAmbientToggle(): { playing: boolean; name: string; icon: Soun
     const timer = useSettings.getState().sleepTimer
     if (st.playing) st.stop(0.8)
     else if (lastIsMix && st.mix) st.playMix(st.mix, timer, st.mixMeta)
-    else st.playPreset(preset?.id ?? DEFAULT_PRESET_ID, timer)
+    else st.playPreset(safeId, timer)
   }
   return { playing, name, icon, toggle }
 }

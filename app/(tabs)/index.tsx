@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useIsFocused, useRouter } from 'expo-router'
-import { Award, Moon, Pause, Play } from 'lucide-react-native'
+import { Award, Lock, Moon, Pause, Play } from 'lucide-react-native'
+import { canPlayGame } from '@/core/access'
 import { arrangeGames, tonightPicks } from '@/core/games/arrange'
 import { feel } from '@/ui/feel'
 import { GAMES, gameMeta, type GameId } from '@/core/games/catalog'
@@ -23,6 +24,7 @@ import { useCovered } from '@/ui/rn/ambientClock'
 import { GLASS_TINT, GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { Horizon } from '@/ui/rn/Horizon'
 import { tabBarClearance, useAppActive, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
+import { UPGRADE_INK } from '@/ui/rn/Paywall'
 import { SoundRibbon } from '@/ui/rn/sound/SoundRibbon'
 import { paletteFamily, resolveBackdrop, SCENE_PALETTES } from '@/core/backdrop/scenes'
 import { presetById } from '@/core/sound/catalog'
@@ -32,6 +34,7 @@ import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useCurrentSchedule, useSettings } from '@/ui/state/settings'
 import { useAmbientToggle, useSound } from '@/ui/state/sound'
+import { useIsUnlocked } from '@/ui/state/unlock'
 import { TonightSheet } from '@/ui/rn/TonightSheet'
 
 const TILE_MORPH = LinearTransition.springify()
@@ -57,8 +60,10 @@ function countdown(mins: number): { num: string; unit: string } {
   return { num: m === 0 ? `${h}h` : `${h}h ${m}m`, unit: '' }
 }
 
-// Play arrives in three beats (after onboarding, or on launch as the splash lifts).
-const ARRIVE = { distance: 8, duration: 360 } as const
+// Play arrives in a choreographed cascade (after onboarding, or on launch as the splash lifts).
+const ARRIVE_HERO = { distance: 14, scaleFrom: 0.985, duration: 440 } as const
+const ARRIVE_TILE = { distance: 16, scaleFrom: 0.95, duration: 400 } as const
+const ARRIVE_DOCK = { distance: 14, scaleFrom: 0.98, duration: 420 } as const
 
 /** Rows in the bento above (13 games, two of them wide). */
 const GRID_ROWS = 5
@@ -99,6 +104,7 @@ export default function HomeScreen() {
   const peekMeta = peek ? gameMeta(peek) : null
   const schedule = useCurrentSchedule(now)
   const ambient = useAmbientToggle()
+  const unlocked = useIsUnlocked()
 
   // Re-read the clock the moment a wind down starts or ends, not at the next tick.
   // Only while Play is the tab on screen (ISS-18); coming back reads it at once.
@@ -150,8 +156,8 @@ export default function HomeScreen() {
   // Near bedtime, ask the two check-in questions once a night (opening Play
   // in the 90 minutes before wind down, or during it).
   const nearBedtime = nearBedtimeFor(evening, now)
-  // Not over another sheet (Wind down, the Composer, the reminder offer: ISS-16.4).
-  const otherSheetOpen = useNav((s) => s.windDownOpen || s.mixOpen || s.reminderOffer)
+  // Not over another sheet (Wind down, the Composer, the reminder offer, or Full Unlock).
+  const otherSheetOpen = useNav((s) => s.windDownOpen || s.mixOpen || s.reminderOffer || s.paywall !== null)
   useEffect(() => {
     if (!onboarded || !nearBedtime || checkInOpen || otherSheetOpen) return
     if (checkInAskedNight === nightKey(now)) return
@@ -162,7 +168,7 @@ export default function HomeScreen() {
   // Now and then, while reminders are off, offer one (core/reminderOffer).
   // Tonight's check-in comes first, and nothing else may be open.
   const playFocused = useIsFocused()
-  const anySheetOpen = useNav((s) => s.checkIn !== null || s.windDownOpen || s.mixOpen || s.reminderOffer)
+  const anySheetOpen = useNav((s) => s.checkIn !== null || s.windDownOpen || s.mixOpen || s.reminderOffer || s.paywall !== null)
   const reminderOfferState = useSettings(
     useShallow((s) => ({
       reminders: s.reminders,
@@ -194,15 +200,16 @@ export default function HomeScreen() {
     playLayout !== null &&
     playLayout.night === night &&
     playLayout.usual === usual &&
+    playLayout.unlocked === unlocked &&
     playLayout.order.length === GAMES.length &&
     Array.isArray(playLayout.picks)
   const layout = useMemo(() => {
     if (layoutFresh) return playLayout
-    const { order, wide } = arrangeGames({ usual, plays })
-    return { night, usual, order, wide, picks: tonightPicks({ tonight: null, usual, plays }) }
+    const { order, wide } = arrangeGames({ usual, plays, unlocked })
+    return { night, usual, unlocked, order, wide, picks: tonightPicks({ tonight: null, usual, plays, unlocked }) }
     // A fresh layout ignores later plays on purpose: that's what keeps it still.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutFresh, playLayout, night, usual])
+  }, [layoutFresh, playLayout, night, usual, unlocked])
   useEffect(() => {
     if (!layoutFresh && onboarded) setSettings({ playLayout: layout })
   }, [layoutFresh, layout, onboarded, setSettings])
@@ -210,11 +217,16 @@ export default function HomeScreen() {
   const ordered = useMemo(() => layout.order.map(gameMeta), [layout])
   const wideIds = useMemo(() => new Set<GameId>(layout.wide), [layout])
   const picks = useMemo(
-    () => new Set<GameId>(tonightPlan ? tonightPicks({ tonight: tonightPlan, usual, plays: {} }) : layout.picks),
-    [tonightPlan, usual, layout],
+    () => new Set<GameId>(tonightPlan ? tonightPicks({ tonight: tonightPlan, usual, plays: {}, unlocked }) : layout.picks),
+    [tonightPlan, usual, layout, unlocked],
   )
 
   const launchGame = (id: GameId) => {
+    if (!canPlayGame(id, unlocked)) {
+      feel('tick')
+      useNav.getState().openPaywall('game', gameMeta(id).name)
+      return
+    }
     const st = useSettings.getState()
     setSettings({ lastGame: id, plays: { ...st.plays, [id]: (st.plays[id] ?? 0) + 1 } })
     router.push(`/game/${id}`)
@@ -269,7 +281,7 @@ export default function HomeScreen() {
       >
         <View style={[styles.frame, { gap: sectionGap }]}>
           {/* Hero: fills the space above the tiles; content centred, so the tiles never move. */}
-          <Rise {...ARRIVE} delay={0} reduced={reduced} style={[styles.hero, { minHeight: HERO_MIN }]}>
+          <Rise {...ARRIVE_HERO} delay={20} reduced={reduced} style={[styles.hero, { minHeight: HERO_MIN }]}>
             <Pressable
               onPress={() => {
                 if (session) return
@@ -329,7 +341,6 @@ export default function HomeScreen() {
           </Rise>
 
           {/* Tiles size themselves to the space left, so the grid ends above the dock. */}
-          <Rise {...ARRIVE} delay={90} reduced={reduced}>
           <GlassGroup
             spacing={0}
             style={[styles.bentoWrap, { gap: tileGap }]}
@@ -342,14 +353,18 @@ export default function HomeScreen() {
               const wide = wideIds.has(game.id)
               const isLead = idx === 0
               const isPick = picks.has(game.id)
-              const isLastPlayed = lastGame === game.id
-              const best = game.id !== 'pond' ? latestBest(highScores, game.id) : null
-              const compactBest = game.id !== 'pond' ? formatBestCompact(game.id, best) : null
-              const hasPreview = isLead && ['kindle', 'hue', 'cascade', 'thread'].includes(game.id)
+              const locked = !canPlayGame(game.id, unlocked)
+              const isLastPlayed = !locked && lastGame === game.id
+              const best = !locked && game.id !== 'pond' ? latestBest(highScores, game.id) : null
+              const compactBest = !locked && game.id !== 'pond' ? formatBestCompact(game.id, best) : null
+              const hasPreview = !locked && isLead && ['kindle', 'hue', 'cascade', 'thread'].includes(game.id)
               const roomy = tileHeight >= 80
+              const tileRow = idx < 2 ? 0 : idx < 5 ? 1 : idx < 7 ? 2 : idx < 10 ? 3 : 4
+              const tileCol = idx < 2 ? idx : idx < 5 ? idx - 2 : idx < 7 ? idx - 5 : idx < 10 ? idx - 7 : idx - 10
 
               return (
                 <Animated.View key={game.id} layout={TILE_MORPH} style={{ width: wide ? wideW : colW }}>
+                  <Rise {...ARRIVE_TILE} delay={85 + tileRow * 46 + tileCol * 18} reduced={reduced}>
                   <Pressable
                     onPress={() => launchGame(game.id)}
                     onLongPress={() => {
@@ -359,21 +374,25 @@ export default function HomeScreen() {
                     delayLongPress={350}
                     accessibilityHint={copy.peekHint}
                     accessibilityRole="button"
-                    accessibilityLabel={`${game.name}${compactBest ? `, best ${compactBest}` : ''}${isPick ? `, ${copy.pickLabel}` : ''}`}
+                    accessibilityLabel={`${game.name}${locked ? ', locked' : ''}${compactBest ? `, best ${compactBest}` : ''}${isPick ? `, ${copy.pickLabel}` : ''}`}
                     style={({ pressed }) => [{ opacity: pressed ? 0.86 : 1, transform: [{ scale: pressed ? 0.97 : 1 }] }]}
                   >
                     <GlassSurface
                       variant="card"
                       radius={20}
-                      tint={isPick ? GLASS_TINT.suggested : undefined}
+                      tint={isPick && !locked ? GLASS_TINT.suggested : undefined}
                       style={[styles.tile, { height: tileHeight }]}
                     >
                       <View style={styles.tileTop}>
-                        <View style={styles.tileArt}>
+                        <View style={[styles.tileArt, locked ? { opacity: 0.68 } : null]}>
                           {hasPreview ? <ContinuePreview id={game.id} size={roomy ? 36 : 30} /> : null}
                           {!hasPreview && <GameGlyph id={game.id} size={roomy ? (wide ? 30 : 28) : 24} />}
                         </View>
-                        {compactBest ? (
+                        {locked ? (
+                          <View style={styles.lockTag}>
+                            <Lock size={11} strokeWidth={1.9} color={UPGRADE_INK} />
+                          </View>
+                        ) : compactBest ? (
                           <View style={styles.bestTag}>
                             <Award size={10} strokeWidth={1.8} color={color.accent} />
                             <Text style={[styles.bestTagText, { color: color.ink2 }]}>{compactBest}</Text>
@@ -399,14 +418,14 @@ export default function HomeScreen() {
                       </View>
                     </GlassSurface>
                   </Pressable>
+                  </Rise>
                 </Animated.View>
               )
             })}
           </GlassGroup>
-          </Rise>
 
           {/* Dock, in thumb reach: wind down on the left, tonight's sound on the right. */}
-          <Rise {...ARRIVE} delay={180} reduced={reduced}>
+          <Rise {...ARRIVE_DOCK} delay={310} reduced={reduced}>
           <GlassGroup spacing={0} style={styles.dock}>
             <Pressable
               onPress={toggleWindDown}
@@ -463,11 +482,18 @@ export default function HomeScreen() {
 
       {/* Press and hold a tile: what the game is, how it feels, how you've done, and a way in. */}
       <Sheet open={peek !== null} onClose={() => setPeek(null)} label={peekMeta?.name ?? ''}>
-        {peekMeta ? <GamePeek id={peekMeta.id} pick={picks.has(peekMeta.id)} onPlay={() => {
-          const id = peekMeta.id
-          setPeek(null)
-          launchGame(id)
-        }} /> : null}
+        {peekMeta ? (
+          <GamePeek
+            id={peekMeta.id}
+            pick={picks.has(peekMeta.id)}
+            locked={!canPlayGame(peekMeta.id, unlocked)}
+            onPlay={() => {
+              const id = peekMeta.id
+              setPeek(null)
+              launchGame(id)
+            }}
+          />
+        ) : null}
       </Sheet>
     </View>
   )
@@ -513,7 +539,7 @@ function PlayRibbon({ width }: { width: number }) {
  * is and what it asks of you, the two lines that explain it, and what you've
  * done in it. One way in (Play); swipe down or tap outside to leave.
  */
-function GamePeek({ id, pick, onPlay }: { id: GameId; pick: boolean; onPlay: () => void }) {
+function GamePeek({ id, pick, locked = false, onPlay }: { id: GameId; pick: boolean; locked?: boolean; onPlay: () => void }) {
   const { color } = useTokenColors()
   const meta = gameMeta(id)
   const plays = useSettings((s) => s.plays[id] ?? 0)
@@ -549,9 +575,15 @@ function GamePeek({ id, pick, onPlay }: { id: GameId; pick: boolean; onPlay: () 
         ))}
       </View>
 
-      <Button variant="primary" block onPress={onPlay}>
-        <Play size={15} strokeWidth={2} color={color.accent} fill={color.accent} />
-        <Text style={[styles.peekPlay, { color: color.accent }]}>{copy.peekPlay}</Text>
+      <Button variant={locked ? 'upgrade' : 'primary'} block onPress={onPlay}>
+        {locked ? (
+          <Lock size={15} strokeWidth={2} color="#FFFFFF" />
+        ) : (
+          <Play size={15} strokeWidth={2} color={color.accentInk} fill={color.accentInk} />
+        )}
+        <Text style={[styles.peekPlay, { color: locked ? '#FFFFFF' : color.accentInk }]}>
+          {locked ? 'Unlock Inverna' : copy.peekPlay}
+        </Text>
       </Button>
     </View>
   )
@@ -669,6 +701,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  lockTag: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(142, 124, 255, 0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(142, 124, 255, 0.30)',
   },
   bestTagText: {
     fontSize: 10.5,

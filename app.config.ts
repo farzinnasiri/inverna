@@ -85,7 +85,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       // the variant band off; the app's name tells them apart there.
       foregroundImage: './assets/images/adaptive-icon.png',
       monochromeImage: './assets/images/monochrome-icon.png',
-      backgroundColor: '#0A0C10',
+      backgroundColor: '#161234',
     },
   },
   web: {

@@ -51,3 +51,10 @@ make doctor       # run expo-doctor dependency health check
 ## Architecture
 
 All 13 game engines, RNG, session curves, bedtime schedules, sound catalog, and OKLab Watchmaker tokens live in `src/core/` and `src/design/` with **zero DOM and zero React dependencies** (enforced by `tsconfig.core.json`).
+
+## Vision, Naming & Distribution
+
+- [`VISION.md`](VISION.md) — 2027 product vision & Apple Editors' Choice release arc.
+- [`DISTRIBUTION.md`](DISTRIBUTION.md) — Positioning thesis, core pillars, pricing/freemium model, complete App Store Connect metadata, screenshot & banner playbook, icon architecture, and marketing copy bank.
+- [`GLOSSARY.md`](GLOSSARY.md) — Canonical names for every feature in code, copy, and docs.
+- [`docs/store/APP_STORE.md`](docs/store/APP_STORE.md) — App Store Connect submission & review checklist.

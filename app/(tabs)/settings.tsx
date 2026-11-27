@@ -1,20 +1,23 @@
 import { useState } from 'react'
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { router } from 'expo-router'
-import { ChevronDown, ChevronRight, ChevronUp, ExternalLink, Flame, Moon, Snowflake, Sun, Trash2 } from 'lucide-react-native'
+import { Check, ChevronDown, ChevronRight, ChevronUp, ExternalLink, Flame, Lock, LockOpen, Moon, Snowflake, Sun, Trash2 } from 'lucide-react-native'
+import { canUseManualLight } from '@/core/access'
 import { brightnessForDim, formatRange } from '@/core/night'
 import { feel } from '@/ui/feel'
 import { clearAll } from '@/core/storage'
-import { notifications } from '@/platform'
+import { canPreviewFreeTier, notifications } from '@/platform'
 import { about, settingsCopy } from '@/ui/copy'
 import { planRemindersNow } from '@/ui/rn/reminders'
 import { useTokenColors } from '@/ui/hooks/useTokenColors'
 import { Button, FRAME_MAX_WIDTH, HoldButton, PillSlider, Sheet, Toggle } from '@/ui/rn/controls'
-import { GlassSurface } from '@/ui/rn/Glass'
+import { GLASS_TINT, GlassSurface } from '@/ui/rn/Glass'
+import { UPGRADE_INK } from '@/ui/rn/Paywall'
 import { scrollEndClearance, useResponsiveLayout } from '@/ui/rn/hooks'
 import { SleepAround } from '@/ui/rn/SleepAround'
 import { useNightFilterMetrics } from '@/ui/rn/NightFilterOverlay'
 import { ScienceSheet } from '@/ui/rn/ScienceSheet'
+import { MakerPortrait } from '@/ui/rn/portrait/MakerPortrait'
 import { PRIVACY_URL, SUPPORT_URL } from '@/ui/links'
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { useHighScores } from '@/ui/state/highscores'
@@ -22,6 +25,7 @@ import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
 import { useSettings } from '@/ui/state/settings'
 import { useSound } from '@/ui/state/sound'
+import { useIsUnlocked, useUnlock } from '@/ui/state/unlock'
 
 export default function SettingsScreen() {
   const { color } = useTokenColors()
@@ -44,6 +48,11 @@ export default function SettingsScreen() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [scienceOpen, setScienceOpen] = useState(false)
 
+  const unlocked = useIsUnlocked()
+  const unlockPrice = useUnlock((s) => s.price)
+  const devPreviewFree = useUnlock((s) => s.devPreviewFree)
+  const setDevPreviewFree = useUnlock((s) => s.setDevPreviewFree)
+
   const setReminders = async (on: boolean) => {
     set({ reminders: on })
     setReminderStatus(null)
@@ -59,7 +68,7 @@ export default function SettingsScreen() {
     useSound.getState().reset()
     useSession.getState().dismiss()
     useHighScores.getState().clearAll()
-    useNav.setState({ checkIn: null, windDownOpen: false, mixOpen: false })
+    useNav.setState({ checkIn: null, windDownOpen: false, mixOpen: false, paywall: null })
     // Scheduled ones and any still in Notification Centre (they can carry their name).
     void notifications.clearReminders({ delivered: true })
     clearAll()
@@ -104,6 +113,43 @@ export default function SettingsScreen() {
                 style={[styles.nameInput, { color: color.ink }]}
                 accessibilityLabel={settingsCopy.nameLabel}
               />
+          </GlassSurface>
+
+          {/* Full Unlock status or upgrade entry point (Twilight Indigo, distinct from brass selections). */}
+          <GlassSurface variant="card" radius={22} tint={!unlocked ? GLASS_TINT.upgrade : undefined} style={styles.card}>
+            {unlocked ? (
+              <View style={[styles.row, styles.rowTall]}>
+                <View style={styles.rowText}>
+                  <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.unlockedTitle}</Text>
+                  <Text style={[styles.rowNote, { color: color.ink3 }]}>{settingsCopy.unlockedNote}</Text>
+                </View>
+                <Check size={17} strokeWidth={2} color={UPGRADE_INK} />
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  feel('tick')
+                  useNav.getState().openPaywall('settings')
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={settingsCopy.unlockTitle}
+                style={({ pressed }) => [styles.row, styles.rowTall, { opacity: pressed ? 0.72 : 1 }]}
+              >
+                <View style={styles.rowText}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <LockOpen size={14} strokeWidth={2} color={UPGRADE_INK} />
+                    <Text style={[styles.rowLabel, { color: UPGRADE_INK }]}>{settingsCopy.unlockTitle}</Text>
+                  </View>
+                  <Text style={[styles.rowNote, { color: color.ink2 }]}>{settingsCopy.unlockNote}</Text>
+                </View>
+                <View style={styles.bedRight}>
+                  {unlockPrice ? (
+                    <Text style={[styles.lightSummary, { color: UPGRADE_INK }]}>{unlockPrice}</Text>
+                  ) : null}
+                  <ChevronRight size={17} strokeWidth={1.65} color={UPGRADE_INK} />
+                </View>
+              </Pressable>
+            )}
           </GlassSurface>
 
           <LightAndColour open={lightOpen} onToggle={() => setLightOpen((o) => !o)} />
@@ -259,6 +305,23 @@ export default function SettingsScreen() {
             </Pressable>
           )}
 
+          {/* Dev & Web preview switch: never compiled/enabled in Beta or Production builds. */}
+          {canPreviewFreeTier ? (
+            <GlassSurface variant="card" radius={22} style={styles.card}>
+              <View style={[styles.row, styles.rowTall]}>
+                <View style={styles.rowText}>
+                  <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.devPreviewFree}</Text>
+                  <Text style={[styles.rowNote, { color: color.ink3 }]}>{settingsCopy.devPreviewFreeNote}</Text>
+                </View>
+                <Toggle
+                  label={settingsCopy.devPreviewFree}
+                  checked={devPreviewFree}
+                  onChange={(v) => setDevPreviewFree(v)}
+                />
+              </View>
+            </GlassSurface>
+          ) : null}
+
           {/* A small note from the person who made it. */}
           <Pressable
             onPress={() => {
@@ -287,8 +350,15 @@ export default function SettingsScreen() {
       <ScienceSheet open={scienceOpen} onClose={() => setScienceOpen(false)} />
 
       <Sheet open={aboutOpen} onClose={() => setAboutOpen(false)} label={about.title}>
-        <Text style={[styles.aboutTitle, { color: color.ink }]}>{about.title}</Text>
-        {about.lines.map((line) => (
+        {/* The note starts beside the portrait and carries on full width below it. */}
+        <View style={styles.aboutHead}>
+          <View style={styles.aboutHeadText}>
+            <Text style={[styles.aboutTitle, { color: color.ink }]}>{about.title}</Text>
+            <Text style={[styles.aboutLine, { color: color.ink2 }]}>{about.lines[0]}</Text>
+          </View>
+          <MakerPortrait style={styles.aboutPortrait} />
+        </View>
+        {about.lines.slice(1).map((line) => (
           <Text key={line} style={[styles.aboutLine, { color: color.ink2 }]}>
             {line}
           </Text>
@@ -314,6 +384,19 @@ const styles = StyleSheet.create({
   creditText: {
     fontSize: 13.5,
     fontWeight: '500',
+  },
+  aboutHead: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  aboutHeadText: {
+    flex: 1,
+  },
+  aboutPortrait: {
+    // Beside the paragraph rather than the title.
+    marginTop: 30,
+    marginRight: -10,
   },
   aboutTitle: {
     fontSize: 26,
@@ -467,16 +550,24 @@ const styles = StyleSheet.create({
  */
 function LightAndColour({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { color } = useTokenColors()
+  const unlocked = useIsUnlocked()
+  const manualAllowed = canUseManualLight(unlocked)
   const adaptive = useSettings((s) => s.adaptiveLight)
+  const effectiveAdaptive = manualAllowed ? adaptive : true
   const warmth = useSettings((s) => s.warmth)
   const brightness = useSettings((s) => s.brightness)
   const set = useSettings((s) => s.set)
   const { base } = useNightFilterMetrics()
 
-  const shownWarmth = adaptive ? base.warmth : warmth
-  const shownBrightness = adaptive ? brightnessForDim(base.dim) : brightness
+  const shownWarmth = effectiveAdaptive ? base.warmth : warmth
+  const shownBrightness = effectiveAdaptive ? brightnessForDim(base.dim) : brightness
 
   const setAdaptive = (on: boolean) => {
+    if (!on && !manualAllowed) {
+      feel('tick')
+      useNav.getState().openPaywall('manual-light')
+      return
+    }
     set(on ? { adaptiveLight: true } : { adaptiveLight: false, warmth: base.warmth, brightness: brightnessForDim(base.dim) })
   }
 
@@ -492,8 +583,8 @@ function LightAndColour({ open, onToggle }: { open: boolean; onToggle: () => voi
       >
         <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.lightLabel}</Text>
         <View style={styles.bedRight}>
-          <Text style={[styles.lightSummary, { color: adaptive ? color.accent : color.ink2 }]}>
-            {adaptive ? settingsCopy.lightAdaptiveSummary : settingsCopy.lightManualSummary}
+          <Text style={[styles.lightSummary, { color: effectiveAdaptive ? color.accent : color.ink2 }]}>
+            {effectiveAdaptive ? settingsCopy.lightAdaptiveSummary : settingsCopy.lightManualSummary}
           </Text>
           {open ? (
             <ChevronUp size={16} strokeWidth={1.65} color={color.ink3} />
@@ -508,30 +599,51 @@ function LightAndColour({ open, onToggle }: { open: boolean; onToggle: () => voi
           <View style={[styles.row, styles.rowTall, { paddingHorizontal: 0, paddingVertical: 0 }]}>
             <View style={styles.rowText}>
               <Text style={[styles.rowLabel, { color: color.ink }]}>{settingsCopy.adaptiveLabel}</Text>
-              <Text style={[styles.rowNote, { color: color.ink3 }]}>{settingsCopy.adaptiveNote}</Text>
+              <Text style={[styles.rowNote, { color: color.ink3 }]}>
+                {manualAllowed ? settingsCopy.adaptiveNote : settingsCopy.manualLightLocked}
+              </Text>
             </View>
-            <Toggle label={settingsCopy.adaptiveLabel} checked={adaptive} onChange={setAdaptive} />
+            <Toggle label={settingsCopy.adaptiveLabel} checked={effectiveAdaptive} onChange={setAdaptive} />
           </View>
-          <PillSlider
-            title={settingsCopy.brightness}
-            value={shownBrightness}
-            onChange={(b) => set({ brightness: b })}
-            valueLabel={settingsCopy.brightnessStage}
-            disabled={adaptive}
-            fillColors={['rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0.30)']}
-            left={<Moon size={16} strokeWidth={1.65} color={color.ink3} />}
-            right={<Sun size={17} strokeWidth={1.65} color={color.ink} />}
-          />
-          <PillSlider
-            title={settingsCopy.warmth}
-            value={shownWarmth}
-            onChange={(w) => set({ warmth: w })}
-            valueLabel={settingsCopy.warmthStage}
-            disabled={adaptive}
-            fillColors={['rgba(150, 185, 255, 0.16)', 'rgba(255, 140, 50, 0.48)']}
-            left={<Snowflake size={16} strokeWidth={1.65} color={color.ink3} />}
-            right={<Flame size={17} strokeWidth={1.65} color={color.accent} />}
-          />
+          <Pressable
+            disabled={manualAllowed}
+            onPress={() => {
+              feel('tick')
+              useNav.getState().openPaywall('manual-light')
+            }}
+            accessibilityRole={manualAllowed ? undefined : 'button'}
+            accessibilityLabel={manualAllowed ? undefined : 'Unlock manual brightness and warmth'}
+            style={{ gap: 18 }}
+          >
+            {!manualAllowed ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: -8 }}>
+                <Lock size={12} strokeWidth={1.9} color={UPGRADE_INK} />
+                <Text style={[styles.rowNote, { color: UPGRADE_INK, marginTop: 0 }]}>Manual controls · Full Unlock</Text>
+              </View>
+            ) : null}
+            <View pointerEvents={manualAllowed ? 'auto' : 'none'} style={{ gap: 18 }}>
+              <PillSlider
+                title={settingsCopy.brightness}
+                value={shownBrightness}
+                onChange={(b) => set({ brightness: b })}
+                valueLabel={settingsCopy.brightnessStage}
+                disabled={effectiveAdaptive}
+                fillColors={['rgba(255, 255, 255, 0.04)', 'rgba(255, 255, 255, 0.30)']}
+                left={<Moon size={16} strokeWidth={1.65} color={color.ink3} />}
+                right={<Sun size={17} strokeWidth={1.65} color={color.ink} />}
+              />
+              <PillSlider
+                title={settingsCopy.warmth}
+                value={shownWarmth}
+                onChange={(w) => set({ warmth: w })}
+                valueLabel={settingsCopy.warmthStage}
+                disabled={effectiveAdaptive}
+                fillColors={['rgba(150, 185, 255, 0.16)', 'rgba(255, 140, 50, 0.48)']}
+                left={<Snowflake size={16} strokeWidth={1.65} color={color.ink3} />}
+                right={<Flame size={17} strokeWidth={1.65} color={color.accent} />}
+              />
+            </View>
+          </Pressable>
         </View>
       ) : null}
     </GlassSurface>
