@@ -50,22 +50,33 @@ jobs:
       - name: Prepare project
         id: plan
         shell: bash
+        env:
+          # Through the environment, never pasted into the script: a quote in
+          # the input could otherwise run as shell (ISS-07).
+          PLAN_JSON: ${{ inputs.config_json }}
         run: |
           set -euo pipefail
           # Fan the packed plan out into step outputs so later steps read it the
           # same way they would read a dispatch input.
-          echo '${{ inputs.config_json }}' > /tmp/eas-plan.json
+          printf '%s' "$PLAN_JSON" > /tmp/eas-plan.json
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os
+          import json, os, re
           with open('/tmp/eas-plan.json') as fh:
               plan = json.load(fh)
           for key, value in plan.items():
-              if key == 'env_json':
+              # env comes from eas.json below; the message is free text no step uses.
+              if key in ('env_json', 'message'):
                   continue
-              print(f"{key}={value}")
+              text = str(value)
+              # Later steps paste these into scripts: plain characters only, so
+              # no value can close a quote or start a command (ISS-07).
+              if not re.fullmatch(r"[A-Za-z0-9 ._:/@+=,~-]*", text):
+                  raise SystemExit(f"plan value for {key} has characters a build plan never needs")
+              print(f"{key}={text}")
           PY
-          echo "Resolved build plan:"
-          python3 -m json.tool /tmp/eas-plan.json
+          # Keys only: values can include environment settings.
+          echo "Resolved build plan keys:"
+          python3 -c "import json; print(', '.join(sorted(json.load(open('/tmp/eas-plan.json')))))"
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -92,12 +103,17 @@ jobs:
           # The profile's `env` map has to be in the environment before the app
           # config is read: an app.config.js branching on APP_VARIANT resolves at
           # prebuild time, and missing it silently ships the wrong icon and API host.
+          # Read from the eas.json in this commit, not from the dispatch input,
+          # and only plain NAME=value lines (ISS-07).
           python3 - <<'PY' >> "$GITHUB_ENV"
-          import json
-          with open('/tmp/eas-plan.json') as fh:
-              plan = json.load(fh)
-          for key, value in json.loads(plan.get('env_json') or '{}').items():
-              print(f"{key}={value}")
+          import json, os, re
+          with open('eas.json') as fh:
+              profile = json.load(fh)['build'][os.environ['EAS_PROFILE']]
+          for key, value in (profile.get('env') or {}).items():
+              text = str(value)
+              if not re.fullmatch(r'[A-Z][A-Z0-9_]*', key) or '\n' in text or '\r' in text:
+                  raise SystemExit(f"eas.json env {key!r} isn't a plain variable")
+              print(f"{key}={text}")
           PY
 
       - name: Set up Node
@@ -115,9 +131,24 @@ jobs:
           fi
           case "$PM" in
             bun)  curl -fsSL https://bun.sh/install | bash; echo "$HOME/.bun/bin" >> "$GITHUB_PATH" ;;
-            pnpm) npm install -g pnpm ;;
+            # The version the project pins in package.json, not whatever is newest.
+            pnpm) npm install -g "pnpm@$(node -p "require('./package.json').packageManager.split('@')[1]")" ;;
             yarn) corepack enable || npm install -g yarn ;;
           esac
+
+      - name: Find pnpm store
+        id: pnpm-store
+        if: steps.plan.outputs.package_manager == 'pnpm'
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore pnpm store
+        if: steps.plan.outputs.package_manager == 'pnpm'
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
 
       - name: Install JS dependencies
         shell: bash
@@ -162,13 +193,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CMD='${{ steps.plan.outputs.prebuild_command }}'
+          # Always the same command: nothing from the dispatch input is run (ISS-07).
           if [ -d ios ] || [ -d android ]; then
             echo "Native directories are committed — skipping prebuild."
-          elif [ -n "$CMD" ]; then
-            eval "$CMD"
           else
-            npx expo prebuild --platform '${{ inputs.platform }}' --no-install
+            npx expo prebuild --platform "$EAS_PLATFORM" --no-install
           fi
 
       - name: Restore pods cache
@@ -176,12 +205,41 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ios/Pods
-          key: pods-${{ steps.plan.outputs.cache_key }}-${{ hashFiles('ios/Podfile.lock') }}
+          # Podfile.lock doesn't exist yet when this runs (pod install makes it),
+          # so it hashed to nothing and every build missed: key on what decides the pods.
+          key: pods-${{ steps.plan.outputs.cache_key }}-${{ hashFiles('pnpm-lock.yaml', 'app.config.ts', 'patches/**') }}
           restore-keys: pods-${{ steps.plan.outputs.cache_key }}-
+
+      - name: Set up ccache
+        if: inputs.platform == 'ios'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install ccache >/dev/null
+          echo "CCACHE_DIR=$HOME/.ccache" >> "$GITHUB_ENV"
+          echo "CCACHE_COMPILERCHECK=content" >> "$GITHUB_ENV"
+          echo "CCACHE_SLOPPINESS=clang_index_store,file_stat_matches,include_file_ctime,include_file_mtime,ivfsoverlay,pch_defines,modules,system_headers,time_macros" >> "$GITHUB_ENV"
+          echo "CCACHE_FILECLONE=true" >> "$GITHUB_ENV"
+          echo "CCACHE_DEPEND=true" >> "$GITHUB_ENV"
+          echo "CCACHE_INODECACHE=true" >> "$GITHUB_ENV"
+
+      - name: Restore ccache
+        if: inputs.platform == 'ios'
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ inputs.profile }}-${{ github.sha }}
+          restore-keys: ccache-${{ inputs.profile }}-
 
       - name: Install pods
         if: inputs.platform == 'ios'
         working-directory: ios
+        env:
+          # C/C++/ObjC++ through ccache, and React Native's prebuilt frameworks
+          # when Maven has them for this version (it falls back to source otherwise).
+          USE_CCACHE: '1'
+          RCT_USE_PREBUILT_RNCORE: '1'
+          RCT_USE_RN_DEP: '1'
         run: pod install
 
       - name: Resolve Xcode scheme
@@ -706,6 +764,7 @@ jobs:
             -destination "generic/platform=iOS Simulator" \
             -derivedDataPath "$RUNNER_TEMP/derived" \
             CODE_SIGNING_ALLOWED=NO \
+            ARCHS=arm64 EXCLUDED_ARCHS=x86_64 \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty
           STATUS=${PIPESTATUS[0]}
           set -e
@@ -735,6 +794,11 @@ jobs:
           set -euo pipefail
           cd android
           SIGNING_ARGS=()
+          # A store build never falls back to the debug key (ISS-07).
+          if [ -z "${KEYSTORE:-}" ] && [ '${{ steps.plan.outputs.distribution }}' = 'store' ]; then
+            echo "::error::Store builds need the EAS_ANDROID_KEYSTORE secrets; refusing to sign with the debug key."
+            exit 1
+          fi
           if [ -n "${KEYSTORE:-}" ]; then
             echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.keystore"
             # AGP honours these injected properties for any assemble/bundle task,

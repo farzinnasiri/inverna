@@ -55,23 +55,25 @@ build-ios-preview: ## Cloud-build an ad-hoc Inverna Beta to install without Test
 build-ios-beta: ## Cloud-build Inverna Beta for TestFlight (com.oooflabs.inverna.beta)
 	rnd build --platform ios --profile beta
 
-submit-beta: ## Upload the latest finished Inverna Beta build to TestFlight
+submit-beta: ## Upload one Inverna Beta build to TestFlight: make submit-beta BUILD=<id from make builds>
 	@$(MAKE) --no-print-directory submit-latest PROFILE=beta
 
 build-ios-release: ## Cloud-build Inverna for App Review and the App Store (com.oooflabs.inverna)
 	rnd build --platform ios --profile production
 
-submit-release: ## Upload the latest finished Inverna build to App Store Connect
+submit-release: ## Upload one Inverna build to App Store Connect: make submit-release BUILD=<id from make builds>
 	@$(MAKE) --no-print-directory submit-latest PROFILE=production
 
 build-ios-testflight: build-ios-beta ## Alias: TestFlight builds are Inverna Beta now
 
 submit-testflight: submit-beta ## Alias: TestFlight uploads are Inverna Beta now
 
+# A named build, never "the latest": the newest finished build can be from
+# another branch or commit than the one meant for review (ISS-07).
 submit-latest:
 	@test -n "$(PROFILE)" || { echo "PROFILE is required"; exit 1; }
-	@BUILD_ID=$$(rnd build:list --platform ios --profile $(PROFILE) --status FINISHED --limit 1 --json | node -e "const d = JSON.parse(require('fs').readFileSync(0,'utf8')); const b = Array.isArray(d) ? d[0] : d?.builds?.[0]; console.log(b?.id ?? '');"); \
-	if [ -z "$$BUILD_ID" ]; then echo "No finished $(PROFILE) iOS build found"; exit 1; fi; \
+	@test -n "$(BUILD)" || { echo "BUILD is required: pick the build id from 'make builds' (check its commit)"; exit 1; }
+	@BUILD_ID="$(BUILD)"; \
 	rm -rf build && mkdir -p build && \
 	rnd build:download --build-id "$$BUILD_ID" --output build/inverna-$(PROFILE).ipa && \
 	rnd submit --platform ios --profile $(PROFILE) --path build/inverna-$(PROFILE).ipa
