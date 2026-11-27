@@ -30,6 +30,8 @@ import {
   stringDisplacement,
   stringEnds,
   stringEnergy,
+  waveAmp,
+  waveProgress,
   type Sim,
 } from '@/core/backdrop/sim'
 
@@ -437,5 +439,7 @@ export function fieldUniforms(s: Sim, fieldW: number, fieldH: number, edge: numb
     ink,
     chl: [ch[0], ch[1], ch[2], ch[3]],
     chlMix: ch[4],
+    breath: [s.breathX / s.W, s.breathY / s.W, s.charge, 0],
+    wave: [Math.max(0, s.waveR) / s.W, waveAmp(s), Math.max(0, waveProgress(s)), 0],
   }
 }

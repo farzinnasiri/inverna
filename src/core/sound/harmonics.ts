@@ -241,6 +241,47 @@ export function resolveGameNotes(
       ]
     }
 
+    case 'exhale': {
+      // The out-breath: a low root swells in under a chord rolled upward, in
+      // time with the wave strumming out across the scene.
+      const roll = [0, 2, 3, 5] as const
+      const notes: QuantizedNote[] = [
+        {
+          freq: scale[0]! / 2,
+          delay: 0,
+          attack: 0.22,
+          decay: 2.8,
+          gain: 0.07 * velScale,
+          cutoff: 820 * cutoffScale,
+          overtoneGain: overtoneScale * 0.4,
+          pan: 0,
+        },
+      ]
+      roll.forEach((deg, n) => {
+        notes.push({
+          freq: scale[deg]!,
+          delay: 0.06 + n * 0.13,
+          attack: 0.03 + n * 0.006,
+          decay: 1.9 + n * 0.25,
+          gain: (0.064 - n * 0.006) * velScale,
+          cutoff: (1380 + n * 60) * cutoffScale,
+          overtoneGain: overtoneScale * (0.9 - n * 0.1),
+          pan: (n % 2 === 0 ? -1 : 1) * (0.12 + n * 0.06),
+        })
+      })
+      notes.push({
+        freq: scale[0]! * 2,
+        delay: 0.66,
+        attack: 0.05,
+        decay: 2.6,
+        gain: 0.032 * velScale,
+        cutoff: 2200 * cutoffScale,
+        overtoneGain: overtoneScale * 0.5,
+        pan: 0.05,
+      })
+      return notes
+    }
+
     case 'undo': {
       return [
         {

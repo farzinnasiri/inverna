@@ -2,13 +2,13 @@
   "fill-specializations": [
     {
       "value": {
-        "solid": "extended-srgb:0.16500,0.13300,0.07800,1.00000"
+        "solid": "extended-srgb:0.15686,0.10588,0.05882,1.00000"
       }
     },
     {
       "appearance": "dark",
       "value": {
-        "solid": "extended-srgb:0.09900,0.07980,0.04680,1.00000"
+        "solid": "extended-srgb:0.09412,0.06353,0.03529,1.00000"
       }
     },
     {
@@ -41,6 +41,41 @@
       "shadow": {
         "kind": "neutral",
         "opacity": 0.4
+      }
+    },
+    {
+      "name": "Ribbon",
+      "layers": [
+        {
+          "name": "Band",
+          "image-name": "ribbon-bg.png",
+          "glass": false,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:0.25000,0.85000"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Label",
+          "image-name": "ribbon-text.png",
+          "glass": false,
+          "fill-specializations": [
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "extended-gray:1.00000,1.00000"
+              }
+            }
+          ]
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.35
       }
     }
   ],

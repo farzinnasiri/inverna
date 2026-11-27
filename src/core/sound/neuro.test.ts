@@ -44,6 +44,20 @@ describe('Harmonic game-cue quantizer', () => {
     }
   })
 
+  it('keeps the out-breath chord in the key (octaves allowed) and softens it with darkness', () => {
+    for (const keyId of Object.keys(HARMONIC_KEYS) as HarmonicKeyId[]) {
+      const scale = HARMONIC_KEYS[keyId].scaleHz
+      const inKey = (f: number) => scale.some((s) => [0.5, 1, 2].some((o) => Math.abs(s * o - f) < 1e-6))
+      const bright = resolveGameNotes('exhale', keyId, 0, 0)
+      const dark = resolveGameNotes('exhale', keyId, 0, 1)
+      expect(bright.length).toBeLessThanOrEqual(8) // the cue voice cap
+      bright.forEach((n, i) => {
+        expect(inKey(n.freq)).toBe(true)
+        expect(dark[i]!.cutoff).toBeLessThan(n.cutoff)
+      })
+    }
+  })
+
   it('cycles tap notes melodically across steps without static repetition', () => {
     const freqs = Array.from({ length: 6 }, (_, i) => resolveGameNotes('tap', 'd-dorian', i, 0)[0]!.freq)
     expect(new Set(freqs).size).toBeGreaterThanOrEqual(4)

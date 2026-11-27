@@ -12,6 +12,10 @@
  *
  * Output is premultiplied. During a sound change, scene A dissolves into scene B
  * along a noisy circular front growing from the dial, with a faint rim of light.
+ *
+ * Over every scene, the breath from the island (sim.ts, breatheIn/breatheOut):
+ * a light that swells under the island on the in-breath, and on the out-breath
+ * a flash there and a wave of the scene's own light crossing the screen.
  */
 export const FIELD_SKSL = `
 uniform float2 res;
@@ -28,6 +32,10 @@ uniform float4 strings[4];
 uniform float4 ink[4];
 uniform float4 chl;
 uniform float chlMix;
+// x, y (width units), charge 0..1
+uniform float4 breath;
+// front radius (width units), strength, progress 0..1
+uniform float4 wave;
 
 const float PI = 3.14159265;
 
@@ -316,6 +324,44 @@ float4 sCove(float2 p, float asp, float3 c2, float3 c3) {
   return acc;
 }
 
+// Light adds to what's there; it never darkens the scene under it.
+float4 glow(float4 base, float3 c, float a) {
+  float k = clamp(a, 0.0, 1.0);
+  return float4(base.rgb + c * k, min(1.0, base.a + k));
+}
+
+float4 breathLight(float2 p, float3 warm, float3 pale, float4 col) {
+  float d = length(p - breath.xy);
+  float ch = breath.z;
+  if (ch > 0.001) {
+    float core = exp(-d * d / (0.0012 + 0.005 * ch));
+    float halo = exp(-d * d / (0.015 + 0.08 * ch));
+    float breathe = 0.93 + 0.07 * sin(t * 1.7 + d * 24.0);
+    col = glow(col, mix(warm, float3(1.0), 0.4), (0.6 * core + 0.2 * halo) * ch * breathe);
+  }
+  float amp = wave.y;
+  if (amp > 0.001) {
+    float R = wave.x;
+    // A little ragged, like light through water, not a drawn circle.
+    float dw = d + (fbm(p * 3.2 + float2(R * 1.5, t * 0.1)) - 0.5) * 0.08;
+    float kb = (dw - R) / 0.16;
+    float kr = (dw - R) / 0.03;
+    float band = exp(-kb * kb);
+    float rim = exp(-kr * kr);
+    // A second, fainter crest behind the first, like a ripple on water.
+    float R2 = R * 0.8 - 0.05;
+    float ke = (dw - R2) / 0.04;
+    float echo = R2 > 0.0 ? exp(-ke * ke) : 0.0;
+    float inside = 1.0 - smoothstep(R - 0.03, R + 0.05, dw);
+    float trail = inside * exp(-(R - dw) / 0.45);
+    float3 c = mix(mix(warm, float3(1.0), 0.3), pale, smoothstep(0.0, 1.4, dw));
+    col = glow(col, c, (0.42 * band + 0.55 * rim + 0.22 * echo + 0.16 * trail) * amp);
+    float flash = exp(-wave.z * 8.0) * exp(-d * d / 0.03);
+    col = glow(col, mix(warm, float3(1.0), 0.55), 0.9 * flash * amp);
+  }
+  return col;
+}
+
 float4 sceneColor(float sid, float2 p, float asp, float3 c1, float3 c2, float3 c3, float3 c4) {
   if (sid < 0.5) { return sRain(p, asp, c1, c2, c3); }
   if (sid < 1.5) { return sNocturne(p, asp, c1, c2, c4); }
@@ -335,7 +381,8 @@ half4 main(float2 fc) {
   float2 p = fc / res.x;
   float asp = res.y / res.x;
   if (settled >= 0.5) {
-    return half4(sceneColor(sb, p, asp, pal[4].rgb, pal[5].rgb, pal[6].rgb, pal[7].rgb) * intensity);
+    float4 still = sceneColor(sb, p, asp, pal[4].rgb, pal[5].rgb, pal[6].rgb, pal[7].rgb) * intensity;
+    return half4(breathLight(p, pal[4].rgb, pal[5].rgb, still));
   }
   // Mid-change: each pixel only works out the scene(s) it actually shows.
   // Inside the front it's all the new scene, outside all the old (ISS-18).
@@ -354,6 +401,6 @@ half4 main(float2 fc) {
   }
   float rd = (d - edge) / 0.05;
   col = over(lit(mix(pal[1].rgb, pal[5].rgb, 0.5), exp(-rd * rd) * 0.045), col);
-  return half4(col * intensity);
+  return half4(breathLight(p, pal[4].rgb, pal[5].rgb, col * intensity));
 }
 `

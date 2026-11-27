@@ -2,7 +2,8 @@ import type { DescentSnapshot } from './arc'
 import type { Mix, SoundIconId, SoundSceneId } from './catalog'
 import type { HarmonicKeyId } from './harmonics'
 
-export type CueName = 'tap' | 'place' | 'clear' | 'chime' | 'undo'
+/** `exhale`: the out-breath from the island (Play page), a slow rolled chord. */
+export type CueName = 'tap' | 'place' | 'clear' | 'chime' | 'undo' | 'exhale'
 
 export interface NowPlayingMeta {
   title: string

@@ -96,6 +96,9 @@ solved, once per round. `commit` (a medium tap) is starting or ending a wind
 down, putting the phone down, finishing onboarding or erasing everything. In
 games each haptic goes with its sound cue (`tap` → `tick`, `place` →
 `settle`, `clear` → `reward`, `chime` → `complete`; `undo` is never felt).
+The breath on Play: `tick` as it starts and on each count, `settle` at the
+mark, `reward` when it's time to let go, and `complete` for a full breath let
+out (`settle` for one let out early).
 
 `Segmented`, `Toggle`, `PillSlider` and `TimeWheel` already tick, so don't add
 another in their `onChange`. A gate (`core/hapticGate.ts`) drops repeats of the

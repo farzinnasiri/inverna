@@ -17,7 +17,7 @@
  *
  * Default export so the web build can lazy-load it after CanvasKit is ready.
  */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { PixelRatio, StyleSheet, View, useWindowDimensions } from 'react-native'
 import {
   AlphaType,
@@ -35,11 +35,24 @@ import {
   StrokeJoin,
   createPicture,
 } from '@shopify/react-native-skia'
-import { makeMutable, useAnimatedReaction, useDerivedValue, useSharedValue } from 'react-native-reanimated'
+import { makeMutable, useAnimatedReaction, useDerivedValue, useFrameCallback, useSharedValue } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 import { sceneIndex, type BackdropId } from '@/core/backdrop/scenes'
-import { createSim, frontEdge, prewarm, simSnap, simStep, type MotifCue, type Sim, type SimEnv } from '@/core/backdrop/sim'
+import {
+  breatheIn,
+  breatheOut,
+  createSim,
+  frontEdge,
+  prewarm,
+  simSnap,
+  simStep,
+  type MotifCue,
+  type Sim,
+  type SimEnv,
+} from '@/core/backdrop/sim'
 import { onMotifPhrase } from '@/platform/audio/motifEvents'
 import { useAmbientTime } from '../ambientClock'
+import { breathFrames, breathSignal } from './breath'
 import { drawFrame, fieldUniforms, makeGfx, type Gfx, type GfxEnums } from './draw'
 import { FIELD_SKSL } from './fieldShader'
 
@@ -59,6 +72,8 @@ export interface BackdropCanvasProps {
 
 const FRAME_PLAYING = 1 / 30
 const FRAME_IDLE = 1 / 20
+/** During a breath: the display's rate, up to 60 fps. */
+const FRAME_BREATH = 1 / 60
 /** Seconds simulated before the very first frame; spawns are already spread out. */
 const FIRST_PREWARM = 3
 const FIELD_PT_PER_PX = 1.5
@@ -83,6 +98,8 @@ interface RenderState {
   sim: Sim
   gfx: Gfx | null
   acc: number
+  /** The last out-breath handed to the sim. */
+  outId: number
 }
 
 /** Shared by every BackdropCanvas instance (one per tab), so tab switches reuse it. */
@@ -119,6 +136,21 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
   const state = sharedState
   const cue = sharedCue
   const tick = useSharedValue(0)
+  /** True while the breath's frame callback steps the scene instead of the ambient clock. */
+  const boosting = useSharedValue(false)
+
+  /** One step: the breath's latest state goes into the sim, then it moves on by dt. */
+  const advance = (rs: RenderState, dt: number) => {
+    'worklet'
+    const b = breathSignal.get()
+    breatheIn(rs.sim, b.x, b.y, b.charge)
+    if (b.outId !== rs.outId) {
+      rs.outId = b.outId
+      breatheOut(rs.sim, b.strength)
+    }
+    simStep(rs.sim, dt, env.get(), target.get(), cue.get(), blendSV.get())
+    tick.set(tick.get() + 1)
+  }
 
   useEffect(() => {
     target.set(scene)
@@ -151,7 +183,7 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
         const sim = createSim(cur.d.W, cur.d.H, cur.scene, seed)
         simSnap(sim, cur.scene)
         prewarm(sim, FIRST_PREWARM)
-        state.set({ sim, gfx: rs?.gfx ?? null, acc: 0 })
+        state.set({ sim, gfx: rs?.gfx ?? null, acc: 0, outId: breathSignal.get().outId })
       } else if (cur.scene !== rs.sim.sceneB) {
         simSnap(rs.sim, cur.scene)
         prewarm(rs.sim, 3)
@@ -171,7 +203,7 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
     if (!rs || rs.sim.W !== d.W || rs.sim.H !== d.H) {
       const sim = createSim(d.W, d.H, target.get(), seed)
       prewarm(sim, FIRST_PREWARM)
-      rs = { sim, gfx: rs?.gfx ?? null, acc: 0 }
+      rs = { sim, gfx: rs?.gfx ?? null, acc: 0, outId: breathSignal.get().outId }
       state.set(rs)
       tick.set(tick.get() + 1)
       return
@@ -185,15 +217,40 @@ export default function BackdropCanvas({ backdrop, blend, playing, breathHz, des
       }
       return
     }
+    // During a breath the frame callback below steps instead.
+    if (boosting.get()) return
     rs.acc += Math.min(0.25, Math.max(0, now - prev))
     // 0.9: playing steps every clock tick (30 fps), idle every second one (15 fps).
     if (rs.acc < frameInterval.get() * 0.9) return
     const dt = Math.min(rs.acc, 0.1)
     rs.acc = 0
-    simStep(s, dt, env.get(), target.get(), cue.get(), blendSV.get())
-    tick.set(tick.get() + 1)
+    advance(rs, dt)
     },
   )
+
+  // The breath: full frame rate while it lasts, then back to the ambient clock.
+  const boost = useFrameCallback((frame) => {
+    'worklet'
+    const rs = state.get()
+    if (!rs || reducedSV.get()) return
+    rs.acc += Math.min(0.1, Math.max(0, (frame.timeSincePreviousFrame ?? 0) / 1000))
+    if (rs.acc < FRAME_BREATH * 0.9) return
+    const dt = Math.min(rs.acc, 0.05)
+    rs.acc = 0
+    advance(rs, dt)
+  }, false)
+  const [breathing, setBreathing] = useState(false)
+  useAnimatedReaction(
+    () => breathFrames.get(),
+    (on, was) => {
+      if (on !== was) scheduleOnRN(setBreathing, on)
+    },
+  )
+  useEffect(() => {
+    const on = breathing && active && !reduced
+    boost.setActive(on)
+    boosting.set(on)
+  }, [breathing, active, reduced, boost, boosting])
 
   useEffect(() => {
     // Coming back into view: draw the shared scene where it is now.

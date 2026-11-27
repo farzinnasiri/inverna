@@ -29,6 +29,10 @@ export const FRONT_WIDTH = 0.22
 /** The transition front and the delta pulse start here (fractions of W, H): the dial. */
 export const ORIGIN_X = 0.5
 export const ORIGIN_Y = 0.3
+/** How long the out-breath's wave takes to cross the screen. */
+export const WAVE_SECONDS = 2.8
+/** The wave's band of light, in width units: soft and wide, not a line. */
+export const WAVE_WIDTH = 0.16
 /** Seconds without a motif cue before scenes fall back to their own rhythm. */
 const CUE_SILENCE = 12
 
@@ -149,6 +153,23 @@ export interface Sim {
    */
   mixScenes: number[]
   mixShares: number[]
+
+  /**
+   * One breath, from the island (the Play page's pull): where it starts (pt),
+   * how full the in-breath is (0..1, eased toward `chargeTarget`), and the
+   * out-breath's wave: when it left (`clock`), how strong, and how far its
+   * front has gone (pt; -1 when there's none). Every scene answers it in its
+   * own way: matter gathers toward the island on the in-breath, and the wave
+   * pushes it out, lights it, and sets off what the scene has (strings, ink,
+   * the delta pulse, the surf, the Chladni plate).
+   */
+  breathX: number
+  breathY: number
+  charge: number
+  chargeTarget: number
+  waveAt: number
+  waveStrength: number
+  waveR: number
 }
 
 /* Worklets below are ordered so each is defined after everything it calls:
@@ -250,6 +271,61 @@ export function sceneActive(s: Sim, scene: number): boolean {
   return s.sceneB === scene || (s.prog < 1 && s.sceneA === scene) || s.mixScenes.indexOf(scene) >= 0
 }
 
+/** The wave's front, as a share of its reach, at u (0..1) through its crossing: fast out, slowing. */
+export function waveFront(u: number): number {
+  'worklet'
+  return 1 - Math.pow(1 - u, 2.2)
+}
+
+/** The wave's strength (times the breath's) at u: full as it leaves, fading as it spreads. */
+export function waveFade(u: number): number {
+  'worklet'
+  return Math.pow(1 - u, 1.15) * smoothstep(0, 0.03, u)
+}
+
+/** How far the wave goes from (x, y) on a W x H screen: past the farthest corner. */
+export function waveReach(W: number, H: number, x: number, y: number): number {
+  'worklet'
+  const dx = Math.max(x, W - x)
+  const dy = Math.max(y, H - y)
+  return Math.sqrt(dx * dx + dy * dy) + W * WAVE_WIDTH * 2
+}
+
+/** 0..1 through the out-breath's crossing, or -1 when no wave is out. */
+export function waveProgress(s: Sim): number {
+  'worklet'
+  const u = (s.clock - s.waveAt) / WAVE_SECONDS
+  return u >= 0 && u < 1 ? u : -1
+}
+
+/** The wave's strength now: full as it leaves the island, fading as it spreads. */
+export function waveAmp(s: Sim): number {
+  'worklet'
+  const u = waveProgress(s)
+  if (u < 0) return 0
+  return s.waveStrength * waveFade(u)
+}
+
+/** How lit a point is by the passing wave, 0..1: a soft band around its front. */
+export function waveBand(s: Sim, x: number, y: number): number {
+  'worklet'
+  if (s.waveR < 0) return 0
+  const amp = waveAmp(s)
+  if (amp <= 0) return 0
+  const dx = x - s.breathX
+  const dy = y - s.breathY
+  const k = (Math.sqrt(dx * dx + dy * dy) - s.waveR) / (s.W * WAVE_WIDTH)
+  return amp * Math.exp(-k * k)
+}
+
+/** The in-breath: where it gathers (pt, just under the island) and how full it is, 0..1. */
+export function breatheIn(s: Sim, x: number, y: number, charge: number): void {
+  'worklet'
+  s.breathX = x
+  s.breathY = y
+  s.chargeTarget = Math.min(1, Math.max(0, charge))
+}
+
 function rainWobble(seed: number, y: number): number {
   'worklet'
   return (vnoise(seed * 91.7, y * 0.02) - 0.5) * 22
@@ -296,6 +372,8 @@ export function gustAt(s: Sim, x: number): number {
     const d = (x - pos) / (0.2 * s.W)
     g += Math.exp(-d * d)
   }
+  // The out-breath's wave passes through the grass as a gust.
+  g += 1.2 * waveBand(s, x, s.H * 0.92)
   return Math.min(1, g)
 }
 
@@ -623,6 +701,13 @@ export function createSim(W: number, H: number, scene: number, seed: number): Si
     cueClock: -CUE_SILENCE,
     mixScenes: [scene],
     mixShares: [1],
+    breathX: W * 0.5,
+    breathY: 0,
+    charge: 0,
+    chargeTarget: 0,
+    waveAt: -NEVER,
+    waveStrength: 0,
+    waveR: -1,
   }
   for (let i = 0; i < N; i++) {
     s.seed[i] = rand(s)
@@ -694,6 +779,42 @@ function pluck(s: Sim, k: number, amp: number, decay: number): void {
   }
 }
 
+/** The out-breath: a wave of light leaves the island. `strength` 0..1 (a full held breath is 1). */
+export function breatheOut(s: Sim, strength: number): void {
+  'worklet'
+  s.chargeTarget = 0
+  s.waveAt = s.clock
+  s.waveStrength = Math.min(1, Math.max(0, strength))
+  s.waveR = 0
+  // What answers at once: the plate re-forms, the delta pulses again, a drop of ink falls.
+  if (sceneActive(s, S_ADAGIO)) nextChladni(s)
+  if (sceneActive(s, S_DELTA) && s.pulse > 0.45) s.pulse = 0
+  if (sceneActive(s, S_INK)) addInk(s, s.t)
+}
+
+/** Moves the wave's front on, and strums the strings it reaches, nearest first. */
+function stepBreath(s: Sim, dtReal: number): void {
+  'worklet'
+  s.charge = approach(s.charge, s.chargeTarget, dtReal, s.chargeTarget > s.charge ? 0.35 : 0.6)
+  if (s.charge < 0.002 && s.chargeTarget === 0) s.charge = 0
+  const u = waveProgress(s)
+  if (u < 0) {
+    s.waveR = -1
+    return
+  }
+  const prevR = s.waveR
+  s.waveR = waveReach(s.W, s.H, s.breathX, s.breathY) * waveFront(u)
+  if (!sceneActive(s, S_NOCTURNE)) return
+  const amp = waveAmp(s)
+  for (let k = 0; k < STRING_COUNT; k++) {
+    const ends = stringEnds(s, k)
+    const sx = ends[0] + (ends[1] - ends[0]) * 0.55 - s.breathX
+    const sy = s.H * 0.55 - s.breathY
+    const d = Math.sqrt(sx * sx + sy * sy)
+    if (d > prevR && d <= s.waveR) pluck(s, k, Math.min(1, 0.45 + 0.6 * amp), 3.6)
+  }
+}
+
 function stepSceneState(s: Sim, dt: number): void {
   'worklet'
   const quiet = s.clock - s.cueClock > CUE_SILENCE
@@ -722,8 +843,10 @@ function stepSceneState(s: Sim, dt: number): void {
   }
 
   const period = Math.max(8, 1 / s.breathHz)
+  // The wave hurries the delta's pulse and the cove's surf along while it's out.
+  const surge = 1 + 2.5 * waveAmp(s)
   s.pulse = (s.pulse + dt / period) % 1
-  s.crest = (s.crest + dt / COVE_PERIOD) % 1
+  s.crest = (s.crest + (dt * surge) / COVE_PERIOD) % 1
 }
 
 /** Runner drops on the window collect the beads in their path. */
@@ -979,6 +1102,31 @@ function convert(s: Sim, i: number, to: number): void {
   }
 }
 
+/**
+ * The breath on particle i: on the in-breath it drifts toward the island
+ * (nearer matter more, never into it); the wave kicks it outward as it passes.
+ */
+function breathNudge(s: Sim, i: number, dt: number): void {
+  'worklet'
+  if (s.charge <= 0 && s.waveR < 0) return
+  const dx = s.x[i]! - s.breathX
+  const dy = s.y[i]! - s.breathY
+  const d = Math.sqrt(dx * dx + dy * dy) + 1e-3
+  const ux = dx / d
+  const uy = dy / d
+  if (s.charge > 0) {
+    const v = s.charge * 22 * (0.3 + 0.7 * Math.exp(-d / (0.9 * s.W))) * smoothstep(24, 90, d)
+    s.x[i] = s.x[i]! - ux * v * dt
+    s.y[i] = s.y[i]! - uy * v * dt
+  }
+  const b = waveBand(s, s.x[i]!, s.y[i]!)
+  if (b > 0.001) {
+    const kick = b * 640 * dt
+    s.vx[i] = s.vx[i]! + ux * kick
+    s.vy[i] = s.vy[i]! + uy * kick
+  }
+}
+
 function flow(s: Sim, i: number, dt: number): void {
   'worklet'
   if (dt <= 0) return
@@ -1084,6 +1232,7 @@ function flow(s: Sim, i: number, dt: number): void {
   }
   s.vx[i] = approach(s.vx[i]!, tx, dt, tau)
   s.vy[i] = approach(s.vy[i]!, ty, dt, tau)
+  breathNudge(s, i, dt)
   s.x[i] = s.x[i]! + s.vx[i]! * dt
   s.y[i] = s.y[i]! + s.vy[i]! * dt
   if (s.owner[i] === S_ADAGIO) {
@@ -1155,6 +1304,7 @@ export function simStep(
   }
 
   setMix(s, blend)
+  stepBreath(s, dtReal)
   stepSceneState(s, dt)
 
   const morphRate = dtReal / MORPH_SECONDS
@@ -1239,6 +1389,15 @@ export function particleLook(s: Sim, i: number, out: number[], o: number): boole
   const dieAt = s.dieAt[i]!
   if (dieAt < NEVER) a *= Math.min(1, Math.max(0, (dieAt - s.age[i]!) / 0.8))
   if (s.prog < 1 && own === s.sceneB && m >= 1) a *= coverAt(s, s.x[i]!, s.y[i]!, (s.seed[i]! - 0.5) * 0.2)
+  if (s.charge > 0 || s.waveR >= 0) {
+    // Lit by the wave as it passes, and a little by the in-breath's light near the island.
+    const b = waveBand(s, s.x[i]!, s.y[i]!)
+    const dx = s.x[i]! - s.breathX
+    const dy = s.y[i]! - s.breathY
+    const near = s.charge * Math.exp(-Math.sqrt(dx * dx + dy * dy) / (0.45 * s.W))
+    a = Math.min(1, a * (1 + 1.8 * b + 0.7 * near))
+    out[o + 5] = out[o + 5]! + 0.9 * b
+  }
   out[o + 3] = a
   return a > 0.004
 }

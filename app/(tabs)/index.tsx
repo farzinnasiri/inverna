@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Platform, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import Animated, { LinearTransition, ReduceMotion } from 'react-native-reanimated'
 import { useIsFocused, useRouter } from 'expo-router'
 import { Award, Lock, Moon, Pause, Play } from 'lucide-react-native'
@@ -23,6 +23,7 @@ import { SoundGlyph } from '@/ui/rn/SoundGlyph'
 import { useCovered } from '@/ui/rn/ambientClock'
 import { GLASS_TINT, GlassGroup, GlassSurface } from '@/ui/rn/Glass'
 import { Horizon } from '@/ui/rn/Horizon'
+import { IslandBreath, useIslandBreath, WaveLift } from '@/ui/rn/IslandBreath'
 import { tabBarClearance, useAppActive, useReducedMotion, useResponsiveLayout } from '@/ui/rn/hooks'
 import { UPGRADE_INK } from '@/ui/rn/Paywall'
 import { SoundRibbon } from '@/ui/rn/sound/SoundRibbon'
@@ -97,6 +98,8 @@ export default function HomeScreen() {
 
   const [now, setNow] = useState(() => new Date())
   const [gridW, setGridW] = useState(0)
+  /** The grid's top in the frame, so its tiles know where they are for the breath's wave. */
+  const [gridY, setGridY] = useState(0)
   const [viewportH, setViewportH] = useState(0)
   const [tonightOpen, setTonightOpen] = useState(false)
   /** The game being peeked at (press and hold a tile). */
@@ -264,10 +267,15 @@ export default function HomeScreen() {
   const colW = gridW > 0 ? Math.floor((gridW - tileGap * 2) / 3) : 104
   const wideW = colW * 2 + tileGap
   const bigSize = isCompact ? 44 : 54
+  // Pull past the top to breathe in, hold, let go (IslandBreath).
+  const breath = useIslandBreath(insets.top)
+  const gridX = gridW > 0 ? (width - gridW) / 2 : sideMargin
 
   return (
     <View style={styles.root}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={breath.onScroll}
+        scrollEventThrottle={16}
         style={styles.scroll}
         onLayout={(e: LayoutChangeEvent) => {
           const h = Math.round(e.nativeEvent.layout.height)
@@ -281,6 +289,7 @@ export default function HomeScreen() {
       >
         <View style={[styles.frame, { gap: sectionGap }]}>
           {/* Hero: fills the space above the tiles; content centred, so the tiles never move. */}
+          <WaveLift baseX={0} baseY={insets.top} amount={0.5} style={styles.heroLift}>
           <Rise {...ARRIVE_HERO} delay={20} reduced={reduced} style={[styles.hero, { minHeight: HERO_MIN }]}>
             <Pressable
               onPress={() => {
@@ -339,6 +348,7 @@ export default function HomeScreen() {
               )}
             </View>
           </Rise>
+          </WaveLift>
 
           {/* Tiles size themselves to the space left, so the grid ends above the dock. */}
           <GlassGroup
@@ -347,6 +357,8 @@ export default function HomeScreen() {
             onLayout={(e: LayoutChangeEvent) => {
               const w = Math.floor(e.nativeEvent.layout.width)
               if (w > 0 && w !== gridW) setGridW(w)
+              const y = Math.round(e.nativeEvent.layout.y)
+              if (y !== gridY) setGridY(y)
             }}
           >
             {ordered.map((game, idx) => {
@@ -363,7 +375,7 @@ export default function HomeScreen() {
               const tileCol = idx < 2 ? idx : idx < 5 ? idx - 2 : idx < 7 ? idx - 5 : idx < 10 ? idx - 7 : idx - 10
 
               return (
-                <Animated.View key={game.id} layout={TILE_MORPH} style={{ width: wide ? wideW : colW }}>
+                <WaveLift key={game.id} layout={TILE_MORPH} baseX={gridX} baseY={insets.top + gridY} style={{ width: wide ? wideW : colW }}>
                   <Rise {...ARRIVE_TILE} delay={85 + tileRow * 46 + tileCol * 18} reduced={reduced}>
                   <Pressable
                     onPress={() => launchGame(game.id)}
@@ -419,12 +431,13 @@ export default function HomeScreen() {
                     </GlassSurface>
                   </Pressable>
                   </Rise>
-                </Animated.View>
+                </WaveLift>
               )
             })}
           </GlassGroup>
 
           {/* Dock, in thumb reach: wind down on the left, tonight's sound on the right. */}
+          <WaveLift baseX={0} baseY={insets.top} amount={0.8}>
           <Rise {...ARRIVE_DOCK} delay={310} reduced={reduced}>
           <GlassGroup spacing={0} style={styles.dock}>
             <Pressable
@@ -476,8 +489,10 @@ export default function HomeScreen() {
             </Pressable>
           </GlassGroup>
           </Rise>
+          </WaveLift>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
+      <IslandBreath breath={breath} />
       <TonightSheet open={tonightOpen} onClose={() => setTonightOpen(false)} />
 
       {/* Press and hold a tile: what the game is, how it feels, how you've done, and a way in. */}
@@ -606,6 +621,9 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     maxWidth: FRAME_MAX_WIDTH,
+  },
+  heroLift: {
+    flex: 1,
   },
   hero: {
     flex: 1,

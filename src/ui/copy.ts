@@ -16,6 +16,14 @@ export function greeting(hour: number, name: string): string {
   return named(part, name)
 }
 
+/** The breath from the island: pull Play down to breathe in, hold, let go. */
+export const breath = {
+  in: 'Breathe in',
+  hold: 'Hold',
+  letGo: 'Let go',
+  out: 'Breathe out',
+}
+
 export const play = {
   windDown: 'Wind down',
   endWindDown: 'End wind down',

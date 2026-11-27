@@ -7,6 +7,9 @@ import {
   MORPH_SECONDS,
   SCENE_PARTICLES,
   TRANSITION_SECONDS,
+  WAVE_SECONDS,
+  breatheIn,
+  breatheOut,
   chladniAt,
   createSim,
   particleLook,
@@ -14,6 +17,7 @@ import {
   simSnap,
   simStep,
   stringEnergy,
+  waveBand,
   type Sim,
   type SimEnv,
 } from './sim'
@@ -185,5 +189,80 @@ describe('backdrop simulation', () => {
     run(b, 3, SCENE.cove)
     expect(a.x).toEqual(b.x)
     expect(a.y).toEqual(b.y)
+  })
+})
+
+describe('the breath from the island', () => {
+  const OX = W / 2
+  const OY = 48
+
+  /** Mean distance of the scene's live particles from where the breath gathers. */
+  function meanDistance(s: Sim) {
+    let sum = 0
+    let n = 0
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+      if (!s.alive[i]) continue
+      sum += Math.hypot(s.x[i]! - OX, s.y[i]! - OY)
+      n++
+    }
+    return sum / n
+  }
+
+  it('gathers matter toward the island on the in-breath', () => {
+    const still = createSim(W, H, SCENE.starfield, 11)
+    const held = createSim(W, H, SCENE.starfield, 11)
+    prewarm(still, 3)
+    prewarm(held, 3)
+    breatheIn(held, OX, OY, 1)
+    run(still, 4)
+    run(held, 4)
+    expect(held.charge).toBeGreaterThan(0.9)
+    expect(meanDistance(held)).toBeLessThan(meanDistance(still) - 10)
+    assertHealthy(held)
+  })
+
+  it('sends a wave across the whole screen that pushes matter out, then is gone', () => {
+    const calm = createSim(W, H, SCENE.delta, 5)
+    const s = createSim(W, H, SCENE.delta, 5)
+    prewarm(calm, 3)
+    prewarm(s, 3)
+    breatheIn(s, OX, OY, 0)
+    breatheOut(s, 1)
+    let lastR = 0
+    for (let k = 0; k < 30; k++) {
+      simStep(s, 1 / 30, ENV, s.sceneB, null)
+      simStep(calm, 1 / 30, ENV, calm.sceneB, null)
+      expect(s.waveR).toBeGreaterThanOrEqual(lastR)
+      lastR = s.waveR
+    }
+    // A second in, the front is well down the screen and lit where it is.
+    expect(s.waveR).toBeGreaterThan(H * 0.6)
+    expect(waveBand(s, OX, OY + s.waveR)).toBeGreaterThan(0.2)
+    expect(meanDistance(s)).toBeGreaterThan(meanDistance(calm) + 3)
+    assertHealthy(s)
+    run(s, WAVE_SECONDS)
+    expect(s.waveR).toBe(-1)
+    expect(waveBand(s, OX, H / 2)).toBe(0)
+  })
+
+  it('strums every Nocturne string as the wave reaches it, nearest first', () => {
+    const s = createSim(W, H, SCENE.nocturne, 3)
+    // Quiet strings and no automatic plucks, so only the wave sounds them.
+    s.strAmp.fill(0)
+    s.pluckAuto = 1e9
+    breatheIn(s, OX, OY, 0)
+    breatheOut(s, 1)
+    const firstSounded: number[] = new Array(s.strAmp.length).fill(-1)
+    for (let k = 0; k < Math.ceil(WAVE_SECONDS * 30); k++) {
+      simStep(s, 1 / 30, ENV, s.sceneB, null)
+      s.pluckAuto = 1e9
+      s.strAmp.forEach((_, j) => {
+        if (firstSounded[j] === -1 && stringEnergy(s, j) > 0.4) firstSounded[j] = k
+      })
+    }
+    expect(firstSounded.every((f) => f >= 0)).toBe(true)
+    const mid = Math.floor(firstSounded.length / 2)
+    expect(firstSounded[mid]!).toBeLessThan(firstSounded[0]!)
+    expect(firstSounded[mid]!).toBeLessThan(firstSounded[firstSounded.length - 1]!)
   })
 })
