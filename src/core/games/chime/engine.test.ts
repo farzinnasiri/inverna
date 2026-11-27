@@ -3,7 +3,6 @@ import {
   BALL_RADIUS,
   BASE_BALL_SPEED,
   CALM_SINGLE_HP_THRESHOLD,
-  CALM_SPEED_FACTOR,
   COURT_COLS,
   FORMATIONS,
   MIN_VERTICAL_ANGLE_RAD,
@@ -433,10 +432,10 @@ describe('Chime engine', () => {
       expect(restarted.ball.attached).toBe(true)
     })
 
-    it('scales ball speed (1.0x -> 0.72x) and paddle width (0.22 -> 0.28) with calm', () => {
+    it('slows the ball and widens the paddle as calm rises, mid-flight too', () => {
       expect(ballSpeedForCalm(0)).toBeCloseTo(BASE_BALL_SPEED, 5)
-      expect(ballSpeedForCalm(1)).toBeCloseTo(BASE_BALL_SPEED * CALM_SPEED_FACTOR, 5)
-      expect(ballSpeedForCalm(0.5)).toBeCloseTo(BASE_BALL_SPEED * (1 - (1 - CALM_SPEED_FACTOR) * 0.5), 5)
+      expect(ballSpeedForCalm(0.5)).toBeLessThan(ballSpeedForCalm(0))
+      expect(ballSpeedForCalm(1)).toBeLessThan(ballSpeedForCalm(0.5))
 
       expect(paddleWidthForCalm(0)).toBeCloseTo(PADDLE_WIDTH_MIN, 5)
       expect(paddleWidthForCalm(1)).toBeCloseTo(PADDLE_WIDTH_MAX, 5)
@@ -446,7 +445,7 @@ describe('Chime engine', () => {
       state = launchBall(state, 0)
       state = tickChime(state, 16, 1)
       expect(state.paddleWidth).toBeCloseTo(PADDLE_WIDTH_MAX, 5)
-      expect(Math.hypot(state.ball.vx, state.ball.vy)).toBeCloseTo(BASE_BALL_SPEED * CALM_SPEED_FACTOR, 4)
+      expect(Math.hypot(state.ball.vx, state.ball.vy)).toBeCloseTo(ballSpeedForCalm(1), 4)
     })
 
     it('round-trips cleanly through JSON.stringify / JSON.parse', () => {

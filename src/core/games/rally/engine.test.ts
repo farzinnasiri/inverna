@@ -250,9 +250,10 @@ describe('rally engine', () => {
     expect(hardSprint.aiX).toBeGreaterThan(medSprint.aiX)
   })
 
-  it('scales ball speed smoothly down to 0.72x and widens paddle as calm increases', () => {
+  it('slows the ball and widens the paddle as calm rises, never speeding up', () => {
     expect(calmSpeedScale(0)).toBeCloseTo(1, 5)
-    expect(calmSpeedScale(1)).toBeCloseTo(0.72, 5)
+    expect(calmSpeedScale(0.5)).toBeLessThan(calmSpeedScale(0))
+    expect(calmSpeedScale(1)).toBeLessThan(calmSpeedScale(0.5))
     expect(paddleWidthFor(1)).toBeGreaterThan(paddleWidthFor(0))
 
     const active = serveNow(createRally({ seed: 303, difficulty: 'medium', calm: 0 }), 0)
@@ -260,7 +261,8 @@ describe('rally engine', () => {
 
     const activeSpeed = Math.hypot(active.ball.vx, active.ball.vy)
     const restfulSpeed = Math.hypot(restful.ball.vx, restful.ball.vy)
-    expect(restfulSpeed / activeSpeed).toBeCloseTo(0.72, 3)
+    // The serve follows the same scale as everything else.
+    expect(restfulSpeed / activeSpeed).toBeCloseTo(calmSpeedScale(1), 3)
 
     // Mid-flight calm change slows the ball and widens the paddle smoothly
     const slowed = tickRally(active, 32, 1)

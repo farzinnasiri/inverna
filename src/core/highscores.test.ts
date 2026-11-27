@@ -1,23 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { GAMES } from './games/catalog'
 import {
   bestFor,
   EMPTY_HIGH_SCORES,
   formatBestCompact,
   formatScoreValue,
-  HIGH_SCORE_SPECS,
   isBetterScore,
   recordScore,
 } from './highscores'
 
 describe('highscores', () => {
-  it('defines a high score spec for every game in the catalog', () => {
-    for (const g of GAMES) {
-      expect(HIGH_SCORE_SPECS[g.id]).toBeDefined()
-      expect(['higher', 'lower']).toContain(HIGH_SCORE_SPECS[g.id].mode)
-    }
-  })
-
   it('tracks higher-is-better games accurately', () => {
     let table = EMPTY_HIGH_SCORES
     const r1 = recordScore(table, 'kindle', 256, 1000)

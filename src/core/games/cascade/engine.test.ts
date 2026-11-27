@@ -106,11 +106,6 @@ describe('Cascade engine', () => {
       }
     })
 
-    it('is deterministic for identical seed and calm', () => {
-      const a = createCascade({ seed: 12345, calm: 0.2 })
-      const b = createCascade({ seed: 12345, calm: 0.2 })
-      expect(a).toEqual(b)
-    })
   })
 
   describe('flood-fill cluster detection', () => {

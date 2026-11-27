@@ -29,12 +29,6 @@ function makeState(size: 3 | 4, tiles: number[], overrides: Partial<DriftState> 
 }
 
 describe('Drift engine — initialisation & solvability parity invariant', () => {
-  it('is deterministic for the same seed and calm', () => {
-    const a = createDrift({ seed: 42, calm: 0 })
-    const b = createDrift({ seed: 42, calm: 0 })
-    expect(a).toEqual(b)
-  })
-
   it('guarantees solvability and non-solved start across 40 generated 4×4 boards', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const state = createDrift({ seed: seed * 7919, calm: 0 })

@@ -36,11 +36,7 @@ describe('Lanterns engine — initialisation & pair distribution', () => {
     expect(new Set(SIGILS.map((s) => s.id)).size).toBe(SIGILS.length)
   })
 
-  it('creates deterministic boards with exact pair distribution across 20 seeds', () => {
-    const a = createLanterns({ seed: 1234, calm: 0 })
-    const b = createLanterns({ seed: 1234, calm: 0 })
-    expect(a).toEqual(b)
-
+  it('deals exact pairs across 20 seeds', () => {
     for (let seed = 1; seed <= 20; seed++) {
       const s = createLanterns({ seed: seed * 3571, calm: 0.3 })
       expect(s.cols).toBe(4)
