@@ -16,6 +16,12 @@ import type { Store, BuyResult } from './store.types'
  * editing storage can't unlock anything. StoreKit keeps signed transactions
  * on the phone, so a bought copy opens offline too.
  */
+/** StoreKit normally answers at once; past this, treat it as unreachable rather than wait forever. */
+const ANSWER_MS = 8000
+function withinTime<T>(job: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([job, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ANSWER_MS))])
+}
+
 export function createStore(productId: string): Store {
   let connected: Promise<boolean> | null = null
   const connect = () => {
@@ -31,9 +37,10 @@ export function createStore(productId: string): Store {
 
   return {
     async owned() {
-      if (!(await connect())) return null
+      if (!(await withinTime(connect(), false))) return null
       try {
-        return owns(await getAvailablePurchases({ onlyIncludeActiveItemsIOS: true }))
+        const list = await withinTime(getAvailablePurchases({ onlyIncludeActiveItemsIOS: true }), null)
+        return list === null ? null : owns(list)
       } catch {
         return null
       }
