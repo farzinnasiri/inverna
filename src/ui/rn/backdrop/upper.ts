@@ -153,18 +153,23 @@ function cloudVeils(canvas: SkCanvas, s: Sim, g: Gfx, S: number, y0: number, cou
   }
 }
 
+/** Where the moons sit, as a fraction of the screen's height. */
+const MOON_Y = 0.115
+
 function tideMoon(canvas: SkCanvas, s: Sim, g: Gfx): void {
   'worklet'
   const S = SCENE.tide
-  moon(canvas, s, g, S, s.W * 0.68, s.H * 0.2, s.W * 0.035, 1)
-  cloudVeils(canvas, s, g, S, s.H * 0.21, 4, 0.09)
+  // High in the sky, between the top controls and the titles: at 0.2 it sat
+  // behind onboarding's question and the Sounds pulse chip (NAT-07).
+  moon(canvas, s, g, S, s.W * 0.68, s.H * MOON_Y, s.W * 0.035, 1)
+  cloudVeils(canvas, s, g, S, s.H * (MOON_Y + 0.01), 4, 0.09)
 }
 
 function mistMoon(canvas: SkCanvas, s: Sim, g: Gfx): void {
   'worklet'
   const S = SCENE.mist
-  moon(canvas, s, g, S, s.W * 0.34, s.H * 0.19, s.W * 0.04, 0.7)
-  cloudVeils(canvas, s, g, S, s.H * 0.22, 6, 0.07)
+  moon(canvas, s, g, S, s.W * 0.34, s.H * MOON_Y, s.W * 0.04, 0.7)
+  cloudVeils(canvas, s, g, S, s.H * (MOON_Y + 0.03), 6, 0.07)
   cloudVeils(canvas, s, g, S, s.H * 0.36, 4, 0.05)
 }
 

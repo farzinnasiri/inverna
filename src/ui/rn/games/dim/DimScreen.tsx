@@ -161,7 +161,7 @@ function DimStone({
         {hinted ? (
           <Animated.View
             pointerEvents="none"
-            style={[StyleSheet.absoluteFill, styles.ring, { borderColor: color.accent, borderCurve: 'continuous' }, ringStyle]}
+            style={[styles.ring, { borderColor: color.ink, borderCurve: 'continuous' }, ringStyle]}
           />
         ) : null}
       </Animated.View>
@@ -414,8 +414,15 @@ const styles = StyleSheet.create({
   core: {
     position: 'absolute',
   },
+  // In the light ink, inset from the edge: on a lit tile the old gold ring
+  // vanished into the tile's own gold border (NAT-07).
   ring: {
-    borderRadius: STONE_RADIUS,
-    borderWidth: 1.5,
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: 4,
+    bottom: 4,
+    borderRadius: STONE_RADIUS - 4,
+    borderWidth: 2,
   },
 })

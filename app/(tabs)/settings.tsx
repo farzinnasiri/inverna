@@ -16,6 +16,7 @@ import { SleepAround } from '@/ui/rn/SleepAround'
 import { useNightFilterMetrics } from '@/ui/rn/NightFilterOverlay'
 import { ScienceSheet } from '@/ui/rn/ScienceSheet'
 import { PRIVACY_URL, SUPPORT_URL } from '@/ui/links'
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
 import { useHighScores } from '@/ui/state/highscores'
 import { useNav } from '@/ui/state/nav'
 import { useSession } from '@/ui/state/session'
@@ -271,6 +272,18 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
+      {/* Content scrolling up fades out under the status bar instead of running behind the time (NAT-07). */}
+      <Svg pointerEvents="none" width="100%" height={insets.top + 24} style={styles.topScrim}>
+        <Defs>
+          <LinearGradient id="settingsTopScrim" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#000000" stopOpacity={0.92} />
+            <Stop offset={String(insets.top / (insets.top + 24))} stopColor="#000000" stopOpacity={0.7} />
+            <Stop offset="1" stopColor="#000000" stopOpacity={0} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#settingsTopScrim)" />
+      </Svg>
+
       <ScienceSheet open={scienceOpen} onClose={() => setScienceOpen(false)} />
 
       <Sheet open={aboutOpen} onClose={() => setAboutOpen(false)} label={about.title}>
@@ -287,6 +300,11 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  topScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
   credit: {
     alignSelf: 'center',
     paddingVertical: 14,

@@ -248,7 +248,7 @@ export const PRESETS: readonly Preset[] = [
   {
     id: 'nocturne',
     name: 'Nocturne',
-    hint: 'Slow piano & warm strings',
+    hint: 'Slow piano & strings',
     page: 0,
     scene: 'classical',
     icon: 'piano',

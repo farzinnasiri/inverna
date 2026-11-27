@@ -774,12 +774,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
   },
+  // Inside the card's rounded shape: the gradient's edge used to show as a
+  // hard rectangle running out past the card (NAT-01).
   pillarGlow: {
     position: 'absolute',
-    top: -16,
-    bottom: -16,
-    left: -18,
-    right: -6,
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderRadius: 18,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
   },
   pillarBadge: {
     width: 36,
