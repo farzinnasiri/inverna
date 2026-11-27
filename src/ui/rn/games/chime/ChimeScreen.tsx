@@ -239,7 +239,10 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
   // A save of a cleared wall loads settled, or the loop would wait for debris that's gone (ISS-09).
   const [settled, setSettled] = useState(() => initialStateRef.current!.solved)
   const mode: ChimeMode = saved.mode ?? 'endless'
-  const running = playing && !settled
+  // The ball resting on the paddle with nothing else moving: the frame loop
+  // sleeps (the paddle is redrawn by its own touch handlers) until launch.
+  const [resting, setResting] = useState(false)
+  const running = playing && !settled && !resting
   const [courtSize, setCourtSize] = useState({ w: 0, h: 0 })
   const [wallVersion, setWallVersion] = useState(0)
   const frame = useSharedValue(motionFrame(initialStateRef.current))
@@ -259,6 +262,8 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
   playingRef.current = playing
   const calmRef = useRef(calm)
   calmRef.current = calm
+  // A calmer night widens the paddle: wake the loop to show it.
+  useEffect(() => setResting(false), [calm])
 
   const updateMotion = useCallback(() => {
     frame.value = motionFrame(stateRef.current)
@@ -312,7 +317,10 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
         if (!playingRef.current) return
         const prev = stateRef.current
         const next = tickChime(prev, dtMs, calmRef.current)
-        if (next === prev) return
+        if (next === prev) {
+          if (prev.ball.attached && !prev.solved) setResting(true)
+          return
+        }
         stateRef.current = next
         if (next.bricks !== prev.bricks) {
           saveDirty.current = true
@@ -354,6 +362,7 @@ export function ChimeScreen({ onExit }: GameScreenProps) {
     if (!prev.ball.attached || prev.solved) return
     const next = launchBall(prev, calmRef.current)
     if (next !== prev) {
+      setResting(false)
       stateRef.current = next
       cue('place', 0.45)
       haptic('settle')

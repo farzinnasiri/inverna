@@ -66,3 +66,24 @@ describe('chained schedules (sleep fade after a short recovery)', () => {
     expect(paramNow(param, 10.125)).toBeCloseTo(0.7, 5)
   })
 })
+
+describe('when scheduling throws', () => {
+  it('the value is set outright and the next ramp starts from it', async () => {
+    const { paramNow, rampParam } = await import('./params')
+    const p = {
+      value: 0,
+      setValueAtTime() {
+        throw new Error('native refused')
+      },
+      linearRampToValueAtTime() {
+        throw new Error('native refused')
+      },
+      exponentialRampToValueAtTime() {},
+      cancelScheduledValues() {},
+    }
+    rampParam(p as never, 0.8, 2, 10, 0)
+    expect(p.value).toBe(0.8)
+    // Halfway through the ramp that never happened, it's already at 0.8.
+    expect(paramNow(p as never, 11)).toBe(0.8)
+  })
+})

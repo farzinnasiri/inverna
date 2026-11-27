@@ -95,6 +95,16 @@ export function noteRamp(param: AudioParamLike, track: RampTrack): void {
   lastRamp.set(param, track)
 }
 
+/**
+ * The fallback when scheduling throws: set the value outright, and record
+ * that, so the next ramp starts where the param really is, not from a ramp
+ * that never happened.
+ */
+function jumpTo(param: AudioParamLike, value: number, now: number): void {
+  writeValue(param, value)
+  lastRamp.set(param, { from: value, to: value, t0: now, t1: now })
+}
+
 export function rampParam(param: AudioParamLike, target: number, rampSeconds: number, now: number, from?: number): void {
   const safeNow = Number.isFinite(now) ? Math.max(0, now) : 0
   const duration = Math.max(0, Number.isFinite(rampSeconds) ? rampSeconds : 0)
@@ -118,7 +128,7 @@ export function rampParam(param: AudioParamLike, target: number, rampSeconds: nu
     try {
       param.cancelScheduledValues(safeNow)
     } catch {
-      writeValue(param, safeTarget)
+      jumpTo(param, safeTarget, safeNow)
       return
     }
   }
@@ -127,7 +137,7 @@ export function rampParam(param: AudioParamLike, target: number, rampSeconds: nu
     try {
       param.setValueAtTime(safeTarget, safeNow)
     } catch {
-      writeValue(param, safeTarget)
+      jumpTo(param, safeTarget, safeNow)
     }
     return
   }
@@ -136,7 +146,7 @@ export function rampParam(param: AudioParamLike, target: number, rampSeconds: nu
     param.setValueAtTime(currentVal, safeNow)
     param.linearRampToValueAtTime(safeTarget, safeNow + duration)
   } catch {
-    writeValue(param, safeTarget)
+    jumpTo(param, safeTarget, safeNow)
   }
 }
 
